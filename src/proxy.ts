@@ -28,6 +28,11 @@ export interface ProxyEndpoint {
    * ScraperAPI) re-sign traffic with their own certificate, so it is required for them.
    */
   insecure?: boolean;
+  /**
+   * Headers added to every request through this proxy, for scraping APIs that take their
+   * parameters as headers in proxy mode (Crawlbase, Zyte, Oxylabs Web Unblocker).
+   */
+  headers?: Record<string, string>;
 }
 
 export interface ProxyProvider {

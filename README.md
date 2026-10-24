@@ -11,13 +11,17 @@ actions and network capture.
 Use it as a library, or run it as a local server and point existing Zyte code at it by changing
 only the base URL.
 
-Runs on **Node.js ≥ 20** and **Bun**.
+Runs on **Node.js ≥ 22** and **Bun**.
+
+**Docs:** [Zyte API coverage](docs/coverage.md) · [providers](docs/providers.md) ·
+[browser & stealth](docs/browser.md) · [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
+[migrating from Zyte](docs/migrating-from-zyte.md) · [examples](examples/)
 
 ```sh
 npm i xyte
 # browser requests (browserHtml, screenshot, actions, networkCapture):
 npm i playwright && npx playwright install chromium
-# proxies on Node.js (Bun has proxy support built into fetch):
+# proxies on Node.js (Bun has proxy support built into fetch); undici 8 needs Node 22.19+:
 npm i undici
 ```
 
@@ -68,8 +72,10 @@ XYTE_PROVIDER=oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… npx xyte serve -
 ```
 
 Set `XYTE_API_KEYS=key1,key2` to require a key (sent the way Zyte expects it: basic-auth username).
-To mount it in your own server, `createHandler(xyte)` returns a Web `(Request) => Response` handler
-for Bun.serve, Deno, Hono or Workers. `serve(handler)` runs it on Bun or `node:http`.
+Docker images (full with Chromium, or slim HTTP-only) and Cloud Run / Fly / Render / App Platform /
+Modal configs: [docs/deploy.md](docs/deploy.md). To serve it from your own app, use
+`createHandler(xyte)` (Hono, Bun.serve, Next.js…) or `toNodeHandler(…)` (Express, Fastify): see
+[docs/mounting.md](docs/mounting.md).
 
 CLI one-offs:
 
@@ -92,7 +98,14 @@ npx xyte extract --json '{"url":"https://example.com","browserHtml":true}'
 | `zenrows({ apiKey })` | ZenRows API proxy mode | `premium_proxy=true&proxy_country=us&session_id=…` |
 | `scrapingBee({ apiKey })` | ScrapingBee proxy mode | `premium_proxy=True&country_code=us&session_id=…` |
 | `scraperApi({ apiKey })` | ScraperAPI proxy mode | `scraperapi.country_code=us.session_number=…` |
+| `template('http://u[-country-{country:lower}]-session-{session}:p@host:port')` | **any provider**, from its URL format | placeholders + optional `[parts]` |
 | `custom(name, ctx => url)` | anything you build | you decide |
+
+…and NodeMaven, SOAX, NetNut, Webshare, Rayobyte, PacketStream, Evomi, DataImpulse, Massive,
+Proxy-Seller, Thordata, Anyip, ABCProxy, ProxyEmpire, RapidProxy, Swiftproxy, 922 S5, LunaProxy,
+plus Crawlbase, Scrape.do, ScrapingAnt, ScrapeOps, Scrapfly, Oxylabs Web Unblocker and Zyte's own
+proxy mode, and hosted browsers (Bright Data Scraping Browser, Browserless, ZenRows, Oxylabs,
+NodeMaven). Full catalog with formats and confidence levels: [docs/providers.md](docs/providers.md).
 
 Combinators:
 
@@ -128,14 +141,15 @@ Use them with `httpResponseBody`.
 `device`, `requestCookies`, `responseCookies`, `cookieManagement`, `session`, `geolocation`,
 `ipType`, `echoData`, `jobId`.
 
-**Browser** (Playwright): `browserHtml`, `screenshot` + `screenshotOptions`, `javascript`,
+**Browser** (Playwright, or [patchright and other forks](docs/browser.md), or a [remote browser](docs/browser.md#remote-browsers)): `browserHtml`, `screenshot` + `screenshotOptions`, `javascript`,
 `viewport`, `networkCapture` (url / resourceType filters, at most 10 captures and 5 MiB),
 the 60 s browser time budget, and the actions `click`, `doubleClick`, `hover`, `hide`, `evaluate`,
 `goto`, `reload`, `keyPress`, `type`, `select`, `scrollTo`, `scrollBottom`, `waitForNavigation`,
-`waitForRequest`, `waitForResponse`, `waitForSelector`, `waitForTimeout` (with `onError`). To use a
-remote browser: `new Xyte({ browser: { launch: () => chromium.connectOverCDP(ws) } })`.
+`waitForRequest`, `waitForResponse`, `waitForSelector`, `waitForTimeout` (with `onError`).
 
-**Extraction** (`product`, `article`, `pageContent`, `markdown`, `serp`, `customAttributes`…):
+**Markdown**: built in and non-AI like Zyte's, with `mainContent` / `fullPage` scopes.
+
+**AI extraction** (`product`, `article`, `pageContent`, `serp`, `customAttributes`…):
 pluggable. Register an `extractors.<field>` function, for example an LLM call. Without one, the
 request is rejected with a 400.
 
@@ -144,17 +158,19 @@ new Xyte({ extractors: { product: async ({ html, url }) => myLlmExtract(html, ur
 ```
 
 **Not supported yet:** Zyte-specific actions (`searchKeyword`, `setLocation`, `interaction`),
-`sessionContext`, `includeIframes`, built-in AI extraction, Zyte's Stats API.
+`sessionContext`, `includeIframes`, built-in AI extraction, Zyte's proxy mode and Stats API.
+Field-by-field status: [docs/coverage.md](docs/coverage.md).
 
 ## Development
 
 ```sh
 bun install
-bun test             # unit + integration (local target site, local proxy, real Chromium)
+bun test             # unit + integration (local target site, local proxy, real Chromium + patchright)
 bun run test:node    # build, then run the dist on Node.js
 bun run typecheck
 bun run build        # tsdown → dist/
-bun run gen:types    # regenerate src/zyte.gen.ts from spec/zyte-openapi.json
+bun run gen:types    # regenerate src/zyte.gen.ts from spec/zyte-openapi.json (and the coverage doc)
+bun run docs:coverage  # regenerate docs/coverage.md from scripts/coverage.ts
 ```
 
 `spec/zyte-openapi.json` is Zyte's OpenAPI document, taken from the

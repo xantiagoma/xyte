@@ -270,6 +270,7 @@ function contextOptions(attempt: EngineAttempt, proxy: ProxyEndpoint | null): Br
   return {
     proxy: proxy ? playwrightProxy(proxy) : undefined,
     ignoreHTTPSErrors: proxy?.insecure === true,
+    extraHTTPHeaders: proxy?.headers,
     javaScriptEnabled: request.javascript !== false,
     // `evaluate` sources run through eval in the page; CSP must not block them.
     bypassCSP: true,

@@ -29,9 +29,24 @@ function bunTransport(request: TransportRequest): Promise<Response> {
     redirect: 'manual',
     signal: request.signal,
     // Bun-specific options.
-    proxy: request.proxy?.url,
+    proxy: request.proxy ? bunProxy(request.proxy.url) : undefined,
     tls: request.proxy?.insecure ? { rejectUnauthorized: false } : undefined,
   } as RequestInit);
+}
+
+/**
+ * Bun misparses a proxy URL with a username but no password (`http://key:@host` becomes host
+ * `key@host`), which is how Crawlbase and Zyte take their API key. Send those credentials as a
+ * `Proxy-Authorization` header instead.
+ */
+function bunProxy(url: string): string | { url: string; headers: Record<string, string> } {
+  const parsed = new URL(url);
+  if (parsed.username === '' || parsed.password !== '') return url;
+  const credentials = `${decodeURIComponent(parsed.username)}:`;
+  return {
+    url: `${parsed.protocol}//${parsed.host}`,
+    headers: { 'Proxy-Authorization': `Basic ${Buffer.from(credentials).toString('base64')}` },
+  };
 }
 
 type Undici = typeof import('undici');

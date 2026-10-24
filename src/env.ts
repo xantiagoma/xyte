@@ -13,6 +13,8 @@ import {
   type ProxyProvider,
 } from './proxy.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
+import * as long from './providers.ts';
+import { brightDataBrowser, browserless, nodeMavenBrowser, oxylabsBrowser, zenrowsBrowser } from './browsers.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -44,6 +46,62 @@ const PROVIDERS: Record<string, (env: Env) => ProxyProvider> = {
   zenrows: (env) => zenrows({ apiKey: required(env, 'ZENROWS_API_KEY') }),
   scrapingbee: (env) => scrapingBee({ apiKey: required(env, 'SCRAPINGBEE_API_KEY') }),
   scraperapi: (env) => scraperApi({ apiKey: required(env, 'SCRAPERAPI_API_KEY') }),
+  ...userPass('nodemaven', long.nodeMaven),
+  ...userPass('netnut', long.netNut),
+  ...userPass('webshare', long.webshare),
+  ...userPass('rayobyte', long.rayobyte),
+  ...userPass('packetstream', long.packetStream),
+  ...userPass('evomi', long.evomi),
+  ...userPass('dataimpulse', long.dataImpulse),
+  ...userPass('massive', long.massive),
+  ...userPass('proxyseller', long.proxySeller),
+  ...userPass('anyip', long.anyIp),
+  ...userPass('thordata', long.thordata),
+  ...userPass('abcproxy', long.abcProxy),
+  ...userPass('proxyempire', long.proxyEmpire),
+  ...userPass('rapidproxy', long.rapidProxy),
+  ...userPass('swiftproxy', long.swiftProxy),
+  soax: (env) => long.soax({ packageId: required(env, 'SOAX_PACKAGE_ID'), packageKey: required(env, 'SOAX_PACKAGE_KEY') }),
+  crawlbase: (env) => long.crawlbase({ token: required(env, 'CRAWLBASE_TOKEN') }),
+  scrapedo: (env) => long.scrapeDo({ token: required(env, 'SCRAPEDO_TOKEN') }),
+  scrapingant: (env) => long.scrapingAnt({ apiKey: required(env, 'SCRAPINGANT_API_KEY') }),
+  scrapeops: (env) => long.scrapeOps({ apiKey: required(env, 'SCRAPEOPS_API_KEY') }),
+  scrapfly: (env) => long.scrapfly({ apiKey: required(env, 'SCRAPFLY_API_KEY') }),
+  zyte: (env) => long.zyteProxy({ apiKey: required(env, 'ZYTE_API_KEY') }),
+  'oxylabs-unblocker': (env) =>
+    long.oxylabsUnblocker({ username: required(env, 'OXYLABS_UNBLOCKER_USERNAME'), password: required(env, 'OXYLABS_UNBLOCKER_PASSWORD') }),
+};
+
+/** `NAME_USERNAME` / `NAME_PASSWORD` (and optional `NAME_HOST` / `NAME_PORT`) for a user+password preset. */
+function userPass(
+  name: string,
+  make: (options: { username: string; password: string; host?: string; port?: number }) => ProxyProvider,
+): Record<string, (env: Env) => ProxyProvider> {
+  const prefix = name.toUpperCase().replace(/-/g, '_');
+  return {
+    [name]: (env) =>
+      make({
+        username: required(env, `${prefix}_USERNAME`),
+        password: required(env, `${prefix}_PASSWORD`),
+        host: env[`${prefix}_HOST`],
+        port: env[`${prefix}_PORT`] ? Number(env[`${prefix}_PORT`]) : undefined,
+      }),
+  };
+}
+
+const REMOTE_BROWSERS: Record<string, (env: Env) => NonNullable<BrowserOptions['connect']>> = {
+  brightdata: (env) =>
+    brightDataBrowser({
+      customerId: required(env, 'BRIGHTDATA_CUSTOMER_ID'),
+      zone: required(env, 'BRIGHTDATA_BROWSER_ZONE'),
+      password: required(env, 'BRIGHTDATA_BROWSER_PASSWORD'),
+    }),
+  browserless: (env) => browserless({ token: required(env, 'BROWSERLESS_TOKEN'), region: env.BROWSERLESS_REGION }),
+  zenrows: (env) => zenrowsBrowser({ apiKey: required(env, 'ZENROWS_API_KEY') }),
+  oxylabs: (env) =>
+    oxylabsBrowser({ username: required(env, 'OXYLABS_BROWSER_USERNAME'), password: required(env, 'OXYLABS_BROWSER_PASSWORD') }),
+  nodemaven: (env) =>
+    nodeMavenBrowser({ username: required(env, 'NODEMAVEN_USERNAME'), password: required(env, 'NODEMAVEN_PASSWORD') }),
 };
 
 /**
@@ -52,9 +110,9 @@ const PROVIDERS: Record<string, (env: Env) => ProxyProvider> = {
  * - `XYTE_PROXY_URL`: one or more proxy URLs, comma-separated (rotated across retries), or
  * - `XYTE_PROXY_TEMPLATE`: a `template()` format, e.g.
  *   `http://user-{env:MY_USER}[-country-{country:lower}]-session-{session}:{env:MY_PASS}@host:7000`, or
- * - `XYTE_PROVIDER`: one or more of `oxylabs`, `oxylabs-datacenter`, `brightdata`, `decodo`,
- *   `iproyal`, `zenrows`, `scrapingbee`, `scraperapi`, `direct`, comma-separated (a retry moves to
- *   the next one), each with its credentials (`OXYLABS_USERNAME`, `ZENROWS_API_KEY`, …).
+ * - `XYTE_PROVIDER`: one or more provider names, comma-separated (a retry moves to the next one),
+ *   each with its credentials (`OXYLABS_USERNAME`, `ZENROWS_API_KEY`, …). See `PROVIDER_NAMES` and
+ *   docs/providers.md.
  *
  * Neither set: no proxy.
  */
@@ -89,6 +147,8 @@ const list = (value: string | undefined) => (value ?? '').split(',').map((v) => 
  * - `XYTE_BROWSER_CHANNEL`: e.g. `chrome` to use installed Google Chrome.
  * - `XYTE_BROWSER_HEADLESS=false`: headed (needs a display, e.g. xvfb).
  * - `XYTE_BROWSER_ARGS`: extra Chromium flags, comma-separated.
+ * - `XYTE_REMOTE_BROWSER`: a hosted browser preset: `brightdata`, `browserless`, `zenrows`, `oxylabs`,
+ *   `nodemaven` (with its credentials, see docs/browser.md), or
  * - `XYTE_BROWSER_WS`: render in a remote browser at this CDP endpoint instead; accepts the same
  *   placeholders as `XYTE_PROXY_TEMPLATE` (e.g. `{country:lower}`, `{session}`).
  *   `XYTE_BROWSER_WS_PROTOCOL=playwright` for a Playwright server.
@@ -112,7 +172,13 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
   if (env.XYTE_BROWSER_ARGS) launchOptions.args = list(env.XYTE_BROWSER_ARGS);
   if (Object.keys(launchOptions).length > 0) options.launchOptions = launchOptions;
 
-  if (env.XYTE_BROWSER_WS) {
+  if (env.XYTE_REMOTE_BROWSER) {
+    const make = REMOTE_BROWSERS[env.XYTE_REMOTE_BROWSER.toLowerCase()];
+    if (!make) {
+      throw new Error(`xyte: unknown XYTE_REMOTE_BROWSER "${env.XYTE_REMOTE_BROWSER}" (one of ${Object.keys(REMOTE_BROWSERS).join(', ')})`);
+    }
+    options.connect = make(env);
+  } else if (env.XYTE_BROWSER_WS) {
     const endpoint = template(env.XYTE_BROWSER_WS);
     const protocol = env.XYTE_BROWSER_WS_PROTOCOL === 'playwright' ? 'playwright' : 'cdp';
     options.connect = async (context) => ({ endpoint: (await endpoint.resolve(context))!.url, protocol });
@@ -121,3 +187,6 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
   if (env.XYTE_BROWSER_TIME_LIMIT) options.timeLimit = Number(env.XYTE_BROWSER_TIME_LIMIT);
   return options;
 }
+
+/** Names accepted by `XYTE_PROVIDER`. */
+export const PROVIDER_NAMES: readonly string[] = Object.keys(PROVIDERS);

@@ -43,6 +43,7 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
 
   for (let hop = 0; ; hop++) {
     const headers = new Headers(baseHeaders);
+    for (const [name, value] of Object.entries(attempt.proxy?.headers ?? {})) headers.set(name, value);
     const cookie = jar.header(url);
     if (cookie) headers.set('cookie', cookie);
 

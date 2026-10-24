@@ -4,7 +4,7 @@ A Zyte API-compatible `POST /v1/extract` client/server that runs on any proxy pr
 
 ## Runtime rule: library code must run on Node.js too
 
-- `src/` is published to npm and must work on Node >= 20 **and** Bun. No Bun-only APIs in `src/`
+- `src/` is published to npm and must work on Node >= 22 **and** Bun. No Bun-only APIs in `src/`
   unless behind a runtime check with a Node fallback (see `src/transport.ts`, `serve()` in `src/server.ts`).
 - Bun is the dev toolchain only: `bun install`, `bun test`, `bun run build` (tsdown on Bun).
 - `bun run test:node` builds and runs `test/node/smoke.mjs` under real Node against `dist/`. Run it

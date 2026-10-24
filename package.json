@@ -20,7 +20,7 @@
   },
   "files": ["dist", "spec", "docs"],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "bun --bun tsdown",
@@ -33,7 +33,7 @@
   },
   "peerDependencies": {
     "playwright": ">=1.40",
-    "undici": ">=6"
+    "undici": ">=7"
   },
   "peerDependenciesMeta": {
     "playwright": {
