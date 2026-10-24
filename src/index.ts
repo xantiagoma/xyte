@@ -34,4 +34,5 @@ export { createHandler, serve, toNodeHandler, type FetchHandler, type HandlerOpt
 export type { Transport, TransportRequest } from './transport.ts';
 export type * from './types.ts';
 export { EXTRACTION_FIELDS } from './types.ts';
+export { htmlToMarkdown, type MarkdownOptions } from './markdown.ts';
 export { decodeBody } from './util.ts';

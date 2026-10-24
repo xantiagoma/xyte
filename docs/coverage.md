@@ -10,8 +10,8 @@ an entry not listed here.
 
 | Area | Supported or partial |
 | --- | --- |
-| Request fields | 25/56 (+27 pluggable) |
-| Response fields | 12/25 (+13 pluggable) |
+| Request fields | 27/56 (+25 pluggable) |
+| Response fields | 13/25 (+12 pluggable) |
 | Browser actions | 17/20 |
 
 ## Request fields
@@ -46,8 +46,8 @@ an entry not listed here.
 | `jobPostingNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `pageContent` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
 | `pageContentOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `markdown` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. (Zyte's is non-AI; a built-in one is planned.) |
-| `markdownOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `markdown` | ✅ supported | Built in and non-AI, like Zyte's: dependency-free converter with heuristic main-content detection. `extractors.markdown` overrides it. |
+| `markdownOptions` | ✅ supported | `scope` (`mainContent` / `fullPage`), `extractFrom`. |
 | `product` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
 | `productOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `productList` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
@@ -84,7 +84,7 @@ an entry not listed here.
 | `httpResponseBody` | ✅ supported |  |
 | `httpResponseHeaders` | ✅ supported |  |
 | `browserHtml` | ✅ supported |  |
-| `markdown` | 🔌 pluggable |  |
+| `markdown` | ✅ supported |  |
 | `session` | ✅ supported | Echoes the request `session`. |
 | `screenshot` | ✅ supported |  |
 | `article` | 🔌 pluggable |  |

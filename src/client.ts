@@ -7,6 +7,7 @@ import {
   unsupported,
   XyteError,
 } from './errors.ts';
+import { htmlToMarkdown } from './markdown.ts';
 import { direct, type ProxyContext, type ProxyProvider } from './proxy.ts';
 import { defaultTransport, type Transport } from './transport.ts';
 import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
@@ -54,7 +55,8 @@ export interface XyteOptions {
   browser?: BrowserOptions;
   /**
    * Implementations for Zyte's extraction outputs (`product`, `article`, `markdown`, …), keyed by
-   * field. Requests for a field without an extractor are rejected with a 400.
+   * field. Requests for a field without an extractor are rejected with a 400, except `markdown`,
+   * which has a built-in (non-AI, like Zyte's) converter.
    */
   extractors?: Partial<Record<ExtractionField, Extractor>>;
   /** Low-level HTTP sender; replace to add logging, or for tests. */
@@ -191,7 +193,12 @@ export class Xyte {
     for (const field of UNSUPPORTED_FIELDS) if (request[field] != null) throw unsupported(`"${field}"`);
 
     const extractions = EXTRACTION_FIELDS.filter((field) => request[field] != null && request[field] !== false);
+    if (request.markdown && (request.serp || request.customAttributes)) {
+      throw invalidRequest('markdown cannot be combined with serp or customAttributes');
+    }
     for (const field of extractions) {
+      // Zyte's markdown is non-AI: built in, unless an extractor overrides it.
+      if (field === 'markdown') continue;
       if (!this.options.extractors?.[field]) {
         throw unsupported(`"${field}" without an extractor (pass one in \`extractors.${field}\`)`);
       }
@@ -251,8 +258,8 @@ export class Xyte {
   ): Promise<ExtractResponse> {
     const response: ExtractResponse = { ...result.response };
     for (const field of plan.extractions) {
-      const extractor = this.options.extractors![field]!;
-      (response as Record<string, unknown>)[field] = await extractor({
+      const extractor = this.options.extractors?.[field] ?? (field === 'markdown' ? builtInMarkdown : undefined);
+      (response as Record<string, unknown>)[field] = await extractor!({
         url: response.url ?? request.url,
         html: result.html ?? '',
         request,
@@ -266,6 +273,9 @@ export class Xyte {
     return response;
   }
 }
+
+const builtInMarkdown: Extractor = ({ html, url, options }) =>
+  htmlToMarkdown(html, { url, scope: (options as { scope?: 'mainContent' | 'fullPage' } | undefined)?.scope });
 
 /** Shorthand for `new Xyte(options)`. */
 export function createXyte(options?: XyteOptions): Xyte {
