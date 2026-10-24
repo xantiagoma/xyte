@@ -10,7 +10,7 @@ an entry not listed here.
 
 | Area | Supported or partial |
 | --- | --- |
-| Request fields | 27/56 (+25 pluggable) |
+| Request fields | 30/56 (+25 pluggable) |
 | Response fields | 13/25 (+12 pluggable) |
 | Browser actions | 17/20 |
 
@@ -65,15 +65,15 @@ an entry not listed here.
 | `echoData` | ✅ supported |  |
 | `viewport` | ✅ supported |  |
 | `followRedirect` | ✅ supported | HTTP requests (browsers always follow, as on Zyte). |
-| `sessionContext` | ❌ unsupported | Server-managed sessions; use `session.id`. |
-| `sessionContextParameters` | ❌ unsupported |  |
+| `sessionContext` | ✅ supported | In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances. |
+| `sessionContextParameters` | 🟡 partial | `actions` run once per new session in a browser at the request URL; Zyte-only actions are rejected. |
 | `session` | ✅ supported | Sticky exit IP through the provider, plus a cookie jar kept in memory per process. |
 | `networkCapture` | ✅ supported | `url` and `resourceType` filters; max 10 captures / 5 MiB. |
 | `device` | ✅ supported | Mobile user agent and client hints; mobile viewport in the browser. |
 | `cookieManagement` | ✅ supported |  |
 | `requestCookies` | ✅ supported |  |
 | `responseCookies` | ✅ supported |  |
-| `includeIframes` | ❌ unsupported |  |
+| `includeIframes` | 🟡 partial | Each frame's document is written into its `<iframe>` element; Zyte doesn't document its exact format. |
 
 ## Response fields
 

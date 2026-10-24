@@ -44,6 +44,10 @@ export function startTarget() {
         case '/flaky':
           // Banned twice, then fine.
           return count <= 2 ? new Response('blocked', { status: 403 }) : new Response('finally');
+        case '/frames':
+          return new Response('<html><body><p>outer</p><iframe src="/html"></iframe></body></html>', {
+            headers: { 'content-type': 'text/html' },
+          });
         case '/api/data':
           return Response.json({ secret: 42 });
         case '/app':

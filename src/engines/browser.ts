@@ -204,6 +204,7 @@ export class BrowserEngine {
         }
       }
 
+      if (request.includeIframes) await embedIframes(page);
       const html = truncate(await page.content());
       const response: EngineResult['response'] = {
         url: page.url(),
@@ -447,6 +448,31 @@ async function runAction(page: Page, action: Action, remaining: () => number): P
     }
     default:
       throw new Error(`unsupported action "${(action as Action).action}"`);
+  }
+}
+
+/**
+ * `includeIframes`: write each frame's document into its `<iframe>` element as text. HTML
+ * serializes iframe text unescaped, so the frame's markup appears inline in browserHtml. Innermost
+ * frames first, so nested iframes nest.
+ */
+async function embedIframes(page: Page): Promise<void> {
+  const depth = (frame: ReturnType<Page['mainFrame']>) => {
+    let d = 0;
+    for (let f = frame.parentFrame(); f; f = f.parentFrame()) d++;
+    return d;
+  };
+  const frames = page.frames().filter((f) => f !== page.mainFrame()).sort((a, b) => depth(b) - depth(a));
+  for (const frame of frames) {
+    try {
+      const html = await frame.content();
+      const element = await frame.frameElement();
+      await element.evaluate((el, content) => {
+        el.textContent = content;
+      }, html);
+    } catch {
+      // Detached or cross-process frame that went away: leave it empty, as without the option.
+    }
   }
 }
 

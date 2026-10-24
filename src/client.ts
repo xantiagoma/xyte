@@ -9,6 +9,7 @@ import {
 } from './errors.ts';
 import { htmlToMarkdown } from './markdown.ts';
 import { direct, type ProxyContext, type ProxyProvider } from './proxy.ts';
+import { SessionPool, type PooledSession, type SessionPoolOptions } from './sessions.ts';
 import { defaultTransport, type Transport } from './transport.ts';
 import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
 import { CookieJar, randomSessionId, sleep } from './util.ts';
@@ -59,6 +60,8 @@ export interface XyteOptions {
    * which has a built-in (non-AI, like Zyte's) converter.
    */
   extractors?: Partial<Record<ExtractionField, Extractor>>;
+  /** Server-managed sessions (`sessionContext`): pool size, max age, bans before retiring. */
+  sessions?: SessionPoolOptions;
   /** Low-level HTTP sender; replace to add logging, or for tests. */
   transport?: Transport;
   /** Called before each retry. */
@@ -66,7 +69,7 @@ export interface XyteOptions {
 }
 
 const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
-const BROWSER_ONLY = ['actions', 'networkCapture', 'javascript', 'viewport', 'screenshotOptions'] as const;
+const BROWSER_ONLY = ['actions', 'networkCapture', 'javascript', 'viewport', 'screenshotOptions', 'includeIframes'] as const;
 const HTTP_ONLY = [
   'httpRequestMethod',
   'httpRequestBody',
@@ -74,7 +77,6 @@ const HTTP_ONLY = [
   'customHttpRequestHeaders',
   'followRedirect',
 ] as const;
-const UNSUPPORTED_FIELDS = ['sessionContext', 'sessionContextParameters', 'includeIframes'] as const;
 
 export class Xyte {
   private readonly proxy: ProxyProvider;
@@ -84,6 +86,7 @@ export class Xyte {
   private readonly browser: BrowserEngine;
   private readonly transport: Transport;
   private readonly sessions = new Map<string, CookieJar>();
+  private readonly pool: SessionPool;
   private readonly limit: <T>(task: () => Promise<T>) => Promise<T>;
 
   constructor(private readonly options: XyteOptions = {}) {
@@ -94,6 +97,7 @@ export class Xyte {
     this.browser = new BrowserEngine(options.browser);
     this.transport = options.transport ?? defaultTransport;
     this.limit = limiter(options.concurrency ?? Number.POSITIVE_INFINITY);
+    this.pool = new SessionPool(options.sessions);
   }
 
   /**
@@ -120,6 +124,7 @@ export class Xyte {
     const plan = this.plan(request);
     const country = request.geolocation?.toUpperCase();
     const pinnedSession = request.session?.id;
+    const poolKey = request.sessionContext ? SessionPool.key(request.sessionContext) : undefined;
     let lastReason = 'unknown error';
     let lastCause: unknown;
     let lastWasBan = false;
@@ -131,13 +136,13 @@ export class Xyte {
         cancel?.throwIfAborted();
       }
 
-      const sessionId = pinnedSession ?? randomSessionId();
-      const jar = this.jarFor(request, pinnedSession);
-      const timeout = AbortSignal.timeout(this.timeoutMs);
-      const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout;
-
-      let result: EngineResult;
+      // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
+      const pooled = poolKey ? this.pool.acquire(poolKey) : undefined;
+      let outcome: 'ok' | 'ban' = 'ban';
       try {
+        const sessionId = pooled?.id ?? pinnedSession ?? randomSessionId();
+        const timeout = AbortSignal.timeout(this.timeoutMs);
+        const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout;
         const context: ProxyContext = {
           url: new URL(request.url),
           country,
@@ -146,36 +151,76 @@ export class Xyte {
           attempt,
           browser: plan.browser,
         };
-        const proxy = await this.proxy.resolve(context);
-        const engineAttempt: EngineAttempt = { request, context, proxy, jar, signal };
-        result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
-      } catch (error) {
-        if (error instanceof XyteError) throw error;
-        if (cancel?.aborted) throw cancel.reason;
-        const classified = classifyError(error);
-        if (classified === 'unreachable') {
-          throw domainUnreachable(`could not resolve ${new URL(request.url).hostname}`, error);
+
+        let jar: CookieJar;
+        let result: EngineResult;
+        try {
+          if (pooled) {
+            pooled.ready ??= this.initSession(request, pooled, context, signal);
+            await pooled.ready.catch((error) => {
+              this.pool.discard(poolKey!, pooled);
+              throw error;
+            });
+          }
+          jar = pooled ? new CookieJar(pooled.jar.all()) : this.jarFor(request, pinnedSession);
+          const proxy = await this.proxy.resolve(context);
+          const engineAttempt: EngineAttempt = { request, context, proxy, jar, signal };
+          result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
+        } catch (error) {
+          if (error instanceof XyteError) throw error;
+          if (cancel?.aborted) throw cancel.reason;
+          const classified = classifyError(error);
+          if (classified === 'unreachable') {
+            throw domainUnreachable(`could not resolve ${new URL(request.url).hostname}`, error);
+          }
+          lastReason = describe(error);
+          lastCause = error;
+          lastWasBan = false;
+          continue;
         }
-        lastReason = describe(error);
-        lastCause = error;
-        lastWasBan = false;
-        continue;
-      }
 
-      if (this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
-        lastReason = `ban detected (HTTP ${result.statusCode})`;
-        lastCause = undefined;
-        lastWasBan = true;
-        continue;
-      }
+        if (this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
+          lastReason = `ban detected (HTTP ${result.statusCode})`;
+          lastCause = undefined;
+          lastWasBan = true;
+          continue;
+        }
 
-      if (pinnedSession) this.sessions.set(pinnedSession, jar);
-      return this.finish(request, plan, result, jar);
+        outcome = 'ok';
+        if (pooled) pooled.jar = jar;
+        else if (pinnedSession) this.sessions.set(pinnedSession, jar);
+        return this.finish(request, plan, result, jar);
+      } finally {
+        if (pooled) this.pool.release(pooled, outcome);
+      }
     }
 
     throw temporaryDownloadError(`${lastReason} after ${this.retries + 1} attempts`, {
       ban: lastWasBan,
       cause: lastCause,
+    });
+  }
+
+  /**
+   * Runs `sessionContextParameters.actions` once for a new pooled session, in a browser at the
+   * request URL, through the session's sticky exit. Its cookies seed the session.
+   */
+  private async initSession(
+    request: ExtractRequest,
+    session: PooledSession,
+    context: ProxyContext,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const actions = request.sessionContextParameters?.actions;
+    if (!actions?.length) return;
+    const initContext = { ...context, browser: true };
+    const proxy = await this.proxy.resolve(initContext);
+    await this.browser.run({
+      request: { url: request.url, browserHtml: true, actions, device: request.device },
+      context: initContext,
+      proxy,
+      jar: session.jar,
+      signal,
     });
   }
 
@@ -190,7 +235,13 @@ export class Xyte {
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw invalidRequest('"url" must be http or https');
 
-    for (const field of UNSUPPORTED_FIELDS) if (request[field] != null) throw unsupported(`"${field}"`);
+    if (request.sessionContext) {
+      if (request.session) throw invalidRequest('sessionContext cannot be combined with session');
+      if (request.sessionContext.length === 0) throw invalidRequest('sessionContext must not be empty');
+      assertSupportedActions(request.sessionContextParameters?.actions);
+    } else if (request.sessionContextParameters) {
+      throw invalidRequest('sessionContextParameters requires sessionContext');
+    }
 
     const extractions = EXTRACTION_FIELDS.filter((field) => request[field] != null && request[field] !== false);
     if (request.markdown && (request.serp || request.customAttributes)) {

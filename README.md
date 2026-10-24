@@ -157,8 +157,11 @@ request is rejected with a 400.
 new Xyte({ extractors: { product: async ({ html, url }) => myLlmExtract(html, url) } });
 ```
 
+**Sessions**: `session.id` (client-managed: sticky exit + cookie jar) and `sessionContext` +
+`sessionContextParameters` (server-managed pool initialized by actions, retired after 4 h or 3 bans).
+
 **Not supported yet:** Zyte-specific actions (`searchKeyword`, `setLocation`, `interaction`),
-`sessionContext`, `includeIframes`, built-in AI extraction, Zyte's proxy mode and Stats API.
+built-in AI extraction, Zyte's proxy mode and Stats API.
 Field-by-field status: [docs/coverage.md](docs/coverage.md).
 
 ## Development

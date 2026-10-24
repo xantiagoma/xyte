@@ -67,15 +67,24 @@ export const REQUEST: Record<string, Entry> = {
   echoData: { status: 'supported' },
   viewport: { status: 'supported' },
   followRedirect: { status: 'supported', note: 'HTTP requests (browsers always follow, as on Zyte).' },
-  sessionContext: { status: 'unsupported', note: 'Server-managed sessions; use `session.id`.' },
-  sessionContextParameters: { status: 'unsupported' },
+  sessionContext: {
+    status: 'supported',
+    note: 'In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances.',
+  },
+  sessionContextParameters: {
+    status: 'partial',
+    note: '`actions` run once per new session in a browser at the request URL; Zyte-only actions are rejected.',
+  },
   session: { status: 'supported', note: 'Sticky exit IP through the provider, plus a cookie jar kept in memory per process.' },
   networkCapture: { status: 'supported', note: '`url` and `resourceType` filters; max 10 captures / 5 MiB.' },
   device: { status: 'supported', note: 'Mobile user agent and client hints; mobile viewport in the browser.' },
   cookieManagement: { status: 'supported' },
   requestCookies: { status: 'supported' },
   responseCookies: { status: 'supported' },
-  includeIframes: { status: 'unsupported' },
+  includeIframes: {
+    status: 'partial',
+    note: "Each frame's document is written into its `<iframe>` element; Zyte doesn't document its exact format.",
+  },
 };
 
 export const RESPONSE: Record<string, Entry> = {

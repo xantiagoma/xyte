@@ -59,6 +59,7 @@ export {
 } from './providers.ts';
 export { brightDataBrowser, browserless, nodeMavenBrowser, oxylabsBrowser, zenrowsBrowser } from './browsers.ts';
 export { createHandler, serve, toNodeHandler, type FetchHandler, type HandlerOptions } from './server.ts';
+export type { SessionPoolOptions } from './sessions.ts';
 export type { Transport, TransportRequest } from './transport.ts';
 export type * from './types.ts';
 export { EXTRACTION_FIELDS } from './types.ts';
