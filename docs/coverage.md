@@ -32,31 +32,31 @@ an entry not listed here.
 | `screenshot` | ✅ supported |  |
 | `screenshotOptions` | ✅ supported | `format`, `fullPage`. |
 | `extractFrom` | 🔌 pluggable | Picks HTTP vs browser for extractors; `userHtml` is not supported. |
-| `article` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `article` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `articleOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `articleList` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `articleList` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `articleListOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `articleNavigation` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `articleNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `articleNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `forumThread` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `forumThread` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `forumThreadOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `jobPosting` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `jobPosting` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `jobPostingOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `jobPostingNavigation` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `jobPostingNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `jobPostingNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `pageContent` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `pageContent` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `pageContentOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `markdown` | ✅ supported | Built in and non-AI, like Zyte's: dependency-free converter with heuristic main-content detection. `extractors.markdown` overrides it. |
 | `markdownOptions` | ✅ supported | `scope` (`mainContent` / `fullPage`), `extractFrom`. |
-| `product` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `product` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `productOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `productList` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `productList` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `productListOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `productNavigation` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `productNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `productNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `customAttributes` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `customAttributes` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `customAttributesOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `serp` | 🔌 pluggable | Runs your `extractors.<field>` function; 400 without one. |
+| `serp` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `serpOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `geolocation` | ✅ supported | Encoded into the provider credentials; ignored by `direct()` and plain `proxyUrl()`. |
 | `javascript` | ✅ supported |  |

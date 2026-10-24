@@ -13,7 +13,7 @@ export interface Entry {
   note?: string;
 }
 
-const EXTRACTOR = 'Runs your `extractors.<field>` function; 400 without one.';
+const EXTRACTOR = '`llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one.';
 const EXTRACTOR_OPTIONS = 'Passed to your extractor as `options`; `extractFrom` picks HTTP or browser.';
 
 export const REQUEST: Record<string, Entry> = {

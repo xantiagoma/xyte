@@ -14,7 +14,7 @@ only the base URL.
 Runs on **Node.js ≥ 22** and **Bun**.
 
 **Docs:** [Zyte API coverage](docs/coverage.md) · [providers](docs/providers.md) ·
-[browser & stealth](docs/browser.md) · [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
+[browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) · [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
 [migrating from Zyte](docs/migrating-from-zyte.md) · [examples](examples/)
 
 ```sh
@@ -149,19 +149,20 @@ the 60 s browser time budget, and the actions `click`, `doubleClick`, `hover`, `
 
 **Markdown**: built in and non-AI like Zyte's, with `mainContent` / `fullPage` scopes.
 
-**AI extraction** (`product`, `article`, `pageContent`, `serp`, `customAttributes`…):
-pluggable. Register an `extractors.<field>` function, for example an LLM call. Without one, the
-request is rejected with a 400.
+**AI extraction** (`product`, `article`, `jobPosting`, `serp`, `customAttributes`…): through any
+LLM, using Zyte's own output schemas, so responses keep Zyte's shape ([docs/extraction.md](docs/extraction.md)):
 
 ```ts
-new Xyte({ extractors: { product: async ({ html, url }) => myLlmExtract(html, url) } });
+new Xyte({ extractors: llmExtractors({ complete: openAICompatible({ baseURL, apiKey, model }) }) });
 ```
+
+Without an extractor, those fields get a 400.
 
 **Sessions**: `session.id` (client-managed: sticky exit + cookie jar) and `sessionContext` +
 `sessionContextParameters` (server-managed pool initialized by actions, retired after 4 h or 3 bans).
 
 **Not supported yet:** Zyte-specific actions (`searchKeyword`, `setLocation`, `interaction`),
-built-in AI extraction, Zyte's proxy mode and Stats API.
+Zyte's proxy mode and Stats API.
 Field-by-field status: [docs/coverage.md](docs/coverage.md).
 
 ## Development

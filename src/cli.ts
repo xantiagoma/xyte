@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
-import { browserFromEnv, proxyFromEnv } from './env.ts';
+import { browserFromEnv, extractorsFromEnv, proxyFromEnv } from './env.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -25,6 +25,9 @@ Browser (environment):
   XYTE_BROWSER=playwright|patchright|<package>   XYTE_BROWSER_CHANNEL=chrome
   XYTE_BROWSER_WS=wss://…{country:lower}…       remote browser per request (CDP)
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
+
+AI extraction (product, article, customAttributes…) via any OpenAI-compatible API:
+  XYTE_LLM_MODEL=gpt-5-mini  XYTE_LLM_BASE_URL=https://openrouter.ai/api/v1  XYTE_LLM_API_KEY=…
 `;
 
 const { values, positionals } = parseArgs({
@@ -46,6 +49,7 @@ const num = (value: string | undefined) => (value ? Number(value) : undefined);
 const xyte = new Xyte({
   proxy: proxyFromEnv(env),
   browser: browserFromEnv(env),
+  extractors: extractorsFromEnv(env),
   retries: num(env.XYTE_RETRIES),
   timeout: num(env.XYTE_TIMEOUT),
   concurrency: num(env.XYTE_CONCURRENCY),

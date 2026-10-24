@@ -12,7 +12,10 @@ import {
   zenrows,
   type ProxyProvider,
 } from './proxy.ts';
+import type { Extractor } from './client.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
+import { llmExtractors, openAICompatible } from './llm.ts';
+import type { ExtractionField } from './types.ts';
 import * as long from './providers.ts';
 import { brightDataBrowser, browserless, nodeMavenBrowser, oxylabsBrowser, zenrowsBrowser } from './browsers.ts';
 
@@ -190,3 +193,22 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
 
 /** Names accepted by `XYTE_PROVIDER`. */
 export const PROVIDER_NAMES: readonly string[] = Object.keys(PROVIDERS);
+
+/**
+ * AI extraction from environment variables (any OpenAI-compatible API):
+ * `XYTE_LLM_MODEL` (required to enable), `XYTE_LLM_BASE_URL` (default OpenAI), `XYTE_LLM_API_KEY`,
+ * `XYTE_LLM_RESPONSE_FORMAT=json_object` for servers without JSON-schema output. Unset: no AI
+ * extraction (those fields get a 400, as without an extractor).
+ */
+export function extractorsFromEnv(env: Env = process.env): Partial<Record<ExtractionField, Extractor>> | undefined {
+  if (!env.XYTE_LLM_MODEL) return undefined;
+  return llmExtractors({
+    complete: openAICompatible({
+      model: env.XYTE_LLM_MODEL,
+      baseURL: env.XYTE_LLM_BASE_URL,
+      apiKey: env.XYTE_LLM_API_KEY,
+      responseFormat: env.XYTE_LLM_RESPONSE_FORMAT === 'json_object' ? 'json_object' : 'json_schema',
+    }),
+    maxInputChars: env.XYTE_LLM_MAX_INPUT_CHARS ? Number(env.XYTE_LLM_MAX_INPUT_CHARS) : undefined,
+  });
+}

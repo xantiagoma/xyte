@@ -8,7 +8,7 @@ export {
   type XyteOptions,
 } from './client.ts';
 export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } from './engines/browser.ts';
-export { browserFromEnv, PROVIDER_NAMES, proxyFromEnv } from './env.ts';
+export { browserFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv } from './env.ts';
 export { XyteError, type XyteProblem } from './errors.ts';
 export {
   brightData,
@@ -63,5 +63,15 @@ export type { SessionPoolOptions } from './sessions.ts';
 export type { Transport, TransportRequest } from './transport.ts';
 export type * from './types.ts';
 export { EXTRACTION_FIELDS } from './types.ts';
+export {
+  llmExtractors,
+  openAICompatible,
+  parseJson,
+  type Complete,
+  type Completion,
+  type CompletionRequest,
+  type LlmExtractorOptions,
+} from './llm.ts';
 export { htmlToMarkdown, type MarkdownOptions } from './markdown.ts';
+export { OUTPUT_SCHEMAS, type OutputSchemaField } from './schemas.gen.ts';
 export { decodeBody } from './util.ts';
