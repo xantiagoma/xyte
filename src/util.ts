@@ -28,8 +28,11 @@ export function randomSessionId(): string {
  */
 export function sessionToken(sessionId: string, length = 12): string {
   const clean = sessionId.replace(/[^a-zA-Z0-9]/g, '');
-  if (clean.length >= length) return clean.slice(0, length);
-  return (clean + hash(sessionId).toString(36).repeat(4)).slice(0, length);
+  if (clean === sessionId && clean.length === length) return clean;
+  // A readable prefix plus a hash of the whole id: ids that share a prefix stay distinct.
+  const digest = [0, 1, 2, 3].map((i) => hash(`${i}:${sessionId}`).toString(36).padStart(7, '0')).join('');
+  const keep = Math.max(0, Math.min(clean.length, length - 8));
+  return (clean.slice(0, keep) + digest).slice(0, length);
 }
 
 export function sessionNumber(sessionId: string, max = 1_000_000): number {
@@ -88,30 +91,38 @@ export function userAgent(device: 'desktop' | 'mobile' = 'desktop'): string {
 /**
  * A minimal RFC 6265 cookie jar: enough to carry cookies across redirects and across requests
  * that share a Zyte `session.id`.
+ *
+ * Domains follow browser conventions: a leading dot (`.example.com`) is a domain cookie, sent to
+ * subdomains too; no dot is host-only. Cookies passed in (`requestCookies`) without a dot are
+ * treated as domain cookies, as Zyte and browsers' cookie APIs do.
  */
 export class CookieJar {
-  private cookies: Cookie[] = [];
+  private cookies: (Cookie & { hostOnly: boolean })[] = [];
 
   constructor(initial: readonly Cookie[] = []) {
     for (const cookie of initial) this.set(cookie);
   }
 
-  set(cookie: Cookie): void {
-    const domain = cookie.domain.toLowerCase();
+  /** Adds or replaces a cookie. `hostOnly` defaults to false (domain cookie). */
+  set(cookie: Cookie, hostOnly = false): void {
+    const domain = cookie.domain.toLowerCase().replace(/^\./, '');
     const path = cookie.path ?? '/';
-    this.cookies = this.cookies.filter(
-      (c) => !(c.name === cookie.name && c.domain.toLowerCase() === domain && (c.path ?? '/') === path),
-    );
+    this.cookies = this.cookies.filter((c) => !(c.name === cookie.name && c.domain === domain && (c.path ?? '/') === path));
     const expired = cookie.expires != null && cookie.expires * 1000 <= Date.now();
-    if (!expired) this.cookies.push({ ...cookie, path });
+    if (!expired) this.cookies.push({ ...cookie, domain, path, hostOnly });
   }
 
   /** Applies the `Set-Cookie` headers of a response to `url`. */
   setFromHeaders(setCookies: readonly string[], url: URL): void {
     for (const header of setCookies) {
-      const cookie = parseSetCookie(header, url);
-      if (cookie) this.set(cookie);
+      const parsed = parseSetCookie(header, url);
+      if (parsed) this.set(parsed.cookie, parsed.hostOnly);
     }
+  }
+
+  /** Copies another jar's cookies over this one's (cookies only this jar has are kept). */
+  merge(other: CookieJar): void {
+    for (const cookie of other.cookies) this.set(cookie, cookie.hostOnly);
   }
 
   /** The `Cookie` header value for `url`, or undefined. */
@@ -121,8 +132,7 @@ export class CookieJar {
     const matching = this.cookies.filter((c) => {
       if (c.expires != null && c.expires * 1000 <= now) return false;
       if (c.secure && url.protocol !== 'https:') return false;
-      const domain = c.domain.toLowerCase().replace(/^\./, '');
-      if (host !== domain && !host.endsWith(`.${domain}`)) return false;
+      if (c.hostOnly ? host !== c.domain : !domainMatches(host, c.domain)) return false;
       const path = c.path ?? '/';
       return url.pathname === path || url.pathname.startsWith(path.endsWith('/') ? path : `${path}/`);
     });
@@ -130,21 +140,41 @@ export class CookieJar {
     return matching.map((c) => `${c.name}=${c.value}`).join('; ');
   }
 
+  /** Zyte-shaped cookies: domain cookies with a leading dot, host-only ones without. */
   all(): Cookie[] {
-    return this.cookies.map((c) => ({ ...c }));
+    return this.cookies.map(({ hostOnly, ...c }) => ({ ...c, domain: hostOnly ? c.domain : `.${c.domain}` }));
+  }
+
+  /** Like `all()`, with the host-only flag (for handing cookies to a browser). */
+  entries(): { cookie: Cookie; hostOnly: boolean }[] {
+    return this.cookies.map(({ hostOnly, ...cookie }) => ({ cookie: { ...cookie }, hostOnly }));
   }
 }
 
-export function parseSetCookie(header: string, url: URL): Cookie | undefined {
+function domainMatches(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+/** RFC 6265 5.1.4: the directory of the request path. */
+function defaultPath(url: URL): string {
+  const path = url.pathname;
+  if (!path.startsWith('/') || path.lastIndexOf('/') === 0) return '/';
+  return path.slice(0, path.lastIndexOf('/'));
+}
+
+const isIp = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
+
+export function parseSetCookie(header: string, url: URL): { cookie: Cookie; hostOnly: boolean } | undefined {
   const [pair, ...attributes] = header.split(';');
   const eq = pair?.indexOf('=') ?? -1;
   if (!pair || eq <= 0) return undefined;
 
+  const host = url.hostname.toLowerCase();
   const cookie: Cookie = {
     name: pair.slice(0, eq).trim(),
     value: pair.slice(eq + 1).trim(),
-    domain: url.hostname,
-    path: '/',
+    domain: host,
+    path: defaultPath(url),
   };
   let hostOnly = true;
 
@@ -153,7 +183,11 @@ export function parseSetCookie(header: string, url: URL): Cookie | undefined {
     const key = rawKey.trim().toLowerCase();
     const value = rest.join('=').trim();
     if (key === 'domain' && value) {
-      cookie.domain = `.${value.replace(/^\./, '')}`;
+      const domain = value.toLowerCase().replace(/^\./, '');
+      // Reject cookies for other sites and for bare TLDs (a best-effort public-suffix check).
+      if (!domainMatches(host, domain) || (!domain.includes('.') && domain !== 'localhost')) return undefined;
+      if (isIp(host) && domain !== host) return undefined;
+      cookie.domain = domain;
       hostOnly = false;
     } else if (key === 'path' && value.startsWith('/')) cookie.path = value;
     else if (key === 'expires') {
@@ -169,6 +203,5 @@ export function parseSetCookie(header: string, url: URL): Cookie | undefined {
       cookie.sameSite = v === 'strict' ? 'Strict' : v === 'none' ? 'None' : 'Lax';
     }
   }
-  if (hostOnly) cookie.domain = url.hostname;
-  return cookie;
+  return { cookie, hostOnly };
 }

@@ -169,7 +169,10 @@ export function template(format: string, options: { insecure?: boolean; name?: s
   return {
     name: options.name ?? 'template',
     resolve(context) {
-      const withOptional = format.replace(/\[([^\]]*)\]/g, (_, part: string) => fill(part, context) ?? '');
+      const withOptional = format.replace(/\[([^\]]*)\]/g, (whole, part: string) =>
+        // `[::1]` is an IPv6 host, not an optional part.
+        /^[0-9a-f:.]+$/i.test(part) && part.includes(':') ? whole : (fill(part, context) ?? ''),
+      );
       const url = fill(withOptional, context);
       if (url == null) throw new Error(`template: a required placeholder has no value in ${format}`);
       return { url, insecure: options.insecure };

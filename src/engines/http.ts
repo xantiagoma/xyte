@@ -64,9 +64,12 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
     jar.setFromHeaders(res.headers.getSetCookie(), url);
 
     const location = res.headers.get('location');
-    if (request.followRedirect !== false && isRedirect(res.status) && location && hop < MAX_REDIRECTS) {
+    const next = location ? safeUrl(location, url) : undefined;
+    if (request.followRedirect !== false && isRedirect(res.status) && next && hop < MAX_REDIRECTS) {
       await res.body?.cancel();
-      url = new URL(location, url);
+      // As fetch does: credentials don't follow a redirect to another origin.
+      if (next.origin !== url.origin) baseHeaders.delete('authorization');
+      url = next;
       // 301/302/303 turn into GET, 307/308 keep method and body (as browsers do).
       if (res.status === 303 || ((res.status === 301 || res.status === 302) && method === 'POST')) {
         method = 'GET';
@@ -77,8 +80,7 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
       continue;
     }
 
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    const truncated = bytes.byteLength > MAX_BODY_BYTES ? bytes.subarray(0, MAX_BODY_BYTES) : bytes;
+    const truncated = await readCapped(res, MAX_BODY_BYTES);
     const headerList = toHeaderList(res.headers);
 
     const response: ExtractResponse = { url: url.toString(), statusCode: res.status };
@@ -92,6 +94,38 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
       html: new TextDecoder().decode(truncated),
     };
   }
+}
+
+function safeUrl(location: string, base: URL): URL | undefined {
+  try {
+    return new URL(location, base);
+  } catch {
+    return undefined; // a malformed Location: return the redirect response itself
+  }
+}
+
+/** Reads at most `max` bytes, then stops the download (Zyte truncates bodies at 10 MB). */
+async function readCapped(res: Response, max: number): Promise<Uint8Array> {
+  if (!res.body) return new Uint8Array();
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (size < max) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.byteLength;
+  }
+  if (size >= max) await reader.cancel().catch(() => {});
+  const out = new Uint8Array(Math.min(size, max));
+  let offset = 0;
+  for (const chunk of chunks) {
+    const part = chunk.subarray(0, Math.min(chunk.byteLength, out.byteLength - offset));
+    out.set(part, offset);
+    offset += part.byteLength;
+    if (offset >= out.byteLength) break;
+  }
+  return out;
 }
 
 /** The proxy itself failed (auth, tunnel, connection): another exit may work. */

@@ -15,7 +15,8 @@ your scrapers ──POST /v1/extract──▶ xyte (Cloud Run, Fly, Render…) �
 | Start command | `xyte serve` (the images run `node dist/cli.mjs serve`) |
 | Port | `$PORT`, default 8080 in the images (8011 outside them). `HOST=0.0.0.0` is set in the images. |
 | Health check | `GET /healthz` → `200 ok` |
-| Auth | `XYTE_API_KEYS=key1,key2`; callers send `Authorization: Basic base64(key + ":")`, as with Zyte |
+| Auth | `XYTE_API_KEYS=key1,key2`; callers send `Authorization: Basic base64(key + ":")`, as with Zyte. **Required** when listening off-loopback (the images listen on `0.0.0.0`); `XYTE_ALLOW_ANONYMOUS=true` opts out. |
+| Safety | Targets on localhost, private/link-local IPs (incl. `169.254.169.254`) and `*.internal` are rejected (`XYTE_ALLOW_PRIVATE_TARGETS=true` to allow). Request bodies are capped at 10 MB. |
 | Proxy | `XYTE_PROVIDER` + credentials, `XYTE_PROXY_URL` or `XYTE_PROXY_TEMPLATE` ([providers](providers.md)) |
 | Browser | `XYTE_BROWSER`, `XYTE_BROWSER_WS`, `XYTE_BLOCK_RESOURCES`… ([browser](browser.md)) |
 | Tuning | `XYTE_CONCURRENCY`, `XYTE_RETRIES` (3), `XYTE_TIMEOUT` (60 s per attempt) |

@@ -48,6 +48,21 @@ export function startTarget() {
           return new Response('<html><body><p>outer</p><iframe src="/html"></iframe></body></html>', {
             headers: { 'content-type': 'text/html' },
           });
+        case '/to-localhost':
+          // Same server, different origin (127.0.0.1 → localhost).
+          return new Response(null, { status: 302, headers: { location: `http://localhost:${url.port}/echo` } });
+        case '/bad-location':
+          return new Response('moved', { status: 302, headers: { location: 'http://[bad' } });
+        case '/evil-cookies':
+          return new Response('ok', {
+            headers: [
+              ['set-cookie', 'other=1; Domain=bank.example'],
+              ['set-cookie', 'tld=1; Domain=com'],
+              ['set-cookie', 'mine=1'],
+            ],
+          });
+        case '/big':
+          return new Response('x'.repeat(12 * 1024 * 1024));
         case '/api/data':
           return Response.json({ secret: 42 });
         case '/app':

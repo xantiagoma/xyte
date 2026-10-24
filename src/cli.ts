@@ -18,7 +18,8 @@ Proxy (environment):
   XYTE_PROXY_TEMPLATE='http://user[-country-{country:lower}]-session-{session}:pass@host:port'
   XYTE_PROVIDER=oxylabs|brightdata|decodo|iproyal|zenrows|scrapingbee|scraperapi[,…]
     with its credentials, e.g. OXYLABS_USERNAME / OXYLABS_PASSWORD, ZENROWS_API_KEY
-  XYTE_API_KEYS=key1,key2   accepted keys for "serve" (default: any)
+  XYTE_API_KEYS=key1,key2   accepted keys for "serve" (required off-loopback, unless XYTE_ALLOW_ANONYMOUS=true)
+  XYTE_ALLOW_PRIVATE_TARGETS=true   let "serve" fetch localhost / private IPs (blocked by default)
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY
 
 Browser (environment):
@@ -64,9 +65,19 @@ if (values.help || !command) {
 }
 
 if (command === 'serve') {
+  const apiKeys = env.XYTE_API_KEYS?.split(',').map((k) => k.trim()).filter(Boolean) ?? [];
+  const hostname = values.host ?? env.HOST ?? '127.0.0.1';
+  const loopback = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
+  // Without keys on a public interface, anyone could spend your proxy bandwidth.
+  if (apiKeys.length === 0 && !loopback && env.XYTE_ALLOW_ANONYMOUS !== 'true') {
+    console.error(
+      `[xyte] refusing to listen on ${hostname} without XYTE_API_KEYS (set XYTE_ALLOW_ANONYMOUS=true to allow anyone)`,
+    );
+    process.exit(1);
+  }
   const server = await serve(
-    createHandler(xyte, { apiKeys: env.XYTE_API_KEYS?.split(',').map((k) => k.trim()).filter(Boolean) }),
-    { port: num(values.port ?? env.PORT), hostname: values.host ?? env.HOST },
+    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true' }),
+    { port: num(values.port ?? env.PORT), hostname },
   );
   console.error(`[xyte] listening on ${server.url}v1/extract`);
   const shutdown = async () => {

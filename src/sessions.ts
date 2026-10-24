@@ -25,6 +25,9 @@ export interface PooledSession {
   ready?: Promise<void>;
 }
 
+/** Session contexts kept per process; the least recently used are dropped first. */
+const MAX_CONTEXTS = 1_000;
+
 export class SessionPool {
   private readonly pools = new Map<string, PooledSession[]>();
   private readonly size: number;
@@ -41,14 +44,26 @@ export class SessionPool {
     return JSON.stringify([...context].map(({ name, value }) => [name, value]).sort());
   }
 
-  /** The least busy live session of the context, or a new one while the pool has room. */
-  acquire(key: string): PooledSession {
+  /**
+   * The least busy live session of the context, or a new one while the pool has room. Sessions
+   * in `exclude` (failed earlier in the same request) are skipped; if only they remain, one of
+   * them is replaced, so a retry never goes back through the exit that was just banned.
+   */
+  acquire(key: string, exclude: ReadonlySet<string> = new Set()): PooledSession {
     const now = Date.now();
     const pool = (this.pools.get(key) ?? []).filter((s) => s.bans < this.maxBans && now - s.createdAt < this.maxAgeMs);
-    this.pools.set(key, pool);
+    this.pools.delete(key);
+    this.pools.set(key, pool); // most recently used context last
+    while (this.pools.size > MAX_CONTEXTS) this.pools.delete(this.pools.keys().next().value!);
 
-    let session = pool.reduce<PooledSession | undefined>((best, s) => (!best || s.inFlight < best.inFlight ? s : best), undefined);
+    const usable = pool.filter((s) => !exclude.has(s.id));
+    let session = usable.reduce<PooledSession | undefined>((best, s) => (!best || s.inFlight < best.inFlight ? s : best), undefined);
     if (!session || (session.inFlight > 0 && pool.length < this.size)) {
+      if (pool.length >= this.size) {
+        // Full: retire the worst excluded (or busiest) session to make room.
+        const victim = [...pool].sort((a, b) => Number(exclude.has(b.id)) - Number(exclude.has(a.id)) || b.bans - a.bans)[0];
+        if (victim) pool.splice(pool.indexOf(victim), 1);
+      }
       session = { id: randomSessionId(), jar: new CookieJar(), createdAt: now, bans: 0, inFlight: 0 };
       pool.push(session);
     }

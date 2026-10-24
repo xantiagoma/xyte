@@ -3,6 +3,7 @@ import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.t
 import {
   domainUnreachable,
   invalidRequest,
+  serverError,
   temporaryDownloadError,
   unsupported,
   XyteError,
@@ -69,6 +70,8 @@ export interface XyteOptions {
 }
 
 const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
+/** Client-managed sessions (`session.id`) remembered per process. */
+const MAX_CLIENT_SESSIONS = 10_000;
 const BROWSER_ONLY = ['actions', 'networkCapture', 'javascript', 'viewport', 'screenshotOptions', 'includeIframes'] as const;
 const HTTP_ONLY = [
   'httpRequestMethod',
@@ -125,6 +128,8 @@ export class Xyte {
     const country = request.geolocation?.toUpperCase();
     const pinnedSession = request.session?.id;
     const poolKey = request.sessionContext ? SessionPool.key(request.sessionContext) : undefined;
+    // Pooled sessions that failed this request: retries go through another one.
+    const failedSessions = new Set<string>();
     let lastReason = 'unknown error';
     let lastCause: unknown;
     let lastWasBan = false;
@@ -137,7 +142,7 @@ export class Xyte {
       }
 
       // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
-      const pooled = poolKey ? this.pool.acquire(poolKey) : undefined;
+      const pooled = poolKey ? this.pool.acquire(poolKey, failedSessions) : undefined;
       let outcome: 'ok' | 'ban' = 'ban';
       try {
         const sessionId = pooled?.id ?? pinnedSession ?? randomSessionId();
@@ -155,6 +160,7 @@ export class Xyte {
         let jar: CookieJar;
         let result: EngineResult;
         let trusted = false;
+        let direct = true;
         try {
           if (pooled) {
             pooled.ready ??= this.initSession(request, pooled, context, signal);
@@ -164,7 +170,13 @@ export class Xyte {
             });
           }
           jar = pooled ? new CookieJar(pooled.jar.all()) : this.jarFor(request, pinnedSession);
-          const endpoint = await this.proxy.resolve(context);
+          const endpoint = await Promise.resolve()
+            .then(() => this.proxy.resolve(context))
+            .catch((error: unknown) => {
+              // A provider that can't build its endpoint is misconfigured; retrying won't help.
+              throw serverError(`proxy provider "${this.proxy.name}" failed: ${describe(error)}`, error);
+            });
+          direct = endpoint == null;
           if (isApiEndpoint(endpoint)) {
             // A scraping API takes the whole request (it renders, solves and proxies itself).
             const answer = await endpoint.api(request, { context, signal });
@@ -177,7 +189,7 @@ export class Xyte {
         } catch (error) {
           if (error instanceof XyteError) throw error;
           if (cancel?.aborted) throw cancel.reason;
-          const classified = classifyError(error);
+          const classified = classifyError(error, { direct, host: context.url.hostname });
           if (classified === 'unreachable') {
             throw domainUnreachable(`could not resolve ${new URL(request.url).hostname}`, error);
           }
@@ -195,11 +207,15 @@ export class Xyte {
         }
 
         outcome = 'ok';
-        if (pooled) pooled.jar = jar;
-        else if (pinnedSession) this.sessions.set(pinnedSession, jar);
+        // Merge, not replace: parallel requests on one session each add their cookies.
+        if (pooled) pooled.jar.merge(jar);
+        else if (pinnedSession) this.rememberSession(pinnedSession, jar);
         return this.finish(request, plan, result, jar);
       } finally {
-        if (pooled) this.pool.release(pooled, outcome);
+        if (pooled) {
+          this.pool.release(pooled, outcome);
+          if (outcome === 'ban') failedSessions.add(pooled.id);
+        }
       }
     }
 
@@ -275,6 +291,17 @@ export class Xyte {
     if (request.customHttpRequestHeaders?.some((h) => h.name?.toLowerCase() === 'cookie')) {
       throw invalidRequest('use requestCookies, not a Cookie header in customHttpRequestHeaders');
     }
+    const probe = new Headers();
+    for (const { name, value } of [
+      ...(request.customHttpRequestHeaders ?? []),
+      ...(request.requestHeaders?.referer != null ? [{ name: 'referer', value: request.requestHeaders.referer }] : []),
+    ]) {
+      try {
+        probe.set(String(name), String(value));
+      } catch {
+        throw invalidRequest(`invalid HTTP header ${JSON.stringify(name)}`);
+      }
+    }
 
     // Extraction alone picks its source from `<field>Options.extractFrom`, else HTTP.
     const extractFromBrowser = extractions.some((field) => {
@@ -301,6 +328,17 @@ export class Xyte {
       }
     }
     return { browser, extractions };
+  }
+
+  private rememberSession(sessionId: string, jar: CookieJar): void {
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      existing.merge(jar);
+      this.sessions.delete(sessionId);
+    }
+    this.sessions.set(sessionId, existing ?? jar);
+    // Bounded: the least recently used sessions are forgotten first.
+    while (this.sessions.size > MAX_CLIENT_SESSIONS) this.sessions.delete(this.sessions.keys().next().value!);
   }
 
   private jarFor(request: ExtractRequest, sessionId: string | undefined): CookieJar {
@@ -371,13 +409,17 @@ export function isLikelyBan(page: BanCheck): boolean {
   return CHALLENGE_MARKERS.some((marker) => marker.test(html));
 }
 
-function classifyError(error: unknown): 'unreachable' | 'retry' {
+/**
+ * Only a direct connection's failure to resolve the *target* is a 421. Through a proxy, a DNS
+ * error is about the proxy's own host (a typo, an outage): retried, so `rotate()` moves on.
+ */
+function classifyError(error: unknown, target: { direct: boolean; host: string }): 'unreachable' | 'retry' {
+  if (!target.direct) return 'retry';
   const text = describe(error);
-  if (/ENOTFOUND|EAI_AGAIN.*ENOTFOUND|ERR_NAME_NOT_RESOLVED|getaddrinfo .*ENOTFOUND|DNS.*not.*found/i.test(text)) {
-    // Through a proxy, the proxy resolves names; a DNS failure here is the target's.
-    return 'unreachable';
-  }
-  return 'retry';
+  if (!/ENOTFOUND|ERR_NAME_NOT_RESOLVED|DNS.*not.*found/i.test(text)) return 'retry';
+  const hostOf = (e: unknown) => (e as { hostname?: string } | undefined)?.hostname;
+  const failedHost = hostOf(error) ?? hostOf((error as { cause?: unknown })?.cause);
+  return failedHost == null || failedHost === target.host || text.includes(target.host) ? 'unreachable' : 'retry';
 }
 
 function describe(error: unknown): string {

@@ -15,7 +15,18 @@ export interface HandlerOptions {
    * framework strips it.
    */
   basePath?: string;
+  /** Largest accepted request body. Default 10 MB. */
+  maxBodyBytes?: number;
+  /**
+   * Reject targets on loopback, private, link-local and cloud-metadata addresses (IP literals,
+   * `localhost`, `*.local`, `*.internal`), so a public endpoint can't be aimed at your internal
+   * network. Hostnames that *resolve* to private IPs are not caught; with a proxy provider, the
+   * proxy's network is what's reachable anyway. Default false; `xyte serve` turns it on.
+   */
+  blockPrivateTargets?: boolean;
 }
+
+const DEFAULT_MAX_BODY = 10 * 1024 * 1024;
 
 export type FetchHandler = (request: Request) => Promise<Response>;
 
@@ -27,6 +38,7 @@ export type FetchHandler = (request: Request) => Promise<Response>;
 export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHandler {
   const keys = new Set(options.apiKeys ?? []);
   const base = options.basePath?.replace(/\/+$/, '');
+  const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY;
   const route = (pathname: string, path: string) =>
     base != null ? pathname === `${base}${path}` : pathname === path || pathname.endsWith(path);
 
@@ -43,14 +55,21 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
       return problem({ status: 401, type: '/auth/key-not-found', title: 'Authentication Key Not Found' });
     }
 
+    const text = await readText(request, maxBody);
+    if (text == null) {
+      return problem({ status: 413, type: '/request/too-large', title: 'Payload Too Large', detail: `limit is ${maxBody} bytes` });
+    }
     let body: ExtractRequest;
     try {
-      body = (await request.json()) as ExtractRequest;
+      body = JSON.parse(text) as ExtractRequest;
     } catch {
       return problem({ status: 400, type: '/request/invalid-json', title: 'Invalid JSON' });
     }
     if (body == null || typeof body !== 'object' || Array.isArray(body)) {
       return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'body must be an object' });
+    }
+    if (options.blockPrivateTargets && typeof body.url === 'string' && isPrivateTarget(body.url)) {
+      return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'private and internal addresses are not allowed' });
     }
 
     try {
@@ -66,6 +85,51 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
       });
     }
   };
+}
+
+/** The body as text, or undefined past `max` bytes. */
+async function readText(request: Request, max: number): Promise<string | undefined> {
+  const declared = Number(request.headers.get('content-length') ?? NaN);
+  if (Number.isFinite(declared) && declared > max) return undefined;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+/** Loopback, RFC 1918, link-local (incl. 169.254.169.254), CGNAT, ULA, and internal names. */
+export function isPrivateTarget(target: string): boolean {
+  let host: string;
+  try {
+    host = new URL(target).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true;
+  if (host === 'metadata.google.internal') return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  if (host.includes(':')) {
+    return host === '::1' || host === '::' || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith('::ffff:');
+  }
+  return false;
 }
 
 function problem(body: { status: number; type: string; title: string; detail?: string }): Response {
@@ -92,7 +156,9 @@ function apiKeyOf(request: Request): string | undefined {
  */
 export function toNodeHandler(
   handler: FetchHandler,
+  options: { maxBodyBytes?: number } = {},
 ): (req: IncomingMessage & { body?: unknown }, res: ServerResponse) => Promise<void> {
+  const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY;
   return async (req, res) => {
     const abort = new AbortController();
     res.on('close', () => {
@@ -113,7 +179,17 @@ export function toNodeHandler(
         headers.delete('content-length');
       } else if (hasBody) {
         const chunks: Buffer[] = [];
-        for await (const chunk of req) chunks.push(chunk as Buffer);
+        let size = 0;
+        for await (const chunk of req) {
+          size += (chunk as Buffer).byteLength;
+          if (size > maxBody) {
+            res.writeHead(413, { 'content-type': 'application/problem+json' });
+            res.end(JSON.stringify({ status: 413, type: '/request/too-large', title: 'Payload Too Large' }));
+            req.destroy();
+            return;
+          }
+          chunks.push(chunk as Buffer);
+        }
         body = Buffer.concat(chunks);
       }
       const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, {

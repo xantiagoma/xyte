@@ -16,6 +16,10 @@ const xyte = new Xyte({ proxy: proxyFromEnv() });
 const handler = createHandler(xyte, { apiKeys: ['secret'], basePath: '/zyte' });
 ```
 
+Options: `apiKeys`, `basePath`, `maxBodyBytes` (default 10 MB, 413 beyond), and
+`blockPrivateTargets`. That last one rejects loopback, private and metadata addresses: turn it on
+for anything public-facing (`xyte serve` does).
+
 When the caller hangs up, the scrape is cancelled: the `Request` signal is passed to
 `extract()`, which aborts the fetch or closes the browser context.
 
@@ -55,7 +59,7 @@ fastify.all('/zyte/*', (request, reply) => {
 });
 
 // node:http
-http.createServer(toNodeHandler(createHandler(xyte))).listen(8011);
+http.createServer(toNodeHandler(createHandler(xyte), { maxBodyBytes: 10 * 1024 * 1024 })).listen(8011);
 ```
 
 Or skip the HTTP layer entirely: `await xyte.extract({ url, httpResponseBody: true })` from any

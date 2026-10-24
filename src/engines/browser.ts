@@ -135,25 +135,30 @@ export class BrowserEngine {
     const deadline = Date.now() + timeLimitMs;
     const remaining = () => Math.max(0, deadline - Date.now());
 
+    attempt.signal.throwIfAborted();
     const remote = this.options.connect ? await this.connectRemote(attempt) : undefined;
-    const proxy = remote && !remote.useProxy ? null : attempt.proxy;
-    const info: BrowserHookInfo = { request, proxy, context: attempt.context };
-    const browser = remote?.browser ?? (await this.getBrowser());
-
-    const defaults = contextOptions(attempt, proxy);
-    const options = this.options.contextOptions ? await this.options.contextOptions(defaults, info) : defaults;
-    let context: BrowserContext;
-    try {
-      context = await browser.newContext(options);
-    } catch (error) {
-      await remote?.browser.close().catch(() => {});
-      throw error;
-    }
-    const abort = () => void context.close().catch(() => {});
+    let context: BrowserContext | undefined;
+    // Registered before any slow step, so a caller hanging up mid-launch still tears down.
+    const abort = () => {
+      void context?.close().catch(() => {});
+      void remote?.browser.close().catch(() => {});
+    };
     attempt.signal.addEventListener('abort', abort, { once: true });
 
     try {
-      if (request.requestCookies?.length) await context.addCookies(request.requestCookies.map(toPlaywrightCookie));
+      const proxy = remote && !remote.useProxy ? null : attempt.proxy;
+      const info: BrowserHookInfo = { request, proxy, context: attempt.context };
+      const browser = remote?.browser ?? (await this.getBrowser());
+      attempt.signal.throwIfAborted();
+
+      const defaults = contextOptions(attempt, proxy);
+      const options = this.options.contextOptions ? await this.options.contextOptions(defaults, info) : defaults;
+      context = await browser.newContext(options);
+      attempt.signal.throwIfAborted();
+
+      // The attempt's jar: requestCookies, or the session's cookies (client- or server-managed).
+      const cookies = attempt.jar.entries().map(({ cookie, hostOnly }) => toPlaywrightCookie(cookie, hostOnly));
+      if (cookies.length) await context.addCookies(cookies);
       if (this.options.blockResources?.length) {
         const blocked = new Set(this.options.blockResources);
         await context.route('**/*', (route) =>
@@ -224,8 +229,12 @@ export class BrowserEngine {
       return { response, statusCode: response.statusCode ?? 200, headers, html };
     } finally {
       attempt.signal.removeEventListener('abort', abort);
-      for (const cookie of await context.cookies().catch(() => [])) attempt.jar.set(fromPlaywrightCookie(cookie));
-      await context.close().catch(() => {});
+      if (context) {
+        for (const cookie of await context.cookies().catch(() => [])) {
+          attempt.jar.set(fromPlaywrightCookie(cookie), !cookie.domain?.startsWith('.'));
+        }
+        await context.close().catch(() => {});
+      }
       await remote?.browser.close().catch(() => {});
     }
   }
@@ -298,12 +307,16 @@ function playwrightProxy(proxy: ProxyEndpoint): NonNullable<BrowserContextOption
 
 type PlaywrightCookie = Parameters<import('playwright').BrowserContext['addCookies']>[0][number];
 
-function toPlaywrightCookie(cookie: Cookie): PlaywrightCookie {
+function toPlaywrightCookie(cookie: Cookie, hostOnly: boolean): PlaywrightCookie {
+  const domain = cookie.domain.replace(/^\./, '');
+  // Playwright: a URL scopes the cookie to that host only; a dotted domain covers subdomains.
+  const scope = hostOnly
+    ? { url: `${cookie.secure ? 'https' : 'http'}://${domain}${cookie.path ?? '/'}` }
+    : { domain: `.${domain}`, path: cookie.path ?? '/' };
   return {
     name: cookie.name,
     value: cookie.value,
-    domain: cookie.domain,
-    path: cookie.path ?? '/',
+    ...scope,
     expires: cookie.expires ?? -1,
     httpOnly: cookie.httpOnly ?? false,
     secure: cookie.secure ?? false,

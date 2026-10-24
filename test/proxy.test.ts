@@ -18,6 +18,11 @@ import {
   type ProxyContext,
 } from '../src/index.ts';
 import { startProxy, startTarget } from './fixtures.ts';
+import { sessionToken } from '../src/util.ts';
+const T8 = sessionToken('abc123def456ghi', 8);
+const T10 = sessionToken('abc123def456ghi', 10);
+const T12 = sessionToken('abc123def456ghi', 12);
+const T16 = sessionToken('abc123def456ghi', 16);
 
 let target: ReturnType<typeof startTarget>;
 let proxy: Awaited<ReturnType<typeof startProxy>>;
@@ -95,18 +100,18 @@ describe('provider presets', () => {
 
   test('bright data', async () => {
     const endpoint = await brightData({ customerId: 'hl_1', zone: 'resi', password: 'p' }).resolve(ctx({ country: 'DE' }));
-    expect(userOf(endpoint!.url)).toBe('brd-customer-hl_1-zone-resi-country-de-session-abc123def456');
+    expect(userOf(endpoint!.url)).toBe(`brd-customer-hl_1-zone-resi-country-de-session-${T12}`);
     expect(endpoint!.url).toEndWith('@brd.superproxy.io:33335');
   });
 
   test('decodo', async () => {
     const endpoint = await decodo({ username: 'acme', password: 'p' }).resolve(ctx({ country: 'FR' }));
-    expect(userOf(endpoint!.url)).toBe('user-acme-country-fr-session-abc123def456-sessionduration-10');
+    expect(userOf(endpoint!.url)).toBe(`user-acme-country-fr-session-${T12}-sessionduration-10`);
   });
 
   test('iproyal puts targeting in the password', async () => {
     const endpoint = await iproyal({ username: 'acme', password: 'p' }).resolve(ctx({ country: 'US' }));
-    expect(passOf(endpoint!.url)).toBe('p_country-us_session-abc123de_lifetime-10m');
+    expect(passOf(endpoint!.url)).toBe(`p_country-us_session-${T8}_lifetime-10m`);
   });
 
   test('zenrows / scrapingbee / scraperapi proxy modes', async () => {
@@ -155,7 +160,7 @@ describe('template()', () => {
     process.env.XYTE_TEST_PASS = 'p@ss:word';
     const provider = template('http://user-acme-country-{country:lower}-session-{session:8}:{env:XYTE_TEST_PASS}@gate.example.com:7000');
     const { url } = (await provider.resolve(ctx({ country: 'US' })))!;
-    expect(url).toBe('http://user-acme-country-us-session-abc123de:p%40ss%3Aword@gate.example.com:7000');
+    expect(url).toBe(`http://user-acme-country-us-session-${T8}:p%40ss%3Aword@gate.example.com:7000`);
     expect(decodeURIComponent(new URL(url).password)).toBe('p@ss:word');
   });
 
@@ -187,7 +192,7 @@ describe('browserFromEnv', () => {
     expect(options.launchOptions).toEqual({ channel: 'chrome', args: ['--a', '--b'] });
     expect(options.blockResources).toEqual(['image', 'font']);
     const remote = await options.connect!(ctx({ country: 'FR' }));
-    expect(remote).toEqual({ endpoint: 'wss://browser.example.com?country=fr&session=abc123def456', protocol: 'cdp' });
+    expect(remote).toEqual({ endpoint: `wss://browser.example.com?country=fr&session=${T12}`, protocol: 'cdp' });
     const browserType = await (options.browserType as () => Promise<unknown>)();
     expect(typeof (browserType as { launch: unknown }).launch).toBe('function');
   });

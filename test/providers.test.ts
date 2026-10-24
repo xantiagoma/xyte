@@ -35,6 +35,11 @@ import {
   type ProxyProvider,
 } from '../src/index.ts';
 import { startProxy, startTarget } from './fixtures.ts';
+import { sessionToken } from '../src/util.ts';
+const T8 = sessionToken('abc123def456ghi789jkl', 8);
+const T10 = sessionToken('abc123def456ghi789jkl', 10);
+const T12 = sessionToken('abc123def456ghi789jkl', 12);
+const T16 = sessionToken('abc123def456ghi789jkl', 16);
 
 const ctx = (overrides: Partial<ProxyContext> = {}): ProxyContext => ({
   url: new URL('https://example.com/'),
@@ -61,18 +66,18 @@ const up = { username: 'acme', password: 'pw' };
 
 describe('residential presets', () => {
   test.each([
-    ['nodemaven', nodeMaven(up), 'gate.nodemaven.com:8080', 'acme-country-us-sid-abc123def456-ttl-10m', 'pw'],
+    ['nodemaven', nodeMaven(up), 'gate.nodemaven.com:8080', `acme-country-us-sid-${T12}-ttl-10m`, 'pw'],
     ['netnut', netNut(up), 'gw.netnut.net:5959', /^acme-res-us-sid-\d+$/, 'pw'],
     ['webshare', webshare(up), 'p.webshare.io', /^acme-us-\d+$/, 'pw'],
-    ['rayobyte', rayobyte(up), 'us-east.gw.rayobyte.com:8000', 'acme', 'pw-country-US-session-abc123def456ghi7-duration-10'],
-    ['packetstream', packetStream(up), 'proxy.packetstream.io:31112', 'acme', 'pw_country-US_session-abc123def456'],
-    ['evomi', evomi(up), 'rp.evomi.com:1000', 'acme', 'pw_country-US_session-abc123def4_lifetime-30'],
-    ['dataimpulse', dataImpulse(up), 'gw.dataimpulse.com:823', 'acme__cr.us;sessid.abc123def456', 'pw'],
-    ['massive', massive(up), 'network.joinmassive.com:65534', 'acme-country-US-session-abc123def456ghi7-sessionttl-15', 'pw'],
-    ['proxy-seller', proxySeller(up), 'res.proxy-seller.com:10000', 'acme_c_US_s_abc123def456_ttl_15m', 'pw'],
-    ['anyip', anyIp(up), 'portal.anyip.io:1080', 'acme,country_US,session_abc123def456,sesstime_10', 'pw'],
-    ['thordata', thordata(up), 't.pr.thordata.net:9999', 'td-customer-acme-country-us-sessid-abc123def456-sesstime-10', 'pw'],
-    ['abcproxy', abcProxy(up), 'proxy.abcproxy.com:4950', 'acme-zone-abc-region-us-session-abc123def456-sessTime-10', 'pw'],
+    ['rayobyte', rayobyte(up), 'us-east.gw.rayobyte.com:8000', 'acme', `pw-country-US-session-${T16}-duration-10`],
+    ['packetstream', packetStream(up), 'proxy.packetstream.io:31112', 'acme', `pw_country-US_session-${T12}`],
+    ['evomi', evomi(up), 'rp.evomi.com:1000', 'acme', `pw_country-US_session-${T10}_lifetime-30`],
+    ['dataimpulse', dataImpulse(up), 'gw.dataimpulse.com:823', `acme__cr.us;sessid.${T12}`, 'pw'],
+    ['massive', massive(up), 'network.joinmassive.com:65534', `acme-country-US-session-${T16}-sessionttl-15`, 'pw'],
+    ['proxy-seller', proxySeller(up), 'res.proxy-seller.com:10000', `acme_c_US_s_${T12}_ttl_15m`, 'pw'],
+    ['anyip', anyIp(up), 'portal.anyip.io:1080', `acme,country_US,session_${T12},sesstime_10`, 'pw'],
+    ['thordata', thordata(up), 't.pr.thordata.net:9999', `td-customer-acme-country-us-sessid-${T12}-sesstime-10`, 'pw'],
+    ['abcproxy', abcProxy(up), 'proxy.abcproxy.com:4950', `acme-zone-abc-region-us-session-${T12}-sessTime-10`, 'pw'],
     ['rapidproxy', rapidProxy(up), 'eu.rapidproxy.io:5001', /^acme-residential-US-session-\d+-stime-10$/, 'pw'],
     ['swiftproxy', swiftProxy(up), 'us.swiftproxy.net:7878', 'acme_custom_zone_US', 'pw'],
   ] as const)('%s', async (_, provider, host, user, pass) => {
@@ -85,11 +90,11 @@ describe('residential presets', () => {
 
   test('soax: package id in the user, package key as password', async () => {
     const p = await parts(soax({ packageId: '123', packageKey: 'KEY' }));
-    expect(p).toMatchObject({ host: 'proxy.soax.com:5000', user: 'package-123-country-us-sessionid-abc123def456-sessionlength-600', pass: 'KEY' });
+    expect(p).toMatchObject({ host: 'proxy.soax.com:5000', user: `package-123-country-us-sessionid-${T12}-sessionlength-600`, pass: 'KEY' });
   });
 
   test('no geolocation drops the country part', async () => {
-    expect((await parts(nodeMaven(up), { country: undefined })).user).toBe('acme-sid-abc123def456-ttl-10m');
+    expect((await parts(nodeMaven(up), { country: undefined })).user).toBe(`acme-sid-${T12}-ttl-10m`);
     expect((await parts(netNut(up), { country: undefined })).user).toMatch(/^acme-res-any-sid-\d+$/);
     expect((await parts(swiftProxy(up), { country: undefined })).user).toBe('acme');
   });
@@ -114,7 +119,7 @@ describe('scraping APIs in proxy mode', () => {
 
   test('scrapeops and scrapfly', async () => {
     expect((await parts(scrapeOps({ apiKey: 'K' }))).user).toBe('scrapeops.country=us');
-    expect((await parts(scrapfly({ apiKey: 'K' }))).user).toBe('scrapfly-country-us-session-abc123def456-renderJs-false');
+    expect((await parts(scrapfly({ apiKey: 'K' }))).user).toBe(`scrapfly-country-us-session-${T12}-renderJs-false`);
   });
 
   test('zyte proxy mode: v4 UUID session header', async () => {
