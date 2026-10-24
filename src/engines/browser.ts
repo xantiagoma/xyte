@@ -1,0 +1,402 @@
+import type { Browser, BrowserContextOptions, Locator, Page, Response as PwResponse } from 'playwright';
+import { unsupported } from '../errors.ts';
+import type { ProxyEndpoint } from '../proxy.ts';
+import type { Action, ActionResult, ActionSelector, CapturedResponse, Cookie, NetworkCaptureFilter } from '../types.ts';
+import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
+import type { EngineAttempt, EngineResult } from './http.ts';
+
+export interface BrowserOptions {
+  /**
+   * Returns the browser to render in. Default: a shared headless Chromium from `playwright`
+   * (an optional peer dependency). Use it to connect to a remote browser, e.g.
+   * `() => chromium.connectOverCDP(process.env.BROWSER_WS!)`.
+   */
+  launch?: () => Promise<Browser>;
+  /** Total browser time per request, seconds. Zyte's limit is 60. */
+  timeLimit?: number;
+}
+
+/** Zyte actions that need Zyte's site-specific knowledge or hosted scripts. */
+const UNSUPPORTED_ACTIONS = new Set(['interaction', 'searchKeyword', 'setLocation']);
+
+/** Zyte returns at most 10 captured responses, 5 MiB of bodies in total. */
+const MAX_CAPTURES = 10;
+const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
+
+export function assertSupportedActions(actions: readonly Action[] | undefined): void {
+  for (const action of actions ?? []) {
+    if (UNSUPPORTED_ACTIONS.has(action.action)) throw unsupported(`the "${action.action}" action`);
+  }
+}
+
+export class BrowserEngine {
+  private browser: Promise<Browser> | undefined;
+
+  constructor(private readonly options: BrowserOptions = {}) {}
+
+  private getBrowser(): Promise<Browser> {
+    if (!this.browser) {
+      const launching = (this.options.launch ?? launchChromium)().then(
+        (browser) => {
+          // A crashed or remotely closed browser is relaunched on the next request.
+          browser.on('disconnected', () => {
+            if (this.browser === launching) this.browser = undefined;
+          });
+          return browser;
+        },
+        (error) => {
+          this.browser = undefined;
+          throw error;
+        },
+      );
+      this.browser = launching;
+    }
+    return this.browser;
+  }
+
+  async close(): Promise<void> {
+    const browser = this.browser;
+    this.browser = undefined;
+    if (browser) await (await browser).close().catch(() => {});
+  }
+
+  async run(attempt: EngineAttempt): Promise<EngineResult> {
+    const { request } = attempt;
+    const timeLimitMs = (this.options.timeLimit ?? 60) * 1000;
+    const deadline = Date.now() + timeLimitMs;
+    const remaining = () => Math.max(0, deadline - Date.now());
+
+    const browser = await this.getBrowser();
+    const context = await browser.newContext(contextOptions(attempt));
+    const abort = () => void context.close().catch(() => {});
+    attempt.signal.addEventListener('abort', abort, { once: true });
+
+    try {
+      if (request.requestCookies?.length) await context.addCookies(request.requestCookies.map(toPlaywrightCookie));
+
+      const page = await context.newPage();
+      const captures = captureNetwork(page, request.networkCapture);
+
+      const actions = [...(request.actions ?? [])];
+      // A leading waitForNavigation configures the initial navigation (Zyte semantics).
+      const first = actions[0];
+      const initialNav = first?.action === 'waitForNavigation' ? actions.shift() : undefined;
+      const results: ActionResult[] = [];
+
+      let mainResponse: PwResponse | null = null;
+      const navStart = Date.now();
+      try {
+        mainResponse = await page.goto(request.url, {
+          referer: request.requestHeaders?.referer,
+          waitUntil: waitUntil(initialNav && 'waitUntil' in initialNav ? initialNav.waitUntil : undefined),
+          timeout: Math.min(remaining(), seconds(initialNav && 'timeout' in initialNav ? initialNav.timeout : undefined, 30)),
+        });
+        if (initialNav) results.push(result(initialNav, navStart, 'success'));
+      } catch (error) {
+        // With a leading waitForNavigation, a failed first navigation is an action error, not a
+        // request error; otherwise it is a download error for the client to classify and retry.
+        if (!initialNav) throw error;
+        results.push(result(initialNav, navStart, 'returned', error));
+      }
+
+      let stopped = results.some((r) => r.status === 'returned');
+      for (const action of actions) {
+        if (stopped || remaining() === 0) {
+          results.push({ action: action.action, elapsedTime: 0, status: 'notExecuted' });
+          continue;
+        }
+        const start = Date.now();
+        try {
+          await withTimeout(runAction(page, action, remaining), remaining());
+          results.push(result(action, start, 'success'));
+        } catch (error) {
+          const onError = action.onError ?? 'return';
+          results.push(result(action, start, onError === 'continue' ? 'continued' : 'returned', error));
+          if (onError === 'return') stopped = true;
+        }
+      }
+
+      const html = truncate(await page.content());
+      const response: EngineResult['response'] = {
+        url: page.url(),
+        statusCode: mainResponse?.status() ?? 200,
+      };
+      if (request.browserHtml) response.browserHtml = html;
+      if (request.screenshot) {
+        const { format = 'jpeg', fullPage = false } = request.screenshotOptions ?? {};
+        response.screenshot = toBase64(await page.screenshot({ type: format, fullPage }));
+      }
+      if (request.actions?.length) response.actions = results;
+      if (request.networkCapture?.length) response.networkCapture = await captures();
+
+      const headers = mainResponse ? await mainResponse.headersArray() : [];
+      if (request.httpResponseHeaders) response.httpResponseHeaders = headers;
+
+      return { response, statusCode: response.statusCode ?? 200, headers, html };
+    } finally {
+      attempt.signal.removeEventListener('abort', abort);
+      for (const cookie of await context.cookies().catch(() => [])) attempt.jar.set(fromPlaywrightCookie(cookie));
+      await context.close().catch(() => {});
+    }
+  }
+}
+
+async function launchChromium(): Promise<Browser> {
+  let playwright: typeof import('playwright');
+  try {
+    playwright = await import('playwright');
+  } catch (error) {
+    throw new Error(
+      'xyte: browser requests (browserHtml, screenshot, actions, networkCapture) need "playwright" ' +
+        '(npm i playwright && npx playwright install chromium), or pass `browser.launch`.',
+      { cause: error },
+    );
+  }
+  return playwright.chromium.launch({ headless: true });
+}
+
+function contextOptions(attempt: EngineAttempt): BrowserContextOptions {
+  const { request, proxy } = attempt;
+  const mobile = request.device === 'mobile';
+  return {
+    proxy: proxy ? playwrightProxy(proxy) : undefined,
+    ignoreHTTPSErrors: proxy?.insecure === true,
+    javaScriptEnabled: request.javascript !== false,
+    // `evaluate` sources run through eval in the page; CSP must not block them.
+    bypassCSP: true,
+    viewport: request.viewport
+      ? { width: request.viewport.width ?? 1920, height: request.viewport.height ?? 1080 }
+      : mobile
+        ? { width: 412, height: 915 }
+        : { width: 1920, height: 1080 },
+    userAgent: userAgent(request.device),
+    isMobile: mobile,
+    hasTouch: mobile,
+    locale: 'en-US',
+  };
+}
+
+function playwrightProxy(proxy: ProxyEndpoint): NonNullable<BrowserContextOptions['proxy']> {
+  const url = new URL(proxy.url);
+  return {
+    server: `${url.protocol}//${url.host}`,
+    username: url.username ? decodeURIComponent(url.username) : undefined,
+    password: url.password ? decodeURIComponent(url.password) : undefined,
+  };
+}
+
+type PlaywrightCookie = Parameters<import('playwright').BrowserContext['addCookies']>[0][number];
+
+function toPlaywrightCookie(cookie: Cookie): PlaywrightCookie {
+  return {
+    name: cookie.name,
+    value: cookie.value,
+    domain: cookie.domain,
+    path: cookie.path ?? '/',
+    expires: cookie.expires ?? -1,
+    httpOnly: cookie.httpOnly ?? false,
+    secure: cookie.secure ?? false,
+    sameSite: cookie.sameSite === 'Strict' ? 'Strict' : cookie.sameSite === 'None' ? 'None' : 'Lax',
+  };
+}
+
+function fromPlaywrightCookie(cookie: PlaywrightCookie): Cookie {
+  return {
+    name: cookie.name,
+    value: cookie.value,
+    domain: cookie.domain ?? '',
+    path: cookie.path,
+    expires: cookie.expires != null && cookie.expires > 0 ? Math.floor(cookie.expires) : undefined,
+    httpOnly: cookie.httpOnly,
+    secure: cookie.secure,
+    sameSite: cookie.sameSite,
+  };
+}
+
+/** Starts capturing matching responses; call the result to collect them. */
+function captureNetwork(page: Page, filters: readonly NetworkCaptureFilter[] | undefined) {
+  if (!filters?.length) return async () => [] as CapturedResponse[];
+
+  const pending: Promise<CapturedResponse | undefined>[] = [];
+  page.on('response', (res) => {
+    if (pending.length >= MAX_CAPTURES) return;
+    const filter = filters.find((f) => matchesFilter(f, res));
+    if (!filter) return;
+    pending.push(
+      (async () => {
+        const captured: CapturedResponse = {
+          url: res.url(),
+          statusCode: res.status(),
+          headers: (await res.allHeaders().catch(() => ({}))) as CapturedResponse['headers'],
+          filter,
+        };
+        if (filter.httpResponseBody) {
+          const body = await res.body().catch(() => undefined);
+          if (body) captured.httpResponseBody = toBase64(body);
+        }
+        return captured;
+      })(),
+    );
+  });
+
+  return async () => {
+    const all = (await Promise.all(pending)).filter((c): c is CapturedResponse => c != null);
+    let total = 0;
+    return all.filter((c) => {
+      total += c.httpResponseBody ? (c.httpResponseBody.length * 3) / 4 : 0;
+      return total <= MAX_CAPTURE_BYTES;
+    });
+  };
+}
+
+function matchesFilter(filter: NetworkCaptureFilter, res: PwResponse): boolean {
+  if (filter.filterType === 'resourceType') {
+    return res.request().resourceType() === filter.resourceType;
+  }
+  return filter.value != null && matchUrl(res.url(), filter.value, filter.matchType as MatchType | undefined);
+}
+
+function locate(page: Page, selector: ActionSelector): Locator {
+  return page.locator(selector.type === 'xpath' ? `xpath=${selector.value}` : selector.value).first();
+}
+
+async function runAction(page: Page, action: Action, remaining: () => number): Promise<void> {
+  const timeout = (value: number | undefined, fallback = 5) => Math.min(remaining(), seconds(value, fallback));
+
+  switch (action.action) {
+    case 'click': {
+      const navTimeout = action.waitForNavigationTimeout ?? 0;
+      const nav = navTimeout > 0 ? page.waitForEvent('framenavigated', { timeout: navTimeout * 1000 }).catch(() => null) : null;
+      await locate(page, action.selector).click({
+        button: action.button,
+        delay: (action.delay ?? 0) * 1000,
+        timeout: timeout(undefined),
+      });
+      if (nav && (await nav)) await page.waitForLoadState('load', { timeout: timeout(undefined, 30) });
+      return;
+    }
+    case 'doubleClick':
+      return locate(page, action.selector).dblclick({ timeout: timeout(undefined) });
+    case 'hover':
+      return locate(page, action.selector).hover({ timeout: timeout(undefined) });
+    case 'hide':
+      await page
+        .locator(action.selector.type === 'xpath' ? `xpath=${action.selector.value}` : action.selector.value)
+        .evaluateAll((elements) => {
+          for (const element of elements) (element as HTMLElement).style.setProperty('visibility', 'hidden', 'important');
+        });
+      return;
+    case 'evaluate':
+      // Zyte runs the source as a script and does not wait on promises it creates; an indirect
+      // eval matches that (statements allowed, result discarded).
+      await page.evaluate((source) => {
+        void (0, eval)(source);
+      }, action.source);
+      return;
+    case 'goto':
+      await page.goto(action.url, {
+        waitUntil: waitUntil(action.options?.waitUntil),
+        timeout: timeout(action.options?.timeout, 30),
+      });
+      return;
+    case 'reload':
+      await page.reload({ waitUntil: waitUntil(action.options?.waitUntil), timeout: timeout(action.options?.timeout, 30) });
+      return;
+    case 'keyPress':
+      return page.keyboard.press(action.key);
+    case 'type': {
+      const target = locate(page, action.selector);
+      await target.click({ timeout: timeout(undefined) });
+      return target.pressSequentially(action.text, { delay: (action.delay ?? 0) * 1000 });
+    }
+    case 'select':
+      await locate(page, action.selector).selectOption(action.values, { timeout: timeout(undefined) });
+      return;
+    case 'scrollTo':
+      if (action.selector) return locate(page, action.selector).scrollIntoViewIfNeeded({ timeout: timeout(undefined) });
+      await page.evaluate(([top, left]) => window.scrollTo({ top, left }), [action.top ?? 0, action.left ?? 0] as const);
+      return;
+    case 'scrollBottom':
+      return scrollBottom(page, action, remaining);
+    case 'waitForNavigation':
+      await page.waitForEvent('framenavigated', { timeout: timeout(action.timeout, 31) });
+      await page.waitForLoadState(waitUntil(action.waitUntil), { timeout: timeout(action.timeout, 31) });
+      return;
+    case 'waitForRequest':
+      await page.waitForRequest((req) => matchUrl(req.url(), action.urlPattern, action.urlMatchingOptions), {
+        timeout: timeout(action.timeout),
+      });
+      return;
+    case 'waitForResponse':
+      await page.waitForResponse((res) => matchUrl(res.url(), action.urlPattern, action.urlMatchingOptions), {
+        timeout: timeout(action.timeout),
+      });
+      return;
+    case 'waitForSelector':
+      await locate(page, action.selector).waitFor({ state: action.selector.state ?? 'visible', timeout: timeout(action.timeout) });
+      return;
+    case 'waitForTimeout': {
+      const ms = seconds(action.timeout, 5);
+      if (ms > remaining()) throw new Error('waitForTimeout exceeds the remaining browser time');
+      return page.waitForTimeout(ms);
+    }
+    default:
+      throw new Error(`unsupported action "${(action as Action).action}"`);
+  }
+}
+
+async function scrollBottom(
+  page: Page,
+  action: Extract<Action, { action: 'scrollBottom' }>,
+  remaining: () => number,
+): Promise<void> {
+  const deadline = Date.now() + Math.min(remaining(), seconds(action.timeout, 15));
+  const scrollDelay = seconds(action.maxScrollDelay, 5);
+  const maxCount = action.maxScrollCount ?? Number.POSITIVE_INFINITY;
+  const maxHeight = action.maxPageHeight ?? Number.POSITIVE_INFINITY;
+  const height = () => page.evaluate(() => document.documentElement.scrollHeight);
+
+  let last = await height();
+  for (let count = 0; count < maxCount && last < maxHeight && Date.now() < deadline; count++) {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const until = Math.min(deadline, Date.now() + scrollDelay);
+    let next = last;
+    while (Date.now() < until && next === last) {
+      await sleep(100);
+      next = await height();
+    }
+    if (next === last) return;
+    last = next;
+  }
+}
+
+function result(action: Action, start: number, status: ActionResult['status'], error?: unknown): ActionResult {
+  const r: ActionResult = { action: action.action, elapsedTime: (Date.now() - start) / 1000, status };
+  if (error != null) r.error = error instanceof Error ? error.message.split('\n')[0] : String(error);
+  return r;
+}
+
+type WaitUntil = 'load' | 'networkidle0' | 'domcontentloaded' | undefined;
+
+function waitUntil(value: WaitUntil): 'load' | 'networkidle' | 'domcontentloaded' {
+  return value === 'networkidle0' ? 'networkidle' : (value ?? 'load');
+}
+
+/** Zyte expresses timeouts in seconds; Playwright in milliseconds. */
+function seconds(value: number | undefined, fallback: number): number {
+  return (value ?? fallback) * 1000;
+}
+
+function truncate(html: string): string {
+  return html.length > MAX_BODY_BYTES ? html.slice(0, MAX_BODY_BYTES) : html;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('browser time limit reached')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}

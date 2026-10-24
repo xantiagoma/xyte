@@ -1,0 +1,4388 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Web Data Extraction API",
+    "version": "1.0.0",
+    "description": "A single API for web scraping",
+    "contact": {
+      "name": "Zyte (Formerly Scrapinghub)",
+      "url": "https://www.zyte.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.zyte.com/v1",
+      "description": "Zyte Extraction API Production server"
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/extract": {
+      "post": {
+        "operationId": "extract",
+        "summary": "Process a single URL, return the result",
+        "description": "Process a single URL, return the result.\n\nThis endpoint blocks until the result is ready.\nIt is intended for short-running operations.\n\nAt least one of the following request fields must be set to true:\n  - [browserHtml](#operation/extract/request/browserHtml)\n  - [httpResponseBody](#operation/extract/request/httpResponseBody)\n  - [httpResponseHeaders](#operation/extract/request/httpResponseHeaders)\n  - [screenshot](#operation/extract/request/screenshot)\n  - An automatic extraction request field:\n      - [article](#operation/extract/request/article)\n      - [articleList](#operation/extract/request/articleList)\n      - [articleNavigation](#operation/extract/request/articleNavigation)\n      - [forumThread](#operation/extract/request/forumThread)\n      - [jobPosting](#operation/extract/request/jobPosting)\n      - [jobPostingNavigation](#operation/extract/request/jobPostingNavigation)\n      - [pageContent](#operation/extract/request/pageContent)\n      - [product](#operation/extract/request/product)\n      - [productList](#operation/extract/request/productList)\n      - [productNavigation](#operation/extract/request/productNavigation)\n      - [serp](#operation/extract/request/serp)\n\nAll automatic extraction data types support performing extraction using\neither a browser request or an HTTP request. Choose which using\n[extractFrom](#operation/extract/request/extractFrom);\nfor\n[serp](#operation/extract/request/serp)\nuse\n[serpOptions.extractFrom](#operation/extract/request/serpOptions.extractFrom)\ninstead.\n\nWhen no option is specified, currently automatic extraction defaults to\nusing a browser request, except for\n[serp](#operation/extract/request/serp),\nwhere an HTTP request is used by default instead. In the future,\nhowever, the default value may depend on the target website.\n\nWhen automatic extraction uses a browser request, it can be combined\nwith any fields compatible with\n[browserHtml](#operation/extract/request/browserHtml),\ne.g. [screenshot](#operation/extract/request/screenshot).\nWhen automatic extraction uses an HTTP request, it can be combined with\nany fields compatible with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\n[serp](#operation/extract/request/serp)\ncannot be combined with any other fields besides\n[serpOptions](#operation/extract/request/serpOptions) and\n[url](#operation/extract/request/url).\n\nYou cannot combine multiple automatic extraction request fields (e.g.\n[product](#operation/extract/request/product)\nand [productList](#operation/extract/request/productList))\non the same request.\n\nYou cannot combine\n[httpResponseBody](#operation/extract/request/httpResponseBody)\nwith a request field that is exclusive of browser requests (e.g.\n[httpResponseBody](#operation/extract/request/httpResponseBody)\nand\n[browserHtml](#operation/extract/request/browserHtml)).\n\n[httpResponseHeaders](#operation/extract/request/httpResponseHeaders)\ncan be requested alone or with any other valid combination of request\nfields except for\n[serp](#operation/extract/request/serp).\n\nThe request body size limit is 5MiB.\n",
+        "requestBody": {
+          "required": true,
+          "description": "An extraction request body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractRequest"
+              },
+              "examples": {
+                "DownloadHttp": {
+                  "summary": "Retrieve raw HTTP content from a page",
+                  "value": {
+                    "url": "https://example.com",
+                    "httpResponseBody": true
+                  }
+                },
+                "DownloadCustomHttpRequestHeaders": {
+                  "summary": "Retrieve raw HTTP content from a page, using custom HTTP headers",
+                  "value": {
+                    "url": "https://example.com",
+                    "httpResponseBody": true,
+                    "customHttpRequestHeaders": [
+                      {
+                        "name": "X-APOLLO-OPERATION-NAME",
+                        "value": "nearByNodes"
+                      }
+                    ]
+                  }
+                },
+                "DownloadHttpPostWithHttpRequestBody": {
+                  "summary": "Retrieve raw HTTP content from a page using a POST request",
+                  "value": {
+                    "url": "https://example.com",
+                    "httpResponseBody": true,
+                    "httpRequestMethod": "POST",
+                    "httpRequestBody": "WyJCV0kiLCAiRkxMIl0=",
+                    "customHttpRequestHeaders": [
+                      {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ]
+                  }
+                },
+                "DownloadHttpPostWithHttpRequestText": {
+                  "summary": "Retrieve raw HTTP content from a page using a POST request",
+                  "value": {
+                    "url": "https://example.com",
+                    "httpResponseBody": true,
+                    "httpRequestMethod": "POST",
+                    "httpRequestText": "{\"name\":\"John Doe\",\"email\":\"johndoe@example.com\",\"age\":32,\"address\":{\"street\":\"123 Main St\",\"city\":\"Anytown\",\"state\":\"CA\",\"zip\":\"12345\"},\"phone_numbers\":[\"+1 555 555 1212\",\"+1 555 555 1313\"]}",
+                    "customHttpRequestHeaders": [
+                      {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ]
+                  }
+                },
+                "DownloadHttpHeaders": {
+                  "summary": "Retrieve HTTP headers from a page using a POST request",
+                  "value": {
+                    "url": "https://example.com",
+                    "httpResponseHeaders": true
+                  }
+                },
+                "DownloadHtml": {
+                  "summary": "Open a page in a browser, return HTML",
+                  "value": {
+                    "url": "https://example.com",
+                    "browserHtml": true
+                  }
+                },
+                "DownloadHtmlWithRequestHeaders": {
+                  "summary": "Open a page in a browser and return HTML, setting a proper Referer header",
+                  "value": {
+                    "url": "https://example.com",
+                    "browserHtml": true,
+                    "requestHeaders": {
+                      "referer": "https://search.example"
+                    }
+                  }
+                },
+                "DownloadScreenshot": {
+                  "summary": "Open a page in a browser and return a JPEG screenshot\nof the content visible on the browser window\n",
+                  "value": {
+                    "url": "https://example.com",
+                    "screenshot": true
+                  }
+                },
+                "DownloadScreenshotFullPagePng": {
+                  "summary": "Open a page in a browser and return a full-page PNG\nscreenshot\n",
+                  "value": {
+                    "url": "https://example.com",
+                    "screenshot": true,
+                    "screenshotOptions": {
+                      "fullPage": true,
+                      "format": "png"
+                    }
+                  }
+                },
+                "DownloadHtmlEchoData": {
+                  "summary": "echoData and jobId example",
+                  "description": "Open a page in a browser, return HTML.\n\nPass the echoData and jobId fields through - they'll be\nreturned unchanged in the output.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "browserHtml": true,
+                    "echoData": {
+                      "seedUrl": "https://example.com",
+                      "foo": "bar"
+                    },
+                    "jobId": "123/234/12"
+                  }
+                },
+                "DownloadHtmlActions": {
+                  "summary": "actions example",
+                  "description": "1. Open the target page in a browser\n2. Type \"Zyte\" in the search box\n3. Click the Search button\n4. Wait for the results page to load\n",
+                  "value": {
+                    "url": "https://example.com/search",
+                    "browserHtml": true,
+                    "actions": [
+                      {
+                        "action": "type",
+                        "selector": {
+                          "value": "#searchbox",
+                          "type": "css"
+                        },
+                        "text": "Zyte"
+                      },
+                      {
+                        "action": "click",
+                        "selector": {
+                          "value": "#searchbtn",
+                          "type": "css"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "ExtractProduct": {
+                  "summary": "Extract Product information",
+                  "description": "Extract Product information from a page:\nprice, name, etc.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "product": true
+                  }
+                },
+                "ExtractProductWithHtml": {
+                  "summary": "Extract Product information, as well as browser HTML",
+                  "description": "Extract Product information, as well as browser HTML.\nMake a request from Spanish geolocation.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "product": true,
+                    "browserHtml": true,
+                    "geolocation": "ES"
+                  }
+                },
+                "ExtractProductRaw": {
+                  "summary": "Extract Product information using an HTTP request",
+                  "description": "Extract Product information using an HTTP request.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "product": true,
+                    "extractFrom": "httpResponseBody"
+                  }
+                },
+                "ExtractProductRawWithBody": {
+                  "summary": "Extract Product information, as well as httpResponseBody",
+                  "description": "Extract Product information using an HTTP request,\nas well as httpResponseBody and httpResponseHeaders.\nMake a request from Spain.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "product": true,
+                    "extractFrom": "httpResponseBody",
+                    "httpResponseBody": true,
+                    "httpResponseHeaders": true,
+                    "geolocation": "ES"
+                  }
+                },
+                "ExtractArticleCustomAttributes": {
+                  "summary": "Extract Custom Attributes along with Article information",
+                  "description": "Extract Custom Attributes along with Article information.\n",
+                  "value": {
+                    "url": "https://example.com/foo",
+                    "article": true,
+                    "customAttributes": {
+                      "summary": {
+                        "type": "string",
+                        "description": "A two sentence article summary"
+                      },
+                      "article_sentiment": {
+                        "type": "string",
+                        "enum": [
+                          "positive",
+                          "negative",
+                          "neutral"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response. Contains the output requested.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response200"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request. See the error details to identify the exact problem in the request.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Unrecognized field": {
+                    "value": {
+                      "type": "/request/invalid",
+                      "title": "Bad Request",
+                      "status": 400,
+                      "detail": "Unrecognized field \"foo\""
+                    }
+                  },
+                  "Invalid JSON value": {
+                    "value": {
+                      "type": "/request/invalid-json",
+                      "title": "Invalid JSON",
+                      "status": 400,
+                      "detail": "The submitted request body is not a valid JSON. Location: line 2, column 26. Details: Unrecognized token 'False': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Authentication problem. See the error details.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Invalid authentication data": {
+                    "value": {
+                      "type": "/auth/not-valid",
+                      "title": "Authentication Info Invalid",
+                      "status": 401,
+                      "detail": "No valid authentication info found in the request. Check the documentation for the correct authentication schema."
+                    }
+                  },
+                  "Invalid API key": {
+                    "value": {
+                      "type": "/auth/key-not-found",
+                      "title": "Authentication Key Not Found",
+                      "status": 401,
+                      "detail": "The authentication key is not valid or can't be matched."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your account is suspended or not allowed to make the request.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Account suspended": {
+                    "value": {
+                      "type": "/auth/account-suspended",
+                      "title": "Account Suspended",
+                      "status": 403,
+                      "detail": "Account is suspended, check billing details."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "421": {
+            "description": "The request failed and should not be retried\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Incompatible parameters": {
+                    "value": {
+                      "type": "/website/domain-unreachable",
+                      "title": "Domain Unreachable",
+                      "status": 421,
+                      "detail": "The domain is invalid or unreachable. Please check the domain name and try again. Verify the domain name and ensure it is registered and valid before restarting the crawl."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request couldn't be processed. Check the details.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Incompatible parameters": {
+                    "value": {
+                      "type": "/request/unprocessable",
+                      "title": "Unprocessable Request",
+                      "status": 422,
+                      "detail": "Incompatible parameters were found in the request. Check details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "description": "Too many requests, see the details.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Domain limit": {
+                    "value": {
+                      "type": "/limits/over-domain-limit",
+                      "title": "Over Domain Requests Limit",
+                      "status": 429,
+                      "detail": "Too many requests. Retry in N seconds from 'Retry-After' header."
+                    }
+                  },
+                  "User limit": {
+                    "value": {
+                      "type": "/limits/over-user-limit",
+                      "title": "Over User Requests Limit",
+                      "status": 429,
+                      "detail": "Too many requests to a specific domain. Retry in N seconds from 'Retry-After' header."
+                    }
+                  },
+                  "Organisation limit": {
+                    "value": {
+                      "type": "/limits/over-org-domain-limit",
+                      "title": "Over Organisation Requests limit for the requested domain",
+                      "status": 429,
+                      "detail": "Too many requests to a specific domain. Retry in N seconds from 'Retry-After' header."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "451": {
+            "description": "Extraction for the domain is forbidden.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenDomainProblem"
+                },
+                "examples": {
+                  "Domain forbidden": {
+                    "value": {
+                      "type": "/download/domain-forbidden",
+                      "title": "Domain Forbidden",
+                      "status": 451,
+                      "detail": "Extraction for the domain is forbidden.",
+                      "blockedDomain": "blocked-domain.example"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request timeout or internal server error.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Internal error": {
+                    "value": {
+                      "type": "/server/internal",
+                      "title": "Internal Server Error",
+                      "status": 500,
+                      "detail": "The server encountered an internal error. Please contact support or wait for us to resolve the issue."
+                    }
+                  },
+                  "Timeout": {
+                    "value": {
+                      "type": "/server/timed-out",
+                      "title": "Request Timed Out",
+                      "status": 500,
+                      "detail": "The request took too long and timed out. Try it again. Contact support if it fails consistently."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "System overload. See the details.\n",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Global request limit": {
+                    "value": {
+                      "type": "/limits/over-global-limit",
+                      "title": "Global Requests Limit Reached",
+                      "status": 503,
+                      "detail": "Too many requests to the service. Retry in N seconds from 'Retry-After' header."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "520": {
+            "description": "A downloading error, possibly requiring user action.\n",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Website ban": {
+                    "value": {
+                      "type": "/download/temporary-error",
+                      "title": "Website Ban",
+                      "status": 520,
+                      "detail": "Zyte API could not get a ban-free response in a reasonable time. See errors.html#ban-responses"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "521": {
+            "description": "Permanent downloading error.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "Internal download error": {
+                    "value": {
+                      "type": "/download/internal-error",
+                      "title": "Internal Downloading Error",
+                      "status": 521,
+                      "detail": "Server encountered a problem while downloading. Check request and contact support."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Check the code and problem object for additional information.\nNote: The client should be ready for the absence of a problem object.\nIn this case, the HTTP status code should be used.\n",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BasicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "HTTPHeader": {
+        "type": "object",
+        "description": "A header name and value.",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the header",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "description": "The value of the header"
+          }
+        },
+        "example": {
+          "name": "Content-Type",
+          "value": "text/html; charset=utf-8"
+        }
+      },
+      "ExtractRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "description": "An absolute URL to extract data from.\n\nThe host name must be a domain name, it cannot be an IP address.\n",
+            "example": "https://example.com/item-page",
+            "type": "string",
+            "maxLength": 8192
+          },
+          "requestHeaders": {
+            "$ref": "#/components/schemas/RequestHeaders"
+          },
+          "tags": {
+            "type": "object",
+            "nullable": true,
+            "description": "Assign arbitrary key-value pairs to the request that you can use\nfor filtering in the\n[Stats API](stats.html).\n\nKeys must be strings. Values must be strings or `null`.\n\nFor example: `{\"tags\": {\"foo\": \"bar\", \"baz\": null}}`.\n",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ipType": {
+            "description": "[Type of IP address](features.html#zapi-ip-type)\nfrom which the request should be sent.\n\nIf not specified, Zyte API will use an IP type that, for the target\nwebsite, does not cause bans or unexpected response data.\n\nIf you believe Zyte API is using the wrong default IP type for a\nwebsite, please\n[reach out to our expert anti-ban team](https://support.zyte.com/support/tickets/new).\n\n[See an example](features.html#zapi-ip-type).\n",
+            "type": "string",
+            "enum": [
+              "datacenter",
+              "residential"
+            ]
+          },
+          "httpRequestMethod": {
+            "description": "Request [HTTP method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods).\n\nCan only be used in combination with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\n\n[See an example](http.html#zapi-set-method).\nSee also:\n[httpRequestText](#operation/extract/request/httpRequestText),\n[httpRequestBody](#operation/extract/request/httpRequestBody),\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders),\n[httpResponseHeaders](#operation/extract/response/200/httpResponseHeaders).\n",
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE",
+              "OPTIONS",
+              "TRACE",
+              "PATCH",
+              "HEAD"
+            ]
+          },
+          "httpRequestBody": {
+            "description": "[Base64](https://en.wikipedia.org/wiki/Base64)-encoded data to send\nas request body.\n\nCan only be used in combination with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\n\nIt usually needs to be used in combination with\n[httpRequestMethod](#operation/extract/request/httpRequestMethod).\n\nIf you only need to send UTF-8-encoded text, use\n[httpRequestText](#operation/extract/request/httpRequestText)\ninstead to skip Base64-encoding. Note that you cannot combine both\nfields on the same request.\n\n[See an example](http.html#zapi-set-body).\nSee also:\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders).\n",
+            "type": "string",
+            "format": "byte",
+            "maxLength": 400000
+          },
+          "httpRequestText": {
+            "description": "UTF-8 text to send as request body.\n\nCan only be used in combination with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\n\nIt usually needs to be used in combination with\n[httpRequestMethod](#operation/extract/request/httpRequestMethod).\n\nIf you need to send a binary or non-UTF-8 request body,\nuse\n[httpRequestBody](#operation/extract/request/httpRequestBody)\ninstead. Note that you cannot combine both fields on the same\nrequest.\n\n[See an example](http.html#zapi-set-body).\nSee also:\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders).\n",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400000,
+            "example": "{\"name\":\"John Doe\",\"email\":\"johndoe@example.com\",\"age\":32,\"address\":{\"street\":\"123 Main St\",\"city\":\"Anytown\",\"state\":\"CA\",\"zip\":\"12345\"},\"phone_numbers\":[\"+1 555 555 1212\",\"+1 555 555 1313\"]}"
+          },
+          "customHttpRequestHeaders": {
+            "description": "HTTP request headers.\n\nCan only be used in combination with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\nTo set headers with other outputs, see\n[requestHeaders](#operation/extract/request/requestHeaders).\n\nSetting HTTP request headers has some caveats:\n\n-   Zyte API sends some headers automatically for\n    [ban avoidance](errors.html#ban-handling),\n    and may silently override or drop some of your custom headers\n    for that purpose.\n\n    However, your custom headers may override those automatic\n    headers, and in doing so they can break the ban avoidance\n    capabilities of Zyte API, as some websites may ban based on the\n    presence, values, or order of certain headers.\n\n-   You cannot set the `Cookie` header. Use\n    [requestCookies](#operation/extract/request/requestCookies)\n    instead.\n\n-   If you set multiple headers with the same name, only the last\n    header value will be sent. To overcome this limitation, [join\n    the header values with a comma into a single header value](https://stackoverflow.com/a/4371395).\n    For example, replace `\"customHttpRequestHeaders\": [{\"name\":\n    \"foo\", \"value\": \"bar\"}, {\"name\": \"foo\", \"value\": \"baz\"}]` with\n    `\"customHttpRequestHeaders\": [{\"name\": \"foo\", \"value\":\n    \"bar,baz\"}]`.\n\n[See an example](http.html#zapi-body-request-headers).\nSee also:\n[httpRequestMethod](#operation/extract/request/httpRequestMethod),\n[httpRequestText](#operation/extract/request/httpRequestText),\n[httpRequestBody](#operation/extract/request/httpRequestBody),\n[httpResponseHeaders](#operation/extract/response/200/httpResponseHeaders).\n",
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/CustomHttpRequestHeader"
+            }
+          },
+          "httpResponseBody": {
+            "description": "Set to `true` to get the HTTP response body in the\n[httpResponseBody](#operation/extract/response/200/httpResponseBody)\nresponse field.\n\nThis field is not compatible with\n[browser automation](browser.html).\n\n[See an example](http.html#example-httpresponsebody).\nSee also:\n[httpRequestMethod](#operation/extract/request/httpRequestMethod),\n[httpRequestText](#operation/extract/request/httpRequestText),\n[httpRequestBody](#operation/extract/request/httpRequestBody),\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "httpResponseHeaders": {
+            "description": "Set to `true` to get the HTTP response headers in the\n[httpResponseHeaders](#operation/extract/response/200/httpResponseHeaders)\nresponse field.\n\n[See an example](features.html#zapi-headers).\nSee also:\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "browserHtml": {
+            "description": "Set to `true` to get the\n[browser HTML](browser.html#zapi-browser-html)\nin the\n[browserHtml](#operation/extract/response/200/browserHtml)\nresponse field.\n\nThis field is not compatible with\n[HTTP requests](http.html).\n\nIf you use\n[actions](#operation/extract/request/actions),\nthe browser HTML is generated *after* action execution has finished\nor timed out.\n\nBy default,\n[iframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)\nare empty. See\n[includeIframes](#operation/extract/request/includeIframes).\n\nTo access content from the\n[shadow DOM](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_shadow_DOM),\ncheck out the corresponding example in the\n[actions documentation](browser.html#zapi-actions).\n\n[See an example](browser.html#zapi-browser-html).\nSee also:\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "screenshot": {
+            "description": "Set to `true` to get a page screenshot in the\n[screenshot](#operation/extract/response/200/screenshot)\nresponse field.\n\nThis field is not compatible with\n[HTTP requests](http.html).\n\nTo adjust the screenshot contents you can use\n[screenshotOptions](#operation/extract/request/screenshotOptions)\nand\n[viewport](#operation/extract/request/viewport).\n\nIf you use\n[actions](#operation/extract/request/actions),\nthe screenshot is generated *after* action execution has finished\nor timed out.\n\n[See an example](browser.html#zapi-screenshot).\nSee also:\n[browserHtml](#operation/extract/request/browserHtml),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "screenshotOptions": {
+            "$ref": "#/components/schemas/ScreenshotOptions"
+          },
+          "extractFrom": {
+            "$ref": "#/components/schemas/ExtractFrom"
+          },
+          "article": {
+            "description": "Set to `true` to get article data in the\n[article](#operation/extract/response/200/article)\nresponse field.\n\nThe target page should only contain a single article, such as a\nblog post or a news article. For pages with multiple articles\nconsider using\n[articleList](#operation/extract/request/articleList)\ninstead.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[articleNavigation](#operation/extract/request/articleNavigation),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "default": false,
+            "type": "boolean"
+          },
+          "articleOptions": {
+            "description": "Additional options for article extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "articleList": {
+            "description": "Set to `true` to get article list data in the\n[articleList](#operation/extract/response/200/articleList)\nresponse field.\n\nThe target page should contain multiple articles, usually as\nlinks or short snippets. Examples of such pages are main or\ncategory pages of news sites, main pages of blogs showing multiple\nposts, and other pages with multiple articles.\n\nArticle list data is especially useful to get basic information\nabout articles on a website, like a headline and a link to the\narticle details, using a smaller number of requests, when article\nattributes are extracted directly from a article list page, without\nmaking individual\n[article](#operation/extract/request/article)\nrequests.\n\nTo implement article crawling from article list pages, use\n[articleNavigation](#operation/extract/request/articleNavigation),\nwhich also enables navigation through pagination links.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "articleListOptions": {
+            "description": "Additional options for articleList extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "articleNavigation": {
+            "description": "Set to `true` to get article navigation data in the\n[articleNavigation](#operation/extract/response/200/articleNavigation)\nresponse field.\n\nThe target page should contain multiple articles and/or\nsubcategories that can be followed.\n\nArticle navigation data is especially useful for implementing\narticle crawling, i.e. following links to article pages, as well as\nto subcategories and pagination that can in turn link to more\narticle pages.\n\nArticle navigation data can also be used to get basic information\nof articles and subcategories on a website, obtaining the URLs and\nlink names of the articles and subcategories, without making\nindividual requests for those articles.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[article](#operation/extract/request/article),\n[articleList](#operation/extract/request/articleList),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "articleNavigationOptions": {
+            "description": "Additional options for articleNavigation extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "forumThread": {
+            "description": "Set to `true` to get forum threads data in the\n[forumThread](#operation/extract/response/200/forumThread)\nresponse field.\n\nThe target page should contain an individual forum thread page on a forum website.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[article](#operation/extract/request/article),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "forumThreadOptions": {
+            "description": "Additional options for forumThread extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "jobPosting": {
+            "description": "Set to `true` to get job posting data in the\n[jobPosting](#operation/extract/response/200/jobPosting)\nresponse field.\n\nThe target page should contain individual job posting page on a company website or on a job website.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "jobPostingOptions": {
+            "description": "Additional options for jobPosting extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "jobPostingNavigation": {
+            "description": "Set to `true` to get job posting navigation data in the\n[jobPostingNavigation](#operation/extract/response/200/jobPostingNavigation)\nresponse field.\n\nThe target page should contain multiple job postings and/or\nsubcategories that can be followed.\n\nJob posting navigation data is especially useful for implementing\njob posting crawling, i.e. following links to job posting pages, as well as\npagination that can in turn link to more\njob posting pages.\n\nJob posting navigation data can also be used to get basic information\nof job postings on a website, obtaining the URLs and\nlink names of the job postings, without making\nindividual requests for them.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[jobPosting](#operation/extract/request/jobPosting),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "jobPostingNavigationOptions": {
+            "description": "Additional options for jobPostingNavigation extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "pageContent": {
+            "description": "Set to `true` to get page content data in the\n[pageContent](#operation/extract/response/200/pageContent)\nresponse field.\n\nThe target page can contain any type of data.\n\nPage content data is especially useful for understanding the layout and\nhierarchy of information on a page, enabling advanced processing such as\ncontent extraction, user experience analysis, and automated page summarization.\n\nPage content data can also be used to capture the main content intended\nfor users, along with auxiliary navigation components such as headers, footers,\nsidebars, and pagination controls. This makes it possible to distinguish core\ncontent from supporting links used for site-wide navigation.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "pageContentOptions": {
+            "description": "Additional options for pageContent extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "markdown": {
+            "description": "Set to `true` to get the page as Markdown in the\n[markdown](#operation/extract/response/200/markdown)\nresponse field.\n\nBy default the Markdown covers the main content of the page only\nand is produced from the\n[httpResponseBody](#operation/extract/request/httpResponseBody).\nUse\n[markdownOptions](#operation/extract/request/markdownOptions)\nto change the scope or the source document, or set\n[browserHtml](#operation/extract/request/browserHtml)\nto `true` to convert the rendered page instead.\n\nThis field is not compatible with\n[serp](#operation/extract/request/serp)\nor\n[customAttributes](#operation/extract/request/customAttributes).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "markdownOptions": {
+            "type": "object",
+            "description": "Additional options for the Markdown output.",
+            "properties": {
+              "extractFrom": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ExtractFrom"
+                  }
+                ],
+                "description": "[extractFrom](#operation/extract/request/extractFrom)\noverride for the Markdown output only. It must match the source\nused by any automatic extraction type requested alongside.\n"
+              },
+              "scope": {
+                "type": "string",
+                "description": "`mainContent` converts the primary content of the page only,\nthe same region\n[pageContent.itemMain](#operation/extract/response/200/pageContent)\ncovers; site navigation, headers, footers and sidebars are left\nout. When no main content can be identified, the full page is\nreturned instead.\n\n`fullPage` converts the whole page.\n",
+                "enum": [
+                  "mainContent",
+                  "fullPage"
+                ],
+                "default": "mainContent"
+              }
+            }
+          },
+          "product": {
+            "description": "Set to `true` to get product data in the\n[product](#operation/extract/response/200/product)\nresponse field.\n\nThe target page should only contain a single product. For\npages with multiple products consider using\n[productList](#operation/extract/request/productList)\ninstead.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\n[See an example](extract.html).\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[productNavigation](#operation/extract/request/productNavigation),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "productOptions": {
+            "description": "Additional options for product extraction.\n",
+            "type": "object",
+            "properties": {
+              "extractFrom": {
+                "$ref": "#/components/schemas/ExtractionOptions/properties/extractFrom"
+              },
+              "model": {
+                "type": "string",
+                "enum": [
+                  "2024-02-01",
+                  "2024-09-16"
+                ],
+                "description": "Model version to use for product extraction. If not specified,\nthe \"2024-09-16\" version is used.\n\nAvailable product models:\n\n- \"2024-02-01\"\n\n- \"2024-09-16\"\n\nSee [Model pinning](extract/index.html#model-pinning).\n"
+              }
+            }
+          },
+          "productList": {
+            "description": "Set to `true` to get product list data in the\n[productList](#operation/extract/response/200/productList)\nresponse field.\n\nThe target page should contain a list or a grid of products.\n\nProduct list data is especially useful to get basic information\nabout products on a website using a smaller number of requests,\nwhen product attributes are extracted directly from a product list\npage, without making individual\n[product](#operation/extract/request/product)\nrequests.\n\nTo implement product crawling from product list pages, use\n[productNavigation](#operation/extract/request/productNavigation),\nwhich also enables navigation through pagination links.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "productListOptions": {
+            "description": "Additional options for productList extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "productNavigation": {
+            "description": "Set to `true` to get product navigation data in the\n[productNavigation](#operation/extract/response/200/productNavigation)\nresponse field.\n\nThe target page should contain multiple products and/or\nsubcategories that can be followed.\n\nProduct navigation data is especially useful for implementing\nproduct crawling, i.e. following links to product pages, as well as\nto subcategories and pagination that can in turn link to more\nproduct pages.\n\nProduct navigation data can also be used to get basic information\nof products and subcategories on a website, obtaining the URLs and\nlink names of the products and subcategories, without making\nindividual requests for those products.\n\nTo combine this field with\n[HTTP requests](http.html),\nset\n[extractFrom](#operation/extract/request/extractFrom)\nto `\"httpResponseBody\"`.\n\nIf you use\n[actions](#operation/extract/request/actions),\ndata extraction happens *after* action execution has finished or\ntimed out.\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields),\n[product](#operation/extract/request/product),\n[productList](#operation/extract/request/productList),\n[browserHtml](#operation/extract/request/browserHtml),\n[screenshot](#operation/extract/request/screenshot),\n[requestHeaders](#operation/extract/request/requestHeaders).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "productNavigationOptions": {
+            "description": "Additional options for productNavigation extraction.\n",
+            "$ref": "#/components/schemas/ExtractionOptions"
+          },
+          "customAttributes": {
+            "type": "object",
+            "description": "Schema of the custom attributes to extract. This is a subset of the OpenAPI specification, using JSON syntax.\n\nZyte custom attributes extraction uses a Large Language Model (LLM) operated by Zyte\nto obtain any structured data specified by this schema from any unstructured web page.\nThis allows to perform extraction similar to standard schemas, such as article or product,\nbut much more flexibly.\n\nWhen this field is specified, the\n[customAttributes.values](#operation/extract/response/200/customAttributes.values)\nfield in the response would contain the extracted data.\n\nWhen custom attributes extraction is requested, a standard extraction field must also be\nspecified (e.g. [product](#operation/extract/request/product)).\nThis determines the part of the web page which would be passed to the LLM for custom attributes extraction,\ne.g. when a web page is a product, we're only going to pass the product information,\nignoring other parts of the page, such as menu or footer, which makes extraction cheaper and more accurate.\n\n[See detailed documentation](custom-attributes.html).\nAdditionally, to see a request example, scroll up to the right-hand sidebar **Request samples**,\nand select “Extract Custom Attributes along with Article information” under **Example**.\n",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CustomAttribute"
+            },
+            "maxProperties": 20
+          },
+          "customAttributesOptions": {
+            "type": "object",
+            "description": "Additional options for custom attributes extraction.",
+            "properties": {
+              "maxInputTokens": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Limit on the number of input tokens for custom attribute extraction.\n\nThis includes the schema as well, but not our internal fixed prompt with the LLM instruction.\n\nWhen the number of tokens for schema and page text is above the specified maxInputTokens,\nwe truncate the page text to fit in maxInputTokens.\nThis may result in quality degradation or data not extracted from the page because it was truncated.\n\nTokens are words or word pieces, for example\n``{\"price\": \"2.00 $\"}`` is 9 tokens:\n``{\"``, ``price``, ``\":``, `` \"``, ``2``, ``.``, ``00``, `` $``, ``\"}``.\n"
+              },
+              "maxOutputTokens": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Limit on the number of output tokens for extracted custom attributes.\nThis field can be set to limit the extraction cost, but may result in quality degradation.\n\nSee an example of token counting in the\n[maxInputTokens](#operation/extract/request/customAttributesOptions.maxInputTokens)\nfield above.\n"
+              }
+            }
+          },
+          "geolocation": {
+            "$ref": "#/components/schemas/CountryCode"
+          },
+          "javascript": {
+            "description": "Forces JavaScript execution on a\n[browser request](browser.html)\nto be enabled (`true`) or disabled (`false`).\n\nBy default Zyte API enables or disables JavaScript execution for a\nrequest depending on which option makes it easier to avoid bans.\nUse this request field to override that choice.\n\nPassing this request field when requesting automatic extraction (\n[product](#operation/extract/request/product),\n[article](#operation/extract/request/article),\netc.) may impact the quality of the returned data, as it might\noverride the optimal value for automatic extraction.\n\nThis field is not compatible with\n[HTTP requests](http.html).\n\n[See an example](browser.html#zapi-javascript).\n",
+            "type": "boolean"
+          },
+          "actions": {
+            "$ref": "#/components/schemas/ActionSequence"
+          },
+          "jobId": {
+            "description": "ID of the\n[Scrapy Cloud](../../scrapy-cloud/get-started.html)\njob from which this request has been sent, to be returned in the\n[jobId](#operation/extract/response/200/jobId)\nresponse field.\n\nThis field is meant to help with request tracking.\n\n[scrapy-zyte-api](https://scrapy-zyte-api.readthedocs.io/en/latest/index.html)\nfills this request field automatically.\n\n[See an example](features.html#zapi-metadata).\nSee also:\n[echoData](#operation/extract/request/echoData).\n",
+            "type": "string",
+            "maxLength": 100,
+            "example": "example-job-1"
+          },
+          "echoData": {
+            "description": "This field is returned in the\n[echoData](#operation/extract/response/200/echoData)\nresponse field, verbatim.\n\nThis field can be useful, for example, to keep track of the\noriginal request order when\n[sending multiple requests in parallel](optimize.html#zapi-parallel).\n\nThe request can be rejected if the data is too big.\n\n[See an example](features.html#zapi-metadata).\nSee also:\n[jobId](#operation/extract/request/jobId).\n"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/Viewport"
+          },
+          "followRedirect": {
+            "description": "Whether to follow\n[HTTP redirection](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections)\nor not.\n\nOnly supported in\n[HTTP requests](http.html#zapi-http-redirection),\n[browser requests always follow redirection](browser.html#zapi-browser-redirection).\n",
+            "type": "boolean"
+          },
+          "sessionContext": {
+            "$ref": "#/components/schemas/SessionContext"
+          },
+          "sessionContextParameters": {
+            "$ref": "#/components/schemas/SessionContextParameters"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "networkCapture": {
+            "$ref": "#/components/schemas/NetworkCaptureFilterSequence"
+          },
+          "device": {
+            "description": "Type of device to emulate during your request.\n\nA desktop device is emulated by default.\n\nCan only be used in combination with\n[httpResponseBody](#operation/extract/request/httpResponseBody).\n",
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ]
+          },
+          "cookieManagement": {
+            "description": "Cookie management method\n\nIt determines how to handle user cookies, defined through\n[requestCookies](#operation/extract/request/requestCookies),\nand automatic cookies, cookies automatically generated by Zyte API.\n`auto` (default) uses user cookies if defined, or automatic\ncookies otherwise.\n\n`discard` uses user cookies if defined, or no cookies\notherwise.\n",
+            "enum": [
+              "auto",
+              "discard"
+            ],
+            "default": "auto"
+          },
+          "requestCookies": {
+            "type": "array",
+            "description": "A list of cookies to be sent with a request.\n\nYou can use the contents of the\n[responseCookies](#operation/extract/response/200/responseCookies)\nresponse field as a value for this request field.\n\n[See an example](features.html#zapi-cookies).\n",
+            "items": {
+              "$ref": "#/components/schemas/Cookie"
+            },
+            "maxItems": 100
+          },
+          "responseCookies": {
+            "description": "Set to `true` to get the list of cookies set during a request\nin the\n[responseCookies](#operation/extract/response/200/responseCookies)\nresponse field.\n\n[See an example](features.html#zapi-cookies).\nSee also:\n[requestCookies](#operation/extract/request/requestCookies).\n",
+            "type": "boolean",
+            "default": false
+          },
+          "serp": {
+            "type": "boolean",
+            "description": "Set to `true` to get the data of a search engine results page\n(SERP) in the\n[serp](#operation/extract/response/200/serp)\nresponse field.\n\nThe\n[target URL](#operation/extract/request/url)\nshould be a search engine URL.\n\nCurrently, you cannot combine this field with any other request\nfields besides\n[serpOptions](#operation/extract/request/serpOptions)\nand\n[url](#operation/extract/request/url).\n\nSee also:\n[List of all automatic extraction request fields](extract.html#zapi-extract-fields).\n"
+          },
+          "serpOptions": {
+            "$ref": "#/components/schemas/SerpOptions"
+          },
+          "includeIframes": {
+            "type": "boolean",
+            "description": "Whether to add the content of\n[iframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)\ninto\n[browserHtml](#operation/extract/response/200/browserHtml).\n\nNote that iframes are visible in screenshots even if this is set to\n`false`.\n\nSee also:\n[browserHtml](#operation/extract/request/browserHtml).\n",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Response200": {
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL the data was extracted from.\n\nCould be different from the input URL in case of\n[redirection](http.html#zapi-redirection).\n\nSee also:\n[statusCode](#operation/extract/response/200/statusCode).\n",
+            "example": "https://example.com/item-page/"
+          },
+          "statusCode": {
+            "type": "integer",
+            "description": "The HTTP status code retrieved from the target page.\n\nIf\n[redirection is followed](http.html#zapi-redirection),\nthis is the status code of the response *after* redirection.\n\nSee also:\n[url](#operation/extract/response/200/url).\n",
+            "example": 200
+          },
+          "httpResponseBody": {
+            "description": "[Base64-encoded](https://en.wikipedia.org/wiki/Base64)\nHTTP response body.\n\nTo get this response field, set the\n[httpResponseBody](#operation/extract/request/httpResponseBody)\nrequest field to `true`.\n\nUnlike\n[browserHtml](#operation/extract/response/200/browserHtml),\nthis field supports binary response bodies, such as image files or\nPDF files. This is the reason why this field is Base64-encoded,\nJSON does not support binary data.\n\n[See an example](http.html#example-httpresponsebody).\n",
+            "type": "string",
+            "format": "byte"
+          },
+          "httpResponseHeaders": {
+            "description": "HTTP response headers.\n\nTo get this response field, set the\n[httpResponseHeaders](#operation/extract/request/httpResponseHeaders)\nrequest field to `true`.\n\nThe `Content-Encoding` header value (e.g. `gzip`, `br`, etc.)\nshould not be used to decompress\n[httpResponseBody](#operation/extract/response/200/httpResponseBody),\nZyte API already decompresses the body of compressed responses.\n\nThe `Set-Cookie` header value, when present, contains the header\nvalue received from the main HTTP response. These cookies could\nhave changed later on, e.g. during browser rendering. Usually you\nwill want to ignore this header in favor of\n[responseCookies](#operation/extract/response/200/responseCookies),\nwhich provides the *final* cookies.\n\n[See an example](features.html#zapi-headers).\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HTTPHeader"
+            }
+          },
+          "browserHtml": {
+            "description": "[Browser HTML](browser.html#zapi-browser-html).\n\nTo get this response field, set the\n[browserHtml](#operation/extract/request/browserHtml)\nrequest field to `true`.\n\nBrowser HTML does not include the contents of\n[iframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)\nor the\n[shadow DOM](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_shadow_DOM).\n\n[See an example](browser.html#zapi-browser-html).\n",
+            "type": "string",
+            "example": "<html>Downloaded data.</html>"
+          },
+          "markdown": {
+            "description": "The page as Markdown.\n\nTo get this response field, set the\n[markdown](#operation/extract/request/markdown)\nrequest field to `true`. Headings, paragraphs, lists, tables, links\nand images are kept, and link and image URLs are absolute. Text\ncontent other than HTML, such as JSON, XML or plain text, is\nreturned as a fenced code block. Content that cannot be converted,\nsuch as a PDF or an image, is described by a short message instead.\n",
+            "type": "string",
+            "example": "# Example page\n\nFirst paragraph."
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "screenshot": {
+            "description": "[Base64-encoded](https://en.wikipedia.org/wiki/Base64)\npage screenshot file data.\n\nTo get this response field, set the\n[screenshot](#operation/extract/request/screenshot)\nrequest field to `true`.\n\n[screenshotOptions.format](#operation/extract/request/screenshotOptions)\ndetermines the file format of the screenshot data.\n\n[See an example](browser.html#zapi-screenshot).\n",
+            "type": "string",
+            "format": "byte"
+          },
+          "article": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Article"
+              },
+              {
+                "description": "Article data.\n\nTo get this response field, set the\n[article](#operation/extract/request/article)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "articleList": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArticleList"
+              },
+              {
+                "description": "Article list data.\n\nTo get this response field, set the\n[articleList](#operation/extract/request/articleList)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "articleNavigation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArticleNavigation"
+              },
+              {
+                "description": "Article navigation data.\n\nTo get this response field, set the\n[articleNavigation](#operation/extract/request/articleNavigation)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "forumThread": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ForumThread"
+              },
+              {
+                "description": "Forum thread data.\n\nTo get this response field, set the\n[forumThread](#operation/extract/request/forumThread)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "jobPosting": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobPosting"
+              },
+              {
+                "description": "Job posting data.\n\nTo get this response field, set the\n[jobPosting](#operation/extract/request/jobPosting)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "jobPostingNavigation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobPostingNavigation"
+              },
+              {
+                "description": "Job posting navigation data.\n\nTo get this response field, set the\n[jobPostingNavigation](#operation/extract/request/jobPostingNavigation)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "pageContent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PageContent"
+              },
+              {
+                "description": "Page content data.\n\nTo get this response field, set the\n[pageContent](#operation/extract/request/pageContent)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "product": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Product"
+              },
+              {
+                "description": "Product data.\n\nTo get this response field, set the\n[product](#operation/extract/request/product)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "productList": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProductList"
+              },
+              {
+                "description": "Product list data.\n\nTo get this response field, set the\n[productList](#operation/extract/request/productList)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "productNavigation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProductNavigation"
+              },
+              {
+                "description": "Product navigation data.\n\nTo get this response field, set the\n[productNavigation](#operation/extract/request/productNavigation)\nrequest field to `true`.\n"
+              }
+            ]
+          },
+          "customAttributes": {
+            "type": "object",
+            "properties": {
+              "values": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Values of extracted custom attributes, extracted according to the requested\n[customAttributes](#operation/extract/request/customAttributes)\nschema.\n"
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "inputTokens": {
+                    "type": "integer",
+                    "description": "Total number of used input tokens, excluding our internal fixed prompt with the LLM instruction.\n"
+                  },
+                  "outputTokens": {
+                    "type": "integer",
+                    "description": "Total number of used output tokens.\n"
+                  },
+                  "textInputTokens": {
+                    "type": "integer",
+                    "description": "Total number of input tokens used for the text of the web page, excluding\nthe schema and our internal fixed prompt with the LLM instruction.\nAlready included in the [customAttributes.metadata.inputTokens](#operation/extract/response/200/customAttributes.metadata.inputTokens)\nfield.\n"
+                  },
+                  "textInputTokensBeforeTruncation": {
+                    "type": "integer",
+                    "description": "textInputTokens before the text was truncated to fit into the input limits,\neither set via\n[customAttributesOptions.maxInputTokens](#operation/extract/request/customAttributesOptions.maxInputTokens)\nor due to the model limitation returned in\n[customAttributes.metadata.maxInputTokens](#operation/extract/response/200/customAttributes.metadata.maxInputTokens).\n"
+                  },
+                  "maxInputTokens": {
+                    "type": "integer",
+                    "description": "Maximum number of allowed input tokens for the model.\n"
+                  },
+                  "excludedPIIAttributes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "A list of all attributes dropped from the output due to a risk of PII\n(Personally Identifiable Information) extraction.\n"
+                  },
+                  "error": {
+                    "type": "string",
+                    "description": "* The ``extraction/unparsable-response`` error is given when the LLM response could not be parsed or recovered.\n  If this error happens, we suggest simplifying the task or reducing the number of attributes.\n* The ``extraction/schema-size-exceeded`` error is given when the schema did not fit into the input limits,\n  leaving no space for the input text, and therefore the LLM could not be used. If this error happens, we suggest\n  either making the schema smaller (fewer attributes and/or shorter descriptions),\n  or increasing\n  [customAttributesOptions.maxInputTokens](#operation/extract/request/customAttributesOptions.maxInputTokens).\n"
+                  }
+                }
+              }
+            }
+          },
+          "echoData": {
+            "description": "Arbitrary data set on the\n[echoData](#operation/extract/request/echoData)\nrequest field.\n\n[See an example](features.html#zapi-metadata).\n",
+            "type": "object"
+          },
+          "jobId": {
+            "description": "[Scrapy Cloud](../../scrapy-cloud/get-started.html)\njob ID set on the\n[jobId](#operation/extract/request/jobId)\nrequest field.\n\n[See an example](features.html#zapi-metadata).\n",
+            "type": "string",
+            "maxLength": 100,
+            "example": "example-job-1"
+          },
+          "actions": {
+            "description": "Debug information about the execution of the action sequence set in\nthe\n[actions](#operation/extract/request/actions)\nrequest field.\n\nAction order in the response always matches that of the request.\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionResult"
+            }
+          },
+          "responseCookies": {
+            "description": "List of cookies set during the request.\n\nTo get this response field, set the\n[responseCookies](#operation/extract/request/responseCookies)\nrequest field to `true`.\n\n[See an example](features.html#zapi-cookies).\nSee also:\n[requestCookies](#operation/extract/request/requestCookies).\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cookie"
+            }
+          },
+          "networkCapture": {
+            "type": "array",
+            "description": "Responses captured by filters specified in the\n[networkCapture](#operation/extract/request/networkCapture)\nrequest parameter.\n",
+            "items": {
+              "$ref": "#/components/schemas/CapturedResponse"
+            }
+          },
+          "serp": {
+            "$ref": "#/components/schemas/Serp"
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "A URI reference that uniquely identifies the problem type, only in\nthe context of the provided API.\n\nOpposed to the specification in RFC-7807, it is neither recommended\nto be dereferenceable and point to human-readable documentation nor\nglobally unique for the problem type.\n",
+            "default": "about:blank",
+            "example": "/problem/connection-error"
+          },
+          "title": {
+            "type": "string",
+            "description": "A short summary of the problem type. Written in English and readable for engineers, usually not suited for non-technical stakeholders, and not localized.\n",
+            "example": "Service Unavailable"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The HTTP status code generated by Zyte API for this occurrence of the problem.\n",
+            "minimum": 100,
+            "maximum": 600,
+            "exclusiveMaximum": true,
+            "example": 503
+          },
+          "detail": {
+            "type": "string",
+            "description": "A human-readable explanation specific to this occurrence of the problem that is helpful to locate the source of the problem and gives advice on how to proceed.\nWritten in English and readable for engineers, usually not suited for non-technical stakeholders, and not localized.\n",
+            "example": "Connection to database timed out"
+          }
+        }
+      },
+      "ForbiddenDomainProblem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Problem"
+          }
+        ],
+        "properties": {
+          "blockedDomain": {
+            "type": "string",
+            "description": "The domain which extraction cannot be performed.\n",
+            "example": "forbiddendomain.com"
+          }
+        }
+      },
+      "SessionContext": {
+        "description": "User-defined name-value pairs to\n[request a server-managed session](features.html#zapi-session-contexts)\ninitialized with\n[sessionContextParameters](#operation/extract/request/sessionContextParameters)).\n\nFor every subsequent request with the same session context, Zyte API\nwill either reuse an available session created for the same session\ncontext or create a new session using\n[sessionContextParameters](#operation/extract/request/sessionContextParameters)).\n\nServer-managed sessions expire after 4 hours or 3 ban responses. If you\nare targeting websites that silently expire their sessions before the\n4-hour mark, i.e. they revert the effects of your\n[sessionContextParameters](#operation/extract/request/sessionContextParameters)\nbut requests continue working as expected otherwise, consider using\n[client-managed sessions](features.html#client-managed-sessions)\nfor higher session control.\n\n[See an example](features.html#zapi-session-contexts).\nSee also:\n[requestCookies](#operation/extract/request/requestCookies),\n[responseCookies](#operation/extract/request/responseCookies).\n",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "maxItems": 10,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name of the context identifier.",
+              "minLength": 1,
+              "maxLength": 30,
+              "nullable": false
+            },
+            "value": {
+              "type": "string",
+              "description": "Value of the context identifier.",
+              "minLength": 1,
+              "maxLength": 100,
+              "nullable": false
+            }
+          },
+          "required": [
+            "name",
+            "value"
+          ]
+        }
+      },
+      "SessionContextParameters": {
+        "description": "Parameters to create a server-managed session for a given\n[sessionContext](#operation/extract/request/sessionContext)).\n\n[See an example](features.html#zapi-session-contexts).\nSee also:\n[actions](#operation/extract/request/actions).\n",
+        "type": "object",
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/SessionContextActionSequence"
+          }
+        }
+      },
+      "ActionResult": {
+        "description": "Returns detailed information about the elapsed time and errors for a particular action.\n",
+        "type": "object",
+        "properties": {
+          "action": {
+            "description": "The type of action submitted",
+            "type": "string",
+            "example": "waitForSelector"
+          },
+          "elapsedTime": {
+            "description": "Elapsed time in seconds",
+            "type": "number"
+          },
+          "status": {
+            "description": "Status of execution of a particular action\n* success - When the action finishes execution successfully without any errors\n* continued - When the action fails, but the execution of the action sequence is continued\n* returned - When the action fails and stops execution\n* notExecuted - When a a prior action has failed, thereby not executing the current action\n",
+            "type": "string",
+            "enum": [
+              "success",
+              "continued",
+              "returned",
+              "notExecuted"
+            ],
+            "example": "success"
+          },
+          "error": {
+            "description": "Detailed information about the underlying error.",
+            "type": "string",
+            "example": "Request timeout while waiting for selector '#form-input'"
+          },
+          "interactionLogs": {
+            "description": "Messages logged with `console.log()` from\n[browser scripts](../ide/index.html#zapi-scripts).\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InteractionLogEntry"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "elapsedTime",
+          "status"
+        ]
+      },
+      "InteractionLogEntry": {
+        "description": "Interaction log entry",
+        "type": "object",
+        "properties": {
+          "time": {
+            "description": "The ISO 8601 format of the time",
+            "type": "string"
+          },
+          "level": {
+            "description": "The log level",
+            "type": "string",
+            "enum": [
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "warn"
+            ]
+          },
+          "message": {
+            "description": "The log message",
+            "type": "string"
+          }
+        }
+      },
+      "ActionTimeout": {
+        "description": "Maximum wait time in seconds.",
+        "type": "number",
+        "minimum": 0,
+        "default": 5,
+        "maximum": 15
+      },
+      "UrlPattern": {
+        "description": "A string to compare with a URL according to `urlMatchingOptions`.\n",
+        "type": "string",
+        "example": [
+          "https://example.com/api",
+          "/api/store/fulfilment"
+        ]
+      },
+      "PatternMatchingOptions": {
+        "description": "How to compare a user-defined string with a target string:\n\n- `contains` matches if the user-defined string is a substring of the\n  target string.\n\n- `exact` matches if the user-defined string is an exact match of the\n  target string.\n\n- `startsWith` matches if the target string starts with the\n  user-defined string.\n\n- `endsWith` matches if the target string ends with the user-defined\n  string.\n\nComparisons are case-sensitive. Regular expressions or wildcard\ncharacters are not supported.\n",
+        "type": "string",
+        "enum": [
+          "startsWith",
+          "endsWith",
+          "contains",
+          "exact"
+        ],
+        "default": "contains"
+      },
+      "ActionSelector": {
+        "description": "A CSS or XPath selector to search for an element.\n",
+        "properties": {
+          "type": {
+            "description": "The type of selector - CSS or XPath",
+            "type": "string",
+            "enum": [
+              "css",
+              "xpath"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "state": {
+            "description": "State can be either of the following values and defaults to visible\n* 'visible' - The element has a non-empty bounding box and no visibility:hidden. Note that an element without content or with display:none has an empty bounding box, and is not considered visible.\n* 'hidden' - The element is either detached from the DOM, or has an empty bounding box or visibility:hidden.\nThis is the opposite of the 'visible' option.\n* 'attached' - The element is present in the DOM; it can be visible or hidden\n",
+            "type": "string",
+            "enum": [
+              "attached",
+              "visible",
+              "hidden"
+            ],
+            "default": "visible"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "onError": {
+        "description": "Handle errors encountered while executing a particular action.\n* continue - When a particular action fails, the action sequence continues, executing the next actions\n* return - When a particular actions fails, the action sequence stops, not executing any more actions\n\nWhen an action sequence finishes prematurely the service will return the entire response body up until the\npoint of execution.\n",
+        "type": "string",
+        "enum": [
+          "continue",
+          "return"
+        ],
+        "default": "return"
+      },
+      "ActionSequence": {
+        "description": "Sequence of browser actions to execute.\n\nSelect an action below to see its API reference.\n\nWhen using actions, you get the\n[actions](#operation/extract/response/200/actions)\nresponse field with debug information about action execution.\n\n[See an example](browser.html#zapi-actions).\n",
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/click"
+            },
+            {
+              "$ref": "#/components/schemas/doubleClick"
+            },
+            {
+              "$ref": "#/components/schemas/evaluate"
+            },
+            {
+              "$ref": "#/components/schemas/goto"
+            },
+            {
+              "$ref": "#/components/schemas/hide"
+            },
+            {
+              "$ref": "#/components/schemas/hover"
+            },
+            {
+              "$ref": "#/components/schemas/interaction"
+            },
+            {
+              "$ref": "#/components/schemas/keyPress"
+            },
+            {
+              "$ref": "#/components/schemas/reload"
+            },
+            {
+              "$ref": "#/components/schemas/scrollBottom"
+            },
+            {
+              "$ref": "#/components/schemas/scrollTo"
+            },
+            {
+              "$ref": "#/components/schemas/searchKeyword"
+            },
+            {
+              "$ref": "#/components/schemas/select"
+            },
+            {
+              "$ref": "#/components/schemas/setLocation"
+            },
+            {
+              "$ref": "#/components/schemas/type"
+            },
+            {
+              "$ref": "#/components/schemas/waitForNavigation"
+            },
+            {
+              "$ref": "#/components/schemas/waitForRequest"
+            },
+            {
+              "$ref": "#/components/schemas/waitForResponse"
+            },
+            {
+              "$ref": "#/components/schemas/waitForSelector"
+            },
+            {
+              "$ref": "#/components/schemas/waitForTimeout"
+            }
+          ]
+        }
+      },
+      "Action": {
+        "description": "Action to perform.",
+        "type": "object",
+        "properties": {
+          "onError": {
+            "$ref": "#/components/schemas/onError"
+          }
+        },
+        "example": {
+          "action": "click",
+          "selector": {
+            "type": "css",
+            "value": "#main"
+          }
+        }
+      },
+      "GoToOptions": {
+        "description": "Used to customise navigation options",
+        "type": "object",
+        "properties": {
+          "waitUntil": {
+            "description": "When to consider navigation succeeded, defaults to load. Events can be either:\n* load - consider navigation to be finished when the load event is fired.\n* networkidle0 -  consider navigation to be finished when there are no more than 0 network connections for at least 500 ms\n* domcontentloaded - consider navigation to be finished when the DOMContentLoaded event is fired.\n",
+            "type": "string",
+            "enum": [
+              "load",
+              "networkidle0",
+              "domcontentloaded"
+            ],
+            "default": "load"
+          },
+          "timeout": {
+            "description": "Maximum navigation time in seconds, defaults to 30 seconds. Pass 0 to disable timeout.",
+            "type": "integer",
+            "default": 30,
+            "minimum": 0
+          }
+        }
+      },
+      "ScreenshotOptions": {
+        "description": "Options for the screenshot taken when the\n[screenshot](#operation/extract/request/screenshot)\nrequest field is `true`.\n",
+        "type": "object",
+        "properties": {
+          "format": {
+            "description": "File format.\n\nJPEG screenshots are taken with a quality of 75%.\n",
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg"
+            ],
+            "default": "jpeg"
+          },
+          "fullPage": {
+            "description": "When `true`, the screenshot features the full page. When\n`false`, it features only what is visible on the browser window\n(viewport).\n\nFull page screenshots:\n\n-   Are only available in JPEG format.\n\n-   Have a minimum resolution of 1920x1080, i.e. for pages\n    smaller than 1920x1080, the screenshot looks the same\n    regardless of the value of `fullPage`.\n\n-   Any image exceeding 5000 (width) x 10000 (height) pixels will be clipped to those\n    dimensions.\n",
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ExtractionOptions": {
+        "description": "Options for automatic extraction.\n",
+        "type": "object",
+        "properties": {
+          "extractFrom": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExtractFrom"
+              }
+            ],
+            "description": "[extractFrom](#operation/extract/request/extractFrom)\noverride for this particular extraction type.\n\nUsing\n[extractFrom](#operation/extract/request/extractFrom)\ninstead is recommended.\n"
+          },
+          "userHtml": {
+            "type": "string",
+            "description": "HTML content provided by the user for extraction.\nRequired when extractFrom is set to `\"userHtml\"`.\n",
+            "minLength": 1,
+            "maxLength": 2621440
+          }
+        }
+      },
+      "ExtractFrom": {
+        "type": "string",
+        "enum": [
+          "httpResponseBody",
+          "browserHtml",
+          "userHtml"
+        ],
+        "description": "[Extraction source](extract/index.html#zapi-extract-from).\n\n`httpResponseBody` extracts from\n[httpResponseBody](#operation/extract/response/200/httpResponseBody).\nIt is usually faster and cheaper.\n\n`browserHtml` extracts from both\n[browserHtml](#operation/extract/response/200/browserHtml)\nand\n[screenshot](#operation/extract/response/200/screenshot).\nIt typically improves quality over `httpResponseBody`, but is not as\nrobust in case of rendering issues.\n\n`userHtml` extracts from user-provided HTML content. When this\noption is set, the\n[userHtml](#operation/extract/request/userHtml)\nfield must contain the HTML to extract from. No download request\nis performed and no browser rendering takes place. The\n[url](#operation/extract/request/url)\nfield is still required.\n\nIf not specified, `browserHtml` is currently used by default for\n[AI extraction](extract/index.html#ai-extraction),\nwhile `httpResponseBody` is used by default for\n[non-AI extraction](extract/index.html#non-ai-extraction).\nIn the future, the default value may depend on the target website.\n\nThis field does not work with\n[serp](#operation/extract/request/serp);\nfor `serp`, use\n[serpOptions.extractFrom](#operation/extract/request/serpOptions.extractFrom)\ninstead.\n"
+      },
+      "RequestHeaders": {
+        "description": "HTTP request headers.\n\nCan only be used in a\n[browser request](browser.html).\nFor\n[HTTP requests](http.html), see\n[customHttpRequestHeaders](#operation/extract/request/customHttpRequestHeaders).\n\nAt the moment it only supports the\n[Referer header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referer).\n\n[See an example](browser.html#zapi-set-browser-headers).\n",
+        "properties": {
+          "referer": {
+            "description": "[Referer header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referer).\n",
+            "type": "string",
+            "example": "https://search.example/"
+          }
+        }
+      },
+      "CustomHttpRequestHeader": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "X-APOLLO-OPERATION-NAME"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 7000,
+            "example": "nearByNodes"
+          }
+        }
+      },
+      "Session": {
+        "description": "Parameters to create or reuse a\n[client-managed session](features.html#client-managed-sessions).\n\nIf `id` does not match one of your running sessions, a new session is\ncreated with that session ID. Otherwise, the matching running session\nis reused.\n\nClient-managed sessions may expire due to any of the following:\n\n-   15 minutes (900 seconds) have passed since the session was created.\n\n-   2 minutes (120 seconds) have passed since the session use.\n\n-   For 3 times in a row, requests using this session got banned.\n\nFor 5-10 minutes after a session expires, Zyte API keeps track of the\nexpired session and does not allow re-using it. After that time,\nattempts to reuse the session will instead create a new session.\n\n[See an example](features.html#client-managed-sessions).\n",
+        "example": {
+          "id": "ab837d21-f848-42b2-8e88-47ea9d84bad0"
+        },
+        "properties": {
+          "id": {
+            "description": "User-defined session ID.\n\nIt must be a\n[version 4 UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_4_(random)),\ni.e. a randomly-generated UUID.\n",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Cookie": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 4085,
+            "description": "Cookie name"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 4085,
+            "description": "Cookie value"
+          },
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "description": "Domain the cookie belongs to"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path the cookie belongs to"
+          },
+          "expires": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix time in seconds."
+          },
+          "httpOnly": {
+            "type": "boolean"
+          },
+          "secure": {
+            "type": "boolean"
+          },
+          "sameSite": {
+            "type": "string",
+            "enum": [
+              "Strict",
+              "Lax",
+              "Extended",
+              "None"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "domain"
+        ]
+      },
+      "PostalAddress": {
+        "description": "Postal address to be set",
+        "type": "object",
+        "properties": {
+          "addressCountry": {
+            "description": "The country code in [ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)",
+            "type": "string",
+            "example": "US"
+          },
+          "addressRegion": {
+            "description": "The region in which the address is. This value is specific to the website.",
+            "type": "string",
+            "example": "California"
+          },
+          "streetAddress": {
+            "description": "The street address.",
+            "type": "string"
+          },
+          "postalCode": {
+            "description": "The postal code.",
+            "type": "string"
+          }
+        }
+      },
+      "NetworkCaptureFilterSequence": {
+        "type": "array",
+        "maxItems": 10,
+        "description": "Filters to capture browser network responses.\n\nHTTP responses received during browser rendering (including\n[action](#operation/extract/request/actions)\nexecution) will be returned in the\n[networkCapture](#operation/extract/response/200/networkCapture)\nresponse field if they match any of the filters defined here.\n\nYou can capture up to 10 responses, provided the sum of their bodies\ndoes not exceed 5 MiB. If they do exceed that limit, only the first\ncaptured responses within the limit are returned.\n\n[See an example](browser.html#zapi-network-capture).\n",
+        "items": {
+          "$ref": "#/components/schemas/NetworkCaptureFilter"
+        }
+      },
+      "NetworkCaptureFilter": {
+        "type": "object",
+        "description": "Filter defined in the\n[networkCapture](#operation/extract/request/networkCapture)\nrequest field that matched the captured response.\n",
+        "properties": {
+          "filterType": {
+            "type": "string",
+            "enum": [
+              "url",
+              "resourceType"
+            ]
+          },
+          "httpResponseBody": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set to `true` to get the body of the captured response in the\n[networkCapture[].httpResponseBody](#operation/extract/response/200/networkCapture.httpResponseBody)\nresponse field.\n"
+          }
+        },
+        "required": [
+          "filterType"
+        ],
+        "discriminator": {
+          "propertyName": "filterType",
+          "mapping": {
+            "url": "#/components/schemas/UrlFilter",
+            "resourceType": "#/components/schemas/ResourceTypeFilter"
+          }
+        }
+      },
+      "UrlFilter": {
+        "description": "An object specifying how to capture responses by matching URL",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NetworkCaptureFilter"
+          },
+          {
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 8192,
+                "description": "A string to compare with the URL of network responses according\nto `matchType`.\n"
+              },
+              "matchType": {
+                "$ref": "#/components/schemas/PatternMatchingOptions"
+              }
+            }
+          },
+          {
+            "required": [
+              "value",
+              "matchType"
+            ]
+          }
+        ]
+      },
+      "ResourceTypeFilter": {
+        "description": "An object specifying how to capture responses by resource type",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NetworkCaptureFilter"
+          },
+          {
+            "properties": {
+              "resourceType": {
+                "type": "string",
+                "enum": [
+                  "document",
+                  "xhr"
+                ],
+                "description": "A resource type for a network response to match:\n\n- `document` is the source HTML document, which might change\n  during browser rendering or through\n  [actions](#operation/extract/request/actions).\n\n- `xhr` is a response obtained using\n  [XMLHttpRequest](http://devdoc.net/web/developer.mozilla.org/en-US/docs/XMLHttpRequest.1.html).\n"
+              }
+            }
+          },
+          {
+            "required": [
+              "resourceType"
+            ]
+          }
+        ]
+      },
+      "CapturedResponse": {
+        "type": "object",
+        "properties": {
+          "interceptionStatus": {
+            "type": "object",
+            "description": "Exit status of the network capture.\n\nIf `interceptionStatus.status` is `error`, `httpResponseBody` is\nnot delivered.\n\nPossible causes of error include all matching responses exceeding\nthe maximum total body size of 5 MiB.\n",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "error"
+                ]
+              },
+              "error": {
+                "type": "string",
+                "description": "Error message.\n\nThis field is only present if `interceptionStatus.status` is\n`error`.\n"
+              }
+            }
+          },
+          "statusCode": {
+            "type": "integer",
+            "description": "HTTP status code of the captured response."
+          },
+          "httpResponseBody": {
+            "type": "string",
+            "format": "byte",
+            "description": "[Base64](https://en.wikipedia.org/wiki/Base64)-encoded body of the\ncaptured response.\n\nTo get this response field, set the\n[networkCapture[].httpResponseBody](#operation/extract/request/networkCapture.httpResponseBody)\nrequest field to `true`.\n"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Captured response URL."
+          },
+          "headers": {
+            "type": "object",
+            "description": "Captured response headers."
+          },
+          "filter": {
+            "$ref": "#/components/schemas/NetworkCaptureFilter"
+          },
+          "request": {
+            "type": "object",
+            "description": "Captured request that got the captured response.",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL of the captured request."
+              },
+              "headers": {
+                "type": "object",
+                "description": "Headers of the captured request."
+              },
+              "method": {
+                "type": "string",
+                "description": "HTTP method of the captured request."
+              },
+              "body": {
+                "type": "string",
+                "description": "Body of the captured request, if any."
+              }
+            }
+          }
+        }
+      },
+      "Viewport": {
+        "type": "object",
+        "description": "[Browser viewport](https://developer.mozilla.org/en-US/docs/Glossary/Viewport).\n",
+        "properties": {
+          "width": {
+            "type": "integer",
+            "description": "Viewport width, in pixels.",
+            "default": 1920,
+            "minimum": 320,
+            "maximum": 5120
+          },
+          "height": {
+            "type": "integer",
+            "description": "Viewport height, in pixels.",
+            "default": 1080,
+            "minimum": 360,
+            "maximum": 4096
+          }
+        }
+      },
+      "CountryCode": {
+        "description": "[ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)\ncode of a country from which the request should be sent, i.e. the\nrequest\n[geolocation](features.html#zapi-geolocation).\n\nIf not specified, Zyte API will use a geolocation that, for the target\nwebsite, does not cause bans or unexpected locale changes in the\nresponse data, such as the wrong language, currency, date format, time\nzone, etc.\n\nIf you believe Zyte API is using the wrong default geolocation for a\nwebsite, please\n[reach out to our expert anti-ban team](https://support.zyte.com/support/tickets/new).\n\nFor some websites, however, you might want to set a custom geolocation.\nFor example, you may be interested in visiting the same URL from\ndifferent locations.\n\nZyte API provides 2 sets of geolocations. Standard geolocations are\n`AU`, `BE`, `BR`, `CA`, `CN`, `DE`, `ES`, `FR`, `GB`, `IN`, `IT`, `JP`,\n`KR`, `MX`, `NL`, `PL`, `RU`, `TR`, `US`, and `ZA`. All other\ngeolocations are\n[extended geolocations](features.html#zapi-extended-geolocations).\n\n[See an example](features.html#zapi-geolocation).\n",
+        "example": "US",
+        "type": "string",
+        "enum": [
+          "AW",
+          "AF",
+          "AO",
+          "AI",
+          "AX",
+          "AL",
+          "AD",
+          "AE",
+          "AR",
+          "AM",
+          "AS",
+          "AQ",
+          "TF",
+          "AG",
+          "AU",
+          "AT",
+          "AZ",
+          "BI",
+          "BE",
+          "BJ",
+          "BQ",
+          "BF",
+          "BD",
+          "BG",
+          "BH",
+          "BS",
+          "BA",
+          "BL",
+          "BY",
+          "BZ",
+          "BM",
+          "BO",
+          "BR",
+          "BB",
+          "BN",
+          "BT",
+          "BV",
+          "BW",
+          "CF",
+          "CA",
+          "CC",
+          "CH",
+          "CL",
+          "CN",
+          "CI",
+          "CM",
+          "CD",
+          "CG",
+          "CK",
+          "CO",
+          "KM",
+          "CV",
+          "CR",
+          "CU",
+          "CW",
+          "CX",
+          "KY",
+          "CY",
+          "CZ",
+          "DE",
+          "DJ",
+          "DM",
+          "DK",
+          "DO",
+          "DZ",
+          "EC",
+          "EG",
+          "ER",
+          "EH",
+          "ES",
+          "EE",
+          "ET",
+          "FI",
+          "FJ",
+          "FK",
+          "FR",
+          "FO",
+          "FM",
+          "GA",
+          "GB",
+          "GE",
+          "GG",
+          "GH",
+          "GI",
+          "GN",
+          "GP",
+          "GM",
+          "GW",
+          "GQ",
+          "GR",
+          "GD",
+          "GL",
+          "GT",
+          "GF",
+          "GU",
+          "GY",
+          "HK",
+          "HM",
+          "HN",
+          "HR",
+          "HT",
+          "HU",
+          "ID",
+          "IM",
+          "IN",
+          "IO",
+          "IE",
+          "IR",
+          "IQ",
+          "IS",
+          "IL",
+          "IT",
+          "JM",
+          "JE",
+          "JO",
+          "JP",
+          "KZ",
+          "KE",
+          "KG",
+          "KH",
+          "KI",
+          "KN",
+          "KR",
+          "KW",
+          "LA",
+          "LB",
+          "LR",
+          "LY",
+          "LC",
+          "LI",
+          "LK",
+          "LS",
+          "LT",
+          "LU",
+          "LV",
+          "MO",
+          "MF",
+          "MA",
+          "MC",
+          "MD",
+          "MG",
+          "MV",
+          "MX",
+          "MH",
+          "MK",
+          "ML",
+          "MT",
+          "MM",
+          "ME",
+          "MN",
+          "MP",
+          "MZ",
+          "MR",
+          "MS",
+          "MQ",
+          "MU",
+          "MW",
+          "MY",
+          "YT",
+          "NA",
+          "NC",
+          "NE",
+          "NF",
+          "NG",
+          "NI",
+          "NU",
+          "NL",
+          "NO",
+          "NP",
+          "NR",
+          "NZ",
+          "OM",
+          "PK",
+          "PA",
+          "PN",
+          "PE",
+          "PH",
+          "PW",
+          "PG",
+          "PL",
+          "PR",
+          "KP",
+          "PT",
+          "PY",
+          "PS",
+          "PF",
+          "QA",
+          "RE",
+          "RO",
+          "RU",
+          "RW",
+          "SA",
+          "SD",
+          "SN",
+          "SG",
+          "GS",
+          "SH",
+          "SJ",
+          "SB",
+          "SL",
+          "SV",
+          "SM",
+          "SO",
+          "PM",
+          "RS",
+          "SS",
+          "ST",
+          "SR",
+          "SK",
+          "SI",
+          "SE",
+          "SZ",
+          "SX",
+          "SC",
+          "SY",
+          "TC",
+          "TD",
+          "TG",
+          "TH",
+          "TJ",
+          "TK",
+          "TM",
+          "TL",
+          "TO",
+          "TT",
+          "TN",
+          "TR",
+          "TV",
+          "TW",
+          "TZ",
+          "UG",
+          "UA",
+          "UM",
+          "UY",
+          "US",
+          "UZ",
+          "VA",
+          "VC",
+          "VE",
+          "VG",
+          "VI",
+          "VN",
+          "VU",
+          "WF",
+          "WS",
+          "YE",
+          "ZA",
+          "ZM",
+          "ZW"
+        ]
+      },
+      "OrganicResult": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Result excerpt.",
+            "example": "Squid is a caching proxy for the Web supporting HTTP, HTTPS, FTP, and more. It reduces bandwidth and improves response times by caching and reusing frequently- ...\n"
+          },
+          "name": {
+            "type": "string",
+            "description": "Result title.",
+            "example": "squid-cache.org"
+          },
+          "url": {
+            "$ref": "#/components/schemas/OrganicResultURL"
+          },
+          "rank": {
+            "type": "integer",
+            "example": 1,
+            "description": "Result position among organic results in the search page.\n\nThe first result of a search page is always 1, regardless of the\nvalue of\n[serp.pageNumber](#operation/extract/response/200/serp.pageNumber).\n"
+          },
+          "displayedUrlText": {
+            "type": "string",
+            "example": "1.4M+ followers",
+            "description": "Extra information present in serp result"
+          }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "description": "Metadata.",
+        "properties": {
+          "displayedQuery": {
+            "type": "string",
+            "description": "Search query as seen in the webpage.",
+            "example": "squid proxy"
+          },
+          "searchedQuery": {
+            "type": "string",
+            "description": "Search query as specified in the input URL.",
+            "example": "squid proxy"
+          },
+          "totalOrganicResults": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of organic results reported by the search engine.\n",
+            "minimum": 0,
+            "example": 10000
+          },
+          "dateDownloaded": {
+            "type": "string",
+            "description": "The timestamp at which the data was downloaded. Timezone: UTC.\nFormat: ISO 8601 format: \"YYYY-MM-DDThh:mm:ssZ\"\n",
+            "example": "2024-02-29T13:01:54Z"
+          }
+        }
+      },
+      "Serp": {
+        "type": "object",
+        "properties": {
+          "organicResults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganicResult"
+            }
+          },
+          "url": {
+            "$ref": "#/components/schemas/SearchURL"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "description": "Current page number",
+            "minimum": 1
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          }
+        }
+      },
+      "OrganicResultURL": {
+        "type": "string",
+        "pattern": "^https?://[\\S]+$",
+        "description": "Result URL.",
+        "example": "https://www.squid-cache.org/",
+        "additionalProperties": false
+      },
+      "SearchURL": {
+        "type": "string",
+        "pattern": "^https?://[\\S]+$",
+        "description": "Search URL.\n\nShould match\n[url](#operation/extract/response/200/url).\n",
+        "example": "https://search.example/search?q=squid+proxy",
+        "additionalProperties": false
+      },
+      "SerpOptions": {
+        "type": "object",
+        "description": "Options for SERP extraction.",
+        "properties": {
+          "extractFrom": {
+            "type": "string",
+            "enum": [
+              "browserHtml",
+              "httpResponseBody"
+            ],
+            "description": "Input to use for extraction, either\n[httpResponseBody](#operation/extract/response/200/httpResponseBody)\nor\n[browserHtml](#operation/extract/response/200/browserHtml).\n\nIf not specified, `httpResponseBody` is currently used by default.\nIn the future, the default value may depend on the target website.\n"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "The keyword or search phrase to query in the SERP extraction process.\nExample: `\"best scraping framework\"`\n"
+          }
+        }
+      },
+      "click": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "click"
+                ],
+                "description": "Click on an element."
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              },
+              "button": {
+                "description": "Mouse button to click",
+                "type": "string",
+                "enum": [
+                  "left",
+                  "right",
+                  "middle"
+                ],
+                "default": "left"
+              },
+              "delay": {
+                "description": "Time to wait between mousedown and mouseup, in seconds.",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3,
+                "default": 0
+              },
+              "waitForNavigationTimeout": {
+                "description": "Maximum waiting time in seconds for the navigation event during the click action.\n\nIf navigation happens within the defined duration, then\nwaiting is halted and the next action is executed after the new\nis page is loaded. If the page loading does not finish then the next action\nends with an error, and following actions may not be executed, depending\non the onError property. If no navigation happens within the defined\nduration then the next action is executed.\n",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 20,
+                "default": 0
+              }
+            },
+            "required": [
+              "selector",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "doubleClick": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "doubleClick"
+                ],
+                "description": "Double click on an element."
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              }
+            },
+            "required": [
+              "selector",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "evaluate": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "evaluate"
+                ],
+                "description": "Run JavaScript code in the page context.\n\nThis is a very powerful action. Use cases include:\n\n-   Sending an API request from the page context, and writing\n    the response somewhere in the DOM, so that the\n    [browser HTML](browser.html#zapi-browser-html)\n    output includes it.\n"
+              },
+              "source": {
+                "description": "JavaScript code to run.",
+                "type": "string",
+                "maxLength": 6000
+              }
+            },
+            "required": [
+              "source",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "goto": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "goto"
+                ],
+                "description": "Navigate to a new page.\n\nThis action waits until page load event is fired with a default timeout\nof 30 seconds.\n"
+              },
+              "url": {
+                "description": "URL to navigate page to. The url should include scheme",
+                "type": "string"
+              },
+              "options": {
+                "$ref": "#/components/schemas/GoToOptions"
+              }
+            },
+            "required": [
+              "url",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "hide": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "hide"
+                ],
+                "description": "Hide an element."
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              }
+            },
+            "required": [
+              "action",
+              "selector"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "hover": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "hover"
+                ],
+                "description": "Hover over a visible element.\n\nElements that are either hidden or not present will cause the action to\nexit with an error.\n"
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              }
+            },
+            "required": [
+              "selector",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "interaction": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "interaction"
+                ],
+                "description": "Execute a\n[browser script](../ide/index.html#creating-a-new-script).\n"
+              },
+              "id": {
+                "description": "Script identifier",
+                "type": "string"
+              },
+              "args": {
+                "description": "Input arguments",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "keyPress": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "keyPress"
+                ],
+                "description": "Press a key on the keyboard."
+              },
+              "key": {
+                "type": "string",
+                "maxLength": 14,
+                "description": "Key to press.\n\nA single character or special key from the [list of supported\nkeys](../ide/api/index.html#Page.keyPress).\n\nKey names are case-sensitive.\n\nOnly one key can be executed at a time. Key combinations are\nnot supported.\n"
+              }
+            },
+            "required": [
+              "key",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "reload": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "reload"
+                ],
+                "description": "Reload the page.\n\nThis action waits until page load event is fired with a default timeout\nof 30 seconds.\n"
+              },
+              "options": {
+                "$ref": "#/components/schemas/GoToOptions"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "scrollBottom": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "scrollBottom"
+                ],
+                "description": "Continuously scroll down the page while it keeps loading more content.\n\nThe action halts if any of the following conditions are met:\n\n  - the timeout or the total browser execution time is reached\n  - the page does not load any new content for the duration of\n    maxScrollDelay\n  - maxPageHeight or maxScrollCount have been reached\n"
+              },
+              "timeout": {
+                "description": "Maximum wait time, in seconds.",
+                "type": "number",
+                "minimum": 0,
+                "default": 15,
+                "maximum": 30
+              },
+              "maxScrollDelay": {
+                "description": "The maximum amount of time to wait for each scroll to complete,\nin seconds.\n\nIf the page does not not load any content during this time, the\naction is deemed to have been completed.\n",
+                "type": "number",
+                "default": 5,
+                "minimum": 0.5,
+                "maximum": 10
+              },
+              "maxPageHeight": {
+                "description": "Maximum height (in pixels) until which the browser keeps scrolling down the page",
+                "type": "integer"
+              },
+              "maxScrollCount": {
+                "description": "The maximum number of scrolls to perform.\n\nIf the page does not yield any fresh content, then the action\nwill finish execution before maxScrollCount is reached.\n",
+                "type": "integer"
+              },
+              "scrollStep": {
+                "description": "The number of pixels for each scroll.\nIt can be used for gradual scrolling.\nIf it's specified, maxScrollDelay will be used as fixed time waiting instead of waiting for new contents.\n",
+                "type": "integer",
+                "default": 0,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "scrollTo": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "scrollTo"
+                ],
+                "description": "Scroll the window to a particular place in the document.\n\nTo set the target location, use one (and only one) of the following:\n\n- `top` and `left`, to set the target coordinates in pixels.\n\n- `selector`, to target the center of an HTML element.\n"
+              },
+              "top": {
+                "description": "Specifies the number of pixels along the Y axis to scroll the window.",
+                "type": "integer"
+              },
+              "left": {
+                "description": "Specifies the number of pixels along the X axis to scroll the window.",
+                "type": "integer",
+                "default": 0
+              },
+              "selector": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ActionSelector"
+                  },
+                  {
+                    "description": "If passed scrolls to specified selector instead of scrolling to specified coordinates within page. If selector is not found no scroll is performed. If more than one elements match selector it scrolls to the first one."
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "searchKeyword": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "searchKeyword"
+                ],
+                "description": "Perform keyword search on the page.\n\nThis action uses website-specific knowledge to find and use a search\nbox.\n\nIt may not work on some websites. If that’s the case, please\n[reach out to us](https://support.zyte.com/support/tickets/new).\n\nIf there is no search box on a page, an error is returned.\n"
+              },
+              "keyword": {
+                "description": "The keyword to be searched for",
+                "type": "string"
+              }
+            },
+            "required": [
+              "keyword",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "select": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "select"
+                ],
+                "description": "Pick single or multiple values from a `<select>` element.\n"
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              },
+              "values": {
+                "description": "Values of options to select.\n\nIf the `<select>` has the multiple attribute, all values are\nconsidered, otherwise only the first one is taken into account.\n",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "selector",
+              "values",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "setLocation": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "setLocation"
+                ],
+                "description": "Configure a physical address on the website.\n\nThis action uses website-specific knowledge to find and fill a location\nform.\n\nIt may not work on some websites. If that’s the case, please\n[reach out to us](https://support.zyte.com/support/tickets/new).\n"
+              },
+              "address": {
+                "$ref": "#/components/schemas/PostalAddress"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "type": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "type"
+                ],
+                "description": "Type text into an element."
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              },
+              "text": {
+                "description": "Text to type into a focused element.\n\nTo press a special key, use the `keyPress` action instead.\n",
+                "type": "string"
+              },
+              "delay": {
+                "description": "Time to wait between key presses, in seconds.",
+                "type": "number",
+                "minimum": 0,
+                "default": 0
+              }
+            },
+            "required": [
+              "selector",
+              "text",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "waitForNavigation": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "waitForNavigation"
+                ],
+                "description": "Wait until the page navigates to a new URL or reloads.\n\nIf `waitForNavigation` is the first action, the specified options will\nbe applied to the initial navigation. Use it if the default timeout of\n30 seconds or the default `waitUntil` value (`load`) is not sufficient\nfor the initial navigation.\n\nMind, however, that using `waitForNavigation` as the first action has\nan important drawback: any error with the initial navigation will\nnonetheless result in a successful API response, as any other [browser\naction failure](errors.html#zapi-action-errors).\n"
+              },
+              "timeout": {
+                "type": "number",
+                "maximum": 45,
+                "minimum": 31,
+                "default": 31,
+                "description": "Maximum wait time, in seconds.\n"
+              },
+              "waitUntil": {
+                "default": "load",
+                "description": "When to consider that navigation succeeded:\n- `load` - [load event](https://developer.mozilla.org/en-US/docs/Web/API/Window/load_event), default.\n- `domcontentloaded` - [DOMContentLoaded event](https://developer.mozilla.org/en-US/docs/Web/API/Window/DOMContentLoaded_event).\n- `networkidle0` - no ongoing network connections for at least\n   0.5 seconds.\n",
+                "type": "string",
+                "enum": [
+                  "load",
+                  "domcontentloaded",
+                  "networkidle0"
+                ]
+              }
+            },
+            "required": [
+              "timeout",
+              "action"
+            ],
+            "nullable": false
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "waitForRequest": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "waitForRequest"
+                ],
+                "description": "Wait until the request to a specific URL has been sent."
+              },
+              "urlPattern": {
+                "$ref": "#/components/schemas/UrlPattern"
+              },
+              "urlMatchingOptions": {
+                "$ref": "#/components/schemas/PatternMatchingOptions"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/ActionTimeout"
+              }
+            },
+            "example": [
+              {
+                "urlPattern": "https://example.org/store/api"
+              },
+              {
+                "urlPattern": "api/store",
+                "urlMatchingOptions": "contains"
+              },
+              {
+                "urlPattern": "https://example.org/",
+                "urlMatchingOptions": "startsWith"
+              }
+            ],
+            "required": [
+              "urlPattern",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "waitForResponse": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "waitForResponse"
+                ],
+                "description": "Wait until the response from a specific URL has been received."
+              },
+              "urlPattern": {
+                "$ref": "#/components/schemas/UrlPattern"
+              },
+              "urlMatchingOptions": {
+                "$ref": "#/components/schemas/PatternMatchingOptions"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/ActionTimeout"
+              }
+            },
+            "example": [
+              {
+                "urlPattern": "/store/api",
+                "urlMatchingOptions": "contains"
+              },
+              {
+                "urlPattern": "https://example.org/store/",
+                "urlMatchingOptions": "startsWith"
+              }
+            ],
+            "required": [
+              "urlPattern",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "waitForSelector": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "waitForSelector"
+                ],
+                "description": "Wait for the selector to appear.\n\nIf at the moment of calling the method the selector already\nexists, the action will return immediately.\n\nAlso, the action will return immediately after the first matching\nselector appears.\n\nFor a usage example, see the\n[web scraping tutorial](../../web-scraping/tutorial/js.html#tutorial-actions).\n"
+              },
+              "selector": {
+                "$ref": "#/components/schemas/ActionSelector"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/ActionTimeout"
+              }
+            },
+            "required": [
+              "selector",
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "waitForTimeout": {
+        "allOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "waitForTimeout"
+                ],
+                "description": "Pause script execution for the given number of seconds before\ncontinuing.\n\nIf the value of timeout is greater than the remaining browser\nexecution time, then this action ends with an error.\n"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/ActionTimeout"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/Action"
+          }
+        ]
+      },
+      "SessionContextActionSequence": {
+        "description": "Actions to run to initialize a server-managed session for a given\n[sessionContext](#operation/extract/request/sessionContext)).\n",
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/click"
+            },
+            {
+              "$ref": "#/components/schemas/doubleClick"
+            },
+            {
+              "$ref": "#/components/schemas/evaluate"
+            },
+            {
+              "$ref": "#/components/schemas/goto"
+            },
+            {
+              "$ref": "#/components/schemas/hide"
+            },
+            {
+              "$ref": "#/components/schemas/hover"
+            },
+            {
+              "$ref": "#/components/schemas/interaction"
+            },
+            {
+              "$ref": "#/components/schemas/keyPress"
+            },
+            {
+              "$ref": "#/components/schemas/reload"
+            },
+            {
+              "$ref": "#/components/schemas/scrollBottom"
+            },
+            {
+              "$ref": "#/components/schemas/scrollTo"
+            },
+            {
+              "$ref": "#/components/schemas/searchKeyword"
+            },
+            {
+              "$ref": "#/components/schemas/select"
+            },
+            {
+              "$ref": "#/components/schemas/setLocation"
+            },
+            {
+              "$ref": "#/components/schemas/type"
+            },
+            {
+              "$ref": "#/components/schemas/waitForNavigation"
+            },
+            {
+              "$ref": "#/components/schemas/waitForRequest"
+            },
+            {
+              "$ref": "#/components/schemas/waitForResponse"
+            },
+            {
+              "$ref": "#/components/schemas/waitForSelector"
+            },
+            {
+              "$ref": "#/components/schemas/waitForTimeout"
+            }
+          ]
+        }
+      },
+      "CustomAttribute": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "boolean",
+              "string",
+              "number",
+              "integer",
+              "array",
+              "object"
+            ]
+          }
+        },
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "boolean": "#/components/schemas/CustomAttributeBoolean",
+            "string": "#/components/schemas/CustomAttributeString",
+            "number": "#/components/schemas/CustomAttributeNumber",
+            "integer": "#/components/schemas/CustomAttributeInteger",
+            "array": "#/components/schemas/CustomAttributeArray",
+            "object": "#/components/schemas/CustomAttributeObject"
+          }
+        }
+      },
+      "CustomAttributeBoolean": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          }
+        ],
+        "type": "object",
+        "required": [
+          "type"
+        ]
+      },
+      "CustomAttributeString": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          },
+          {
+            "properties": {
+              "enum": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "maxLength": 50,
+                  "minLength": 1
+                }
+              },
+              "format": {
+                "type": "string",
+                "description": "Extract data from the HTML of the page instead of its plain text.\nOnly supported for the \"string\" type.\n\n* \"html\": the HTML of the matching element (its outer HTML, tags included).\n* \"html-text\": the visible text of the matching element.\n* \"uri\": a URL found in the matching element, such as the value of an \"href\" or \"src\" attribute.\n* \"xpath\": the XPath of the matching element within the page.\n",
+                "enum": [
+                  "html",
+                  "uri",
+                  "html-text",
+                  "xpath"
+                ]
+              }
+            }
+          }
+        ],
+        "required": [
+          "type"
+        ]
+      },
+      "CustomAttributeNumber": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          },
+          {
+            "properties": {
+              "enum": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 10,
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ],
+        "type": "object",
+        "required": [
+          "type"
+        ]
+      },
+      "CustomAttributeInteger": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          },
+          {
+            "properties": {
+              "enum": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 10,
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        ],
+        "type": "object",
+        "required": [
+          "type"
+        ]
+      },
+      "CustomAttributeArray": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          }
+        ],
+        "properties": {
+          "items": {
+            "$ref": "#/components/schemas/CustomAttribute"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "items"
+        ]
+      },
+      "CustomAttributeObject": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomAttribute"
+          }
+        ],
+        "properties": {
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CustomAttribute"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Author": {
+        "description": "Author of the article.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Full name of the author, e.g. \"Alice\".",
+            "type": "string"
+          },
+          "nameRaw": {
+            "description": "Text from which this author name was extracted, e.g. \"Alice and Bob\".",
+            "type": "string"
+          }
+        },
+        "example": {
+          "name": "Alice",
+          "nameRaw": "Alice and Bob"
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Breadcrumb": {
+        "description": "Breadcrumb item (a specific navigation element) with optional `name` and `url`.\n",
+        "example": {
+          "name": "Home",
+          "url": "https://example.com/"
+        },
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Text of the breadcrumb, as it appears on the website.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Absolute URL of the breadcrumb.",
+            "type": "string"
+          }
+        }
+      },
+      "Image": {
+        "description": "Image.",
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "URL of an image.",
+            "type": "string",
+            "example": "http://example.com/item-1/image1.jpeg"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "DateDownloaded": {
+        "description": "The timestamp at which the data was downloaded.\nTimezone: UTC. Format: ISO 8601 format: \"YYYY-MM-DDThh:mm:ssZ\"\n",
+        "type": "string",
+        "example": "2019-06-19T08:27:43Z"
+      },
+      "schemas-Metadata": {
+        "description": "Extracted item metadata for single-item data types.",
+        "type": "object",
+        "properties": {
+          "probability": {
+            "description": "Probability that extracted item is of requested data type.\nIt is closer to 0 in case this page does not contain requested data type.\nFor example, when single product extraction is requested with\n\"product: true\", but a page does not contain a product,\nprobability would be close to 0.\nIf an item of requested type can be extracted from a page,\nthen probability is closer to 1.\nRecommended probability threshold is 0.5,\nbut we will return extracted data even if probability is very low.\n",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.87
+          },
+          "dateDownloaded": {
+            "$ref": "#/components/schemas/DateDownloaded"
+          }
+        },
+        "required": [
+          "probability",
+          "dateDownloaded"
+        ]
+      },
+      "Article": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "description": "Article headline or title.",
+            "type": "string",
+            "example": "Article headline"
+          },
+          "articleBody": {
+            "description": "Clean text of the article, including sub-headings, with newline separators.\n",
+            "type": "string",
+            "example": "Article body ..."
+          },
+          "articleBodyHtml": {
+            "description": "Simplified and standardized HTML of the article body, including sub-headings,\nimage captions and embedded content (videos, tweets, etc.).\n",
+            "type": "string",
+            "example": "<article><p>Article body ... </p> ... </article>"
+          },
+          "description": {
+            "description": "A short summary of the article. It can be either human-provided\n(if available), or auto-generated.\n",
+            "type": "string",
+            "example": "Article summary"
+          },
+          "datePublished": {
+            "description": "Publication date. ISO-formatted with 'T' separator, may contain a timezone.\nIf the actual publication date is not found, \"dateModified\" value is taken.\n",
+            "type": "string",
+            "example": "2019-06-19T00:00:00"
+          },
+          "datePublishedRaw": {
+            "description": "Same date as \"datePublished\", but before parsing/normalization, i.e. as\nit appears on the website.\n",
+            "type": "string",
+            "example": "June 19, 2019"
+          },
+          "dateModified": {
+            "description": "The date when the article was most recently modified.\nISO-formatted with 'T' separator, may contain a timezone.\n",
+            "type": "string",
+            "example": "2019-06-21T00:00:00"
+          },
+          "dateModifiedRaw": {
+            "description": "Same date as \"dateModified\", but before parsing/normalization, i.e. as\nit appears on the website.\n",
+            "type": "string",
+            "example": "June 21, 2019"
+          },
+          "authors": {
+            "description": "Authors of the article.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Author"
+            },
+            "example": [
+              {
+                "name": "Alice",
+                "nameRaw": "Alice and Bob"
+              },
+              {
+                "name": "Bob",
+                "nameRaw": "Alice and Bob"
+              }
+            ]
+          },
+          "inLanguage": {
+            "description": "Language of the article, as an ISO 639-1 language code. Example: \"en\".\nSometimes article language is not the same as the web page overall\nlanguage; to get the detected web page languages,\nsee \"webPageInfo\".\n",
+            "type": "string",
+            "example": "en"
+          },
+          "breadcrumbs": {
+            "description": "A list of breadcrumbs (a specific navigation element)\nwith optional `name` and `url`.\n",
+            "example": [
+              {
+                "name": "Home",
+                "url": "https://example.com/"
+              },
+              {
+                "name": "Cell Phones",
+                "url": "https://example.com/cell-phones"
+              },
+              {
+                "name": "Cell Phones & Accessories"
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Breadcrumb"
+            }
+          },
+          "mainImage": {
+            "$ref": "#/components/schemas/Image",
+            "description": "The main image of the item."
+          },
+          "images": {
+            "description": "All images of the item (may include the main image).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Image"
+            }
+          },
+          "videos": {
+            "description": "A list of all videos inside the article body.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "Absolute URL of the video.",
+                  "type": "string",
+                  "example": "https://example.com/video.mp4"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "audios": {
+            "description": "A list of all audios inside the article body.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "Absolute URL of the audio.",
+                  "type": "string",
+                  "example": "https://example.com/audio.mp3"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL of a page where this article was extracted.",
+            "type": "string",
+            "example": "https://example.com/article/"
+          },
+          "canonicalUrl": {
+            "description": "Canonical URL of the article, if available.",
+            "type": "string",
+            "example": "https://example.com/article"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/schemas-Metadata"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "MetadataListItem": {
+        "description": "Item-level metadata for list data types.",
+        "properties": {
+          "probability": {
+            "description": "Probability that extracted item in a list is a valid item.\nItems which are unlikely to be valid are not returned,\nso normally no extra thresholding is needed for list items.\nThis probability is not calibrated.\n",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.34
+          }
+        },
+        "required": [
+          "probability"
+        ]
+      },
+      "MetadataList": {
+        "description": "Top-level metadata for list data types.",
+        "properties": {
+          "dateDownloaded": {
+            "$ref": "#/components/schemas/DateDownloaded"
+          }
+        },
+        "required": [
+          "dateDownloaded"
+        ]
+      },
+      "ArticleList": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "description": "List of articles available on this page.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL of a detailed article page.\nPass this URL with \"article: true\" in the request to\nextract detailed information about the article.\n",
+                  "type": "string",
+                  "example": "https://example.com/articles/1/"
+                },
+                "headline": {
+                  "description": "Article headline or title.",
+                  "type": "string",
+                  "example": "Article headline"
+                },
+                "articleBody": {
+                  "description": "Text of the article as it appears on the list page,\nincluding sub-headings, with newline separators.\n",
+                  "type": "string",
+                  "example": "Article body ..."
+                },
+                "datePublished": {
+                  "description": "Publication date. ISO-formatted with 'T' separator, may contain a timezone.\n",
+                  "type": "string",
+                  "example": "2019-06-19T00:00:00"
+                },
+                "datePublishedRaw": {
+                  "description": "Same date as \"datePublished\", but before parsing/normalization, i.e. as\nit appears on the website.\n",
+                  "type": "string",
+                  "example": "June 19, 2019"
+                },
+                "authors": {
+                  "description": "Authors of the article.",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Author"
+                  },
+                  "example": [
+                    {
+                      "name": "Alice",
+                      "nameRaw": "Alice and Bob"
+                    },
+                    {
+                      "name": "Bob",
+                      "nameRaw": "Alice and Bob"
+                    }
+                  ]
+                },
+                "inLanguage": {
+                  "description": "Language of the article, as an ISO 639-1 language code. Example: \"en\".\nSometimes article language is not the same as the web page overall\nlanguage; to get the detected web page languages,\nsee \"webPageInfo\".\n",
+                  "type": "string",
+                  "example": "en"
+                },
+                "mainImage": {
+                  "$ref": "#/components/schemas/Image",
+                  "description": "The main image of the item."
+                },
+                "images": {
+                  "description": "All images of the item (may include the main image).",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Image"
+                  }
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/MetadataListItem"
+                }
+              },
+              "required": [
+                "metadata"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL of a page where this article list was extracted.",
+            "type": "string",
+            "example": "https://example.com/articles/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "PaginationNext": {
+        "description": "A link to the next page in the list.",
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "URL of the next page in the list.",
+            "type": "string",
+            "example": "http://example.com/foo?p=3"
+          },
+          "name": {
+            "description": "Text of the link to the next page, if available.",
+            "type": "string",
+            "example": "3"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "PageNumber": {
+        "description": "Integer describing the current page number. Starts at 1.",
+        "type": "integer",
+        "example": 2
+      },
+      "ArticleNavigation": {
+        "type": "object",
+        "properties": {
+          "nextPage": {
+            "$ref": "#/components/schemas/PaginationNext"
+          },
+          "pageNumber": {
+            "$ref": "#/components/schemas/PageNumber"
+          },
+          "items": {
+            "description": "List of articles available on this page.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL of a detailed article page.\nPass this URL with \"article: true\" in the request to\nextract detailed information about the article.\n",
+                  "type": "string",
+                  "example": "https://example.com/articles/1/"
+                },
+                "name": {
+                  "description": "The name of the article or article link text.",
+                  "type": "string",
+                  "example": "Article name"
+                },
+                "datePublished": {
+                  "description": "Publication date. ISO-formatted with 'T' separator, may contain a timezone.\n",
+                  "type": "string",
+                  "example": "2019-06-19T00:00:00"
+                },
+                "datePublishedRaw": {
+                  "description": "Same date as \"datePublished\", but before parsing/normalization, i.e. as\nit appears on the website.\n",
+                  "type": "string",
+                  "example": "June 19, 2019"
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/MetadataListItem"
+                }
+              },
+              "required": [
+                "url",
+                "metadata"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL of a page containing the list of articles.",
+            "type": "string",
+            "example": "https://example.com/articles/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "ForumThread": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "description": "Topic that is discussed on the page.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the topic.",
+                "type": "string",
+                "example": "How do you cook rice?"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "posts": {
+            "description": "List of posts available on this page, including the first or top post.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "description": "Text of the post.\n",
+                  "type": "string",
+                  "example": "Cooking rice is a hobby of mine. Here is how I cook it."
+                },
+                "datePublished": {
+                  "description": "Publication date. ISO-formatted with 'T' separator, may contain a timezone.\n",
+                  "type": "string",
+                  "example": "2019-06-19T00:00:00"
+                },
+                "datePublishedRaw": {
+                  "description": "Same date as \"datePublished\", but before parsing/normalization, i.e. as\nit appears on the website.\n",
+                  "type": "string",
+                  "example": "June 19, 2019"
+                },
+                "reactions": {
+                  "description": "Details of reactions to this post.",
+                  "type": "object",
+                  "properties": {
+                    "likes": {
+                      "description": "Number of up-votes or likes/stars received by the post.\n",
+                      "type": "integer",
+                      "minimum": 0,
+                      "example": 3
+                    },
+                    "replies": {
+                      "description": "Number of replies received by the post.\n",
+                      "type": "integer",
+                      "minimum": 0,
+                      "example": 2
+                    }
+                  }
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/MetadataListItem"
+                }
+              },
+              "required": [
+                "metadata"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL of a page where this forum post list was extracted.",
+            "type": "string",
+            "example": "https://example.com/forum/thread/1/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "JobPosting": {
+        "type": "object",
+        "properties": {
+          "jobTitle": {
+            "description": "The title of the job.",
+            "type": "string",
+            "example": "Regional Manager"
+          },
+          "datePublished": {
+            "description": "Publication date of the job posting.\nISO-formatted with 'T' separator, may contain a timezone.\n",
+            "type": "string",
+            "example": "2019-06-19T00:00:00"
+          },
+          "datePublishedRaw": {
+            "description": "Same date as 'datePublished', but before parsing/normalization,\ni.e. as it appears on the website.\n",
+            "type": "string",
+            "example": "19 June 2019"
+          },
+          "validThrough": {
+            "description": "The date after which the job posting is not valid,\ne.g. the end of an offer.\nISO-formatted with ‘T’ separator, may contain a timezone.\n",
+            "type": "string",
+            "example": "2019-08-20T00:00:00"
+          },
+          "description": {
+            "description": "A description of the job posting including sub-headings,\nwith newline separators.\n",
+            "type": "string",
+            "example": "Job Description ..."
+          },
+          "descriptionHtml": {
+            "description": "Simplified HTML of the description, including sub-headings,\nimage captions and embedded content.\n",
+            "type": "string",
+            "example": "<article>HTML for Job Description ..."
+          },
+          "employmentType": {
+            "description": "Type of employment\n(e.g. full-time, part-time, contract, temporary, seasonal, internship).\n",
+            "type": "string",
+            "example": "Full-time"
+          },
+          "hiringOrganization": {
+            "description": "Information about the organization offering the job position.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the organization.",
+                "type": "string",
+                "example": "ACME Corp."
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "baseSalary": {
+            "description": "The base salary of the job or of an employee in the proposed role.\n",
+            "type": "object",
+            "properties": {
+              "raw": {
+                "description": "Salary amount as it appears on the website.",
+                "example": "$53,251 a year",
+                "type": "string"
+              },
+              "valueMax": {
+                "description": "The maximum value of the base salary as a number string.\nIn case of only one value given for the salary instead of a range, valueMax is used to represent it.\n",
+                "example": "53251.0",
+                "type": "string"
+              },
+              "currency": {
+                "description": "Currency associated with the salary amount.\nISO 4217 standard.\n",
+                "type": "string",
+                "example": "USD"
+              },
+              "currencyRaw": {
+                "description": "Currency associated with the salary amount, without normalization.",
+                "type": "string",
+                "example": "$"
+              }
+            }
+          },
+          "jobLocation": {
+            "description": "A (typically single) geographic location associated with the job position.\n",
+            "type": "object",
+            "properties": {
+              "raw": {
+                "description": "Job location as it appears on the website.",
+                "type": "string",
+                "example": "West New York, NJ 07093"
+              }
+            },
+            "required": [
+              "raw"
+            ]
+          },
+          "url": {
+            "description": "URL of a page where this job posting was extracted.",
+            "type": "string",
+            "example": "https://example.com/job"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/schemas-Metadata"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "JobPostingNavigation": {
+        "type": "object",
+        "properties": {
+          "nextPage": {
+            "$ref": "#/components/schemas/PaginationNext"
+          },
+          "pageNumber": {
+            "$ref": "#/components/schemas/PageNumber"
+          },
+          "items": {
+            "description": "List of job postings available on this page.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL of a detailed job posting page.\nPass this URL with \"jobPosting: true\" in the request to\nextract detailed information about the job posting.\n",
+                  "type": "string",
+                  "example": "https://example.com/jobs/1/"
+                },
+                "name": {
+                  "description": "The name of the job posting or job posting link text.",
+                  "type": "string",
+                  "example": "Job posting name"
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/MetadataListItem"
+                }
+              },
+              "required": [
+                "metadata",
+                "url"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL a of page.",
+            "type": "string",
+            "example": "https://example.com/jobs/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "PageContent": {
+        "type": "object",
+        "properties": {
+          "breadcrumbs": {
+            "description": "A list of breadcrumbs (a specific navigation element).\n",
+            "example": [
+              {
+                "name": "Home",
+                "url": "https://example.com/"
+              },
+              {
+                "name": "Category",
+                "url": "https://example.com/category"
+              },
+              {
+                "name": "Subcategory"
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Breadcrumb"
+            }
+          },
+          "headline": {
+            "description": "A page headline.",
+            "type": "string",
+            "example": "Example page headline"
+          },
+          "title": {
+            "description": "A page title extracted from the `<title>` tag of the page.",
+            "type": "string",
+            "example": "Example page title"
+          },
+          "itemMain": {
+            "description": "Text of the primary content of the page.\n\nIt does not include navigation elements (headers, footers,\nsidebars or pagination links).\n",
+            "type": "string",
+            "example": "Example content snippet showing part of the page’s main text…"
+          },
+          "itemMainXPath": {
+            "description": "XPath for `itemMain`.\n\nIt is an XPath 1.0 expression that points to the smallest HTML\nelement that contains all of `itemMain`.\n\nThe expression may only work with an HTML5-compliant parser.\n",
+            "type": "string",
+            "example": "//*[@id='homepage-container']/*[1]"
+          },
+          "navigationHeader": {
+            "description": "Navigation items from the header.\n\nThey are typically for site-wide navigation, not page-specific.\n",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL.",
+                  "type": "string",
+                  "example": "https://example.com/category/"
+                },
+                "name": {
+                  "description": "Name.",
+                  "type": "string",
+                  "example": "Category name"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "navigationFooter": {
+            "description": "Navigation items from the footer.\n\nThey are typically for site-wide navigation, not page-specific.\n",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL.",
+                  "type": "string",
+                  "example": "https://example.com/policy/"
+                },
+                "name": {
+                  "description": "Name.",
+                  "type": "string",
+                  "example": "Privacy Policy"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "navigationSidebar": {
+            "description": "Navigation items from the sidebars.\n\nThey are typically for site-wide navigation, not page-specific.\n",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL.",
+                  "type": "string",
+                  "example": "https://example.com/sidebar-link/"
+                },
+                "name": {
+                  "description": "Name.",
+                  "type": "string",
+                  "example": "Sidebar link"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "pagination": {
+            "description": "Pagination items.\n\nItems to navigate content pages, either relative to the current\npage (e.g. current, next, previous) or absolute (e.g. first, last,\nspecific page number).\n",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL.",
+                  "type": "string",
+                  "example": "https://example.com/?page=2"
+                },
+                "name": {
+                  "description": "Name.",
+                  "type": "string",
+                  "example": "Next"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          "nextPage": {
+            "$ref": "#/components/schemas/PaginationNext"
+          },
+          "url": {
+            "description": "URL of the page.",
+            "type": "string",
+            "example": "https://example.com/example-page/"
+          },
+          "canonicalUrl": {
+            "description": "Canonical URL of the page, if available.",
+            "type": "string",
+            "example": "https://example.com/canonical-url-page/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/schemas-Metadata"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "Name": {
+        "description": "The name of the product.",
+        "type": "string",
+        "example": "Product name"
+      },
+      "Price": {
+        "description": "The price at which the product is being offered. If there is only one price associated with the offer, it is returned in this field.\n",
+        "type": "string",
+        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+        "example": "149"
+      },
+      "Currency": {
+        "description": "The ISO 4217 standard of the currency in which the price is in.\n",
+        "type": "string",
+        "pattern": "^[A-Z]{3}$",
+        "example": "USD"
+      },
+      "CurrencyRaw": {
+        "description": "The currency as given on the website, without extra normalization (for example, both \"$\" and \"USD\" are possible currencies).\n",
+        "type": "string",
+        "example": "$"
+      },
+      "RegularPrice": {
+        "description": "The price before any discount or special offer.\n",
+        "type": "string",
+        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+        "example": "199.00"
+      },
+      "Availability": {
+        "description": "Availability, as a string. Allowed values:\n\n  * `\"InStock\"` - includes limited availability, presale,\n    preorder, and in-store only.\n  * `\"OutOfStock\"` - includes discontinued and sold out.\n",
+        "example": "InStock",
+        "type": "string",
+        "enum": [
+          "InStock",
+          "OutOfStock"
+        ]
+      },
+      "Sku": {
+        "description": "The Stock Keeping Unit (SKU), i.e. a merchant-specific identifier\nfor the product - identifier assigned by the seller.\n\n![](../../_static/images/schemas/sku.png)\n",
+        "example": "A123DK9823",
+        "type": "string"
+      },
+      "Mpn": {
+        "description": "The Manufacturer Part Number (MPN) of the product. It is issued by the manufacturer, and is the same across different e-commerce websites.",
+        "type": "string",
+        "example": "code-123"
+      },
+      "Gtin": {
+        "type": "object",
+        "description": "Standardized GTIN product identifier which is unique for a product across different sellers.\n",
+        "example": {
+          "type": "isbn13",
+          "value": 9781933624341
+        },
+        "properties": {
+          "type": {
+            "description": "`gtin14` corresponds to former names\n*EAN/UCC-14*, *SCC-14*, *DUN-14*, *UPC Case Code*,\n*UPC Shipping Container Code*.\n\n`gtin13` also includes the *jan* (japanese article number).\n",
+            "enum": [
+              "gtin8",
+              "gtin13",
+              "gtin14",
+              "isbn10",
+              "isbn13",
+              "ismn",
+              "issn",
+              "upc"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "description": "The GTIN value as a string.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "Color": {
+        "description": "Color of the product.",
+        "type": "string",
+        "example": "Red"
+      },
+      "Size": {
+        "description": "A standardized size of a product,\nspecified through a simple textual string (for example \"XL\", \"32Wx34L\").\nA single product dimension (height, width) is not considered as the size.\n",
+        "type": "string",
+        "example": "XL"
+      },
+      "Weight": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "description": "A weight value expressed as a floating point number.\n",
+            "type": "number",
+            "example": 120
+          },
+          "unit": {
+            "description": "A normalized unit of weight, like kilogram / ounce / pound and others.\n",
+            "type": "string",
+            "example": "kilogram"
+          },
+          "rawUnit": {
+            "description": "A unit of weight without normalization - how it was extracted from the page.\nNormalized version of the rawUnit is in 'unit' attribute.\n",
+            "type": "string",
+            "example": "kg"
+          }
+        }
+      },
+      "Style": {
+        "description": "Style of the product.\nIt can also be referred as pattern/finish on the product page.\nExample values: \"Polka dots\", \"Striped\",\n\"Nickel finish with Translucent glass\", etc.\n",
+        "type": "string",
+        "example": "Striped"
+      },
+      "AdditionalProperty": {
+        "description": "Additional propertiy or characteristics.\n\n* name field contains the property name,\n* value field contains the property value.\n\n![](../../_static/images/schemas/product_info.png)\n",
+        "example": {
+          "name": "batteries",
+          "value": "1 Lithium ion batteries required. (included)"
+        },
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Property name.",
+            "type": "string"
+          },
+          "value": {
+            "description": "Property value.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Url": {
+        "description": "URL of a page where this product was extracted.",
+        "type": "string",
+        "example": "https://example.com/product/"
+      },
+      "CanonicalUrl": {
+        "description": "Canonical URL of the product, if available.",
+        "type": "string",
+        "example": "https://example.com/product/"
+      },
+      "Product": {
+        "type": "object",
+        "required": [
+          "url",
+          "metadata"
+        ],
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Price"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "currencyRaw": {
+            "$ref": "#/components/schemas/CurrencyRaw"
+          },
+          "regularPrice": {
+            "$ref": "#/components/schemas/RegularPrice"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/Availability"
+          },
+          "sku": {
+            "$ref": "#/components/schemas/Sku"
+          },
+          "mpn": {
+            "$ref": "#/components/schemas/Mpn"
+          },
+          "gtin": {
+            "description": "Standardized GTIN product identifier which is unique for\na product across different sellers.\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gtin"
+            }
+          },
+          "brand": {
+            "description": "Brand or manufacturer of the product.\n",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the brand.",
+                "type": "string",
+                "example": "Product brand"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "breadcrumbs": {
+            "description": "A list of breadcrumbs (a specific navigation element)\nwith optional `name` and `url`.\n",
+            "example": [
+              {
+                "name": "Home",
+                "url": "https://example.com/"
+              },
+              {
+                "name": "Cell Phones",
+                "url": "https://example.com/cell-phones"
+              },
+              {
+                "name": "Cell Phones & Accessories"
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Breadcrumb"
+            }
+          },
+          "mainImage": {
+            "$ref": "#/components/schemas/Image",
+            "description": "The main image of the item."
+          },
+          "images": {
+            "description": "All images of the item (may include the main image).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Image"
+            }
+          },
+          "description": {
+            "description": "Description of the product.",
+            "type": "string",
+            "example": "product description"
+          },
+          "descriptionHtml": {
+            "description": "Simplified HTML of the description, including sub-headings, image captions and embedded content.\n",
+            "type": "string",
+            "example": "<article>HTML description for Product ..."
+          },
+          "aggregateRating": {
+            "description": "The overall rating, based on a collection of reviews or ratings.\n\n![](../../_static/images/schemas/rating.png)\n",
+            "type": "object",
+            "properties": {
+              "ratingValue": {
+                "description": "The average rating value.",
+                "type": "number",
+                "example": 4
+              },
+              "bestRating": {
+                "description": "The highest value allowed in this rating system.",
+                "type": "number",
+                "example": 5
+              },
+              "reviewCount": {
+                "description": "The total number of reviews or ratings for the product.",
+                "type": "integer",
+                "minimum": 0,
+                "example": 24
+              }
+            }
+          },
+          "color": {
+            "$ref": "#/components/schemas/Color"
+          },
+          "size": {
+            "$ref": "#/components/schemas/Size"
+          },
+          "weight": {
+            "$ref": "#/components/schemas/Weight"
+          },
+          "material": {
+            "description": "The materials from which the product is made. Contains all product materials on the page.\n",
+            "type": "string",
+            "example": "Metal, Plastic"
+          },
+          "style": {
+            "$ref": "#/components/schemas/Style"
+          },
+          "additionalProperties": {
+            "description": "A list of properties or characteristics.\n\n* name field contains the property name,\n* value field contains the property value.\n\n![](../../_static/images/schemas/product_info.png)\n",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdditionalProperty"
+            }
+          },
+          "features": {
+            "description": "A list of features of the Product.\n\nThe features of a Product can be found generally on the product page arranged\nin a list, which is usually bulleted.\n",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Multi-System Compatible",
+              "HD Ready 1366 x 768 LED Panel",
+              "REFRESH RATE 100Hz PQI"
+            ]
+          },
+          "url": {
+            "$ref": "#/components/schemas/Url"
+          },
+          "canonicalUrl": {
+            "$ref": "#/components/schemas/CanonicalUrl"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/schemas-Metadata"
+          },
+          "variants": {
+            "description": "Array of product variants, using the same Product schema.\nRepresents extra information available about the variants of a product.\nAll variants are included into this array, including the variant\nshown on the page. If some field in this array is empty,\nit means that either the value is the same as in the top-level product,\nor that extraction API did not manage to extract it.\n",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/components/schemas/Name"
+                },
+                "price": {
+                  "$ref": "#/components/schemas/Price"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/Currency"
+                },
+                "currencyRaw": {
+                  "$ref": "#/components/schemas/CurrencyRaw"
+                },
+                "regularPrice": {
+                  "$ref": "#/components/schemas/RegularPrice"
+                },
+                "availability": {
+                  "$ref": "#/components/schemas/Availability"
+                },
+                "sku": {
+                  "$ref": "#/components/schemas/Sku"
+                },
+                "mpn": {
+                  "$ref": "#/components/schemas/Mpn"
+                },
+                "gtin": {
+                  "description": "Standardized GTIN product identifier which is unique for\na product across different sellers.\n",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Gtin"
+                  }
+                },
+                "mainImage": {
+                  "$ref": "#/components/schemas/Image",
+                  "description": "The main image of the item."
+                },
+                "images": {
+                  "description": "All images of the item (may include the main image).",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Image"
+                  }
+                },
+                "color": {
+                  "$ref": "#/components/schemas/Color"
+                },
+                "size": {
+                  "$ref": "#/components/schemas/Size"
+                },
+                "style": {
+                  "$ref": "#/components/schemas/Style"
+                },
+                "additionalProperties": {
+                  "description": "A list of properties or characteristics.\n\n* name field contains the property name,\n* value field contains the property value.\n\n![](../../_static/images/schemas/product_info.png)\n",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdditionalProperty"
+                  }
+                },
+                "url": {
+                  "$ref": "#/components/schemas/Url"
+                },
+                "canonicalUrl": {
+                  "$ref": "#/components/schemas/CanonicalUrl"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "properties": {
+          "breadcrumbs": {
+            "description": "A list of breadcrumbs (a specific navigation element)\nwith optional `name` and `url`.\n",
+            "example": [
+              {
+                "name": "Home",
+                "url": "https://example.com/"
+              },
+              {
+                "name": "Cell Phones",
+                "url": "https://example.com/cell-phones"
+              },
+              {
+                "name": "Cell Phones & Accessories"
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Breadcrumb"
+            }
+          },
+          "products": {
+            "description": "List of products available on this page.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "URL of a detailed product page.\nPass this URL with \"product: true\" in the request to\nextract detailed information about the product.\n",
+                  "type": "string",
+                  "example": "https://example.com/products/1/"
+                },
+                "name": {
+                  "description": "The name of the product.",
+                  "type": "string",
+                  "example": "Product name"
+                },
+                "price": {
+                  "$ref": "#/components/schemas/Price"
+                },
+                "currencyRaw": {
+                  "$ref": "#/components/schemas/CurrencyRaw"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/Currency"
+                },
+                "regularPrice": {
+                  "$ref": "#/components/schemas/RegularPrice"
+                },
+                "mainImage": {
+                  "$ref": "#/components/schemas/Image",
+                  "description": "The main image of the item."
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/MetadataListItem"
+                }
+              },
+              "required": [
+                "metadata"
+              ]
+            }
+          },
+          "url": {
+            "description": "URL of a page where this product list was extracted.",
+            "type": "string",
+            "example": "https://example.com/products/"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          },
+          "categoryName": {
+            "description": "Name of the category in which the listed products are.",
+            "type": "string",
+            "example": "Sports & Outdoors"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "NavigationRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "URL of the item.",
+            "type": "string",
+            "example": "https://example.com/products/category/1"
+          },
+          "name": {
+            "description": "The name or link text of the item.",
+            "type": "string",
+            "example": "In Her Wake"
+          },
+          "method": {
+            "description": "HTTP method associated with the navigation request for product, subcategory",
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE",
+              "OPTIONS",
+              "TRACE",
+              "PATCH"
+            ]
+          },
+          "headers": {
+            "description": "List of headers associated with the request.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Header name."
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Header value."
+                }
+              }
+            }
+          },
+          "body": {
+            "description": "Base64-encoded body of the request.",
+            "type": "string",
+            "format": "byte"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataListItem"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      },
+      "ProductNavigation": {
+        "type": "object",
+        "properties": {
+          "categoryName": {
+            "description": "Name of the category in which the listed products are found.",
+            "type": "string",
+            "example": "Sports & Outdoors"
+          },
+          "nextPage": {
+            "$ref": "#/components/schemas/PaginationNext"
+          },
+          "pageNumber": {
+            "$ref": "#/components/schemas/PageNumber"
+          },
+          "items": {
+            "description": "List of products available on this page.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationRequest"
+            }
+          },
+          "subCategories": {
+            "description": "List of subcategory links found on this page.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationRequest"
+            }
+          },
+          "url": {
+            "description": "URL of the page.",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataList"
+          }
+        },
+        "required": [
+          "url",
+          "metadata"
+        ]
+      }
+    }
+  }
+}
