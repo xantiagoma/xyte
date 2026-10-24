@@ -1,3 +1,4 @@
+import type { ExtractRequest, ExtractResponse } from './types.ts';
 import { sessionNumber, sessionToken } from './util.ts';
 
 /** What a provider gets to pick an exit for one attempt of one request. */
@@ -35,11 +36,41 @@ export interface ProxyEndpoint {
   headers?: Record<string, string>;
 }
 
-export interface ProxyProvider {
-  readonly name: string;
-  /** The proxy for this attempt, or null to connect directly. */
-  resolve(context: ProxyContext): ProxyEndpoint | null | Promise<ProxyEndpoint | null>;
+/**
+ * A scraping service with no proxy port (Scrappey, ScrapingBot, Zyte API itself): it takes the
+ * whole Zyte request and returns a Zyte-shaped response. Ban detection, retries, `rotate()` and
+ * extractors work on its answer as on a proxied download.
+ */
+export interface ApiEndpoint {
+  api: (request: ExtractRequest, info: { context: ProxyContext; signal: AbortSignal }) => Promise<ApiResult>;
 }
+
+export interface ApiResult {
+  /** The Zyte-shaped response (url, statusCode, httpResponseBody / browserHtml, …). */
+  response: ExtractResponse;
+  /** The target's status, for ban detection. */
+  statusCode: number;
+  headers?: { name: string; value: string }[];
+  /** The page as text, for ban detection and extractors. */
+  html?: string;
+  /** The service already handled bans (Zyte): skip xyte's ban check on this answer. */
+  trusted?: boolean;
+}
+
+/** Picks the exit for each attempt. Presets resolve to a `ProxyEndpoint`; API adapters to an `ApiEndpoint`. */
+export interface ProxyProvider<E extends ProxyEndpoint | ApiEndpoint = ProxyEndpoint | ApiEndpoint> {
+  readonly name: string;
+  /**
+   * The provider answers AI extraction fields itself (Zyte API): requests for them are not
+   * rejected upfront for lack of a local extractor.
+   */
+  readonly extracts?: boolean;
+  /** The proxy (or API) for this attempt, or null to connect directly. */
+  resolve(context: ProxyContext): E | null | Promise<E | null>;
+}
+
+export const isApiEndpoint = (endpoint: ProxyEndpoint | ApiEndpoint | null): endpoint is ApiEndpoint =>
+  endpoint != null && 'api' in endpoint;
 
 const encode = encodeURIComponent;
 
@@ -58,7 +89,7 @@ export function proxyEndpointUrl(args: {
 }
 
 /** No proxy: requests go straight from this machine. */
-export function direct(): ProxyProvider {
+export function direct(): ProxyProvider<ProxyEndpoint> {
   return { name: 'direct', resolve: () => null };
 }
 
@@ -66,7 +97,7 @@ export function direct(): ProxyProvider {
  * Any proxy (or list of proxies) given as URLs. With several, attempts rotate through them, so a
  * retry uses the next one. For providers that encode geo/session in the URL, use `custom`.
  */
-export function proxyUrl(urls: string | readonly string[], options: { insecure?: boolean } = {}): ProxyProvider {
+export function proxyUrl(urls: string | readonly string[], options: { insecure?: boolean } = {}): ProxyProvider<ProxyEndpoint> {
   const list = typeof urls === 'string' ? [urls] : [...urls];
   if (list.length === 0) throw new Error('proxyUrl: at least one URL is required');
   return {
@@ -82,7 +113,7 @@ export function proxyUrl(urls: string | readonly string[], options: { insecure?:
 export function custom(
   name: string,
   resolve: (context: ProxyContext) => string | ProxyEndpoint | null | Promise<string | ProxyEndpoint | null>,
-): ProxyProvider {
+): ProxyProvider<ProxyEndpoint> {
   return {
     name,
     async resolve(context) {
@@ -106,7 +137,7 @@ export function custom(
  *
  *     template('http://user-{env:USER}[-country-{country:lower}]-session-{session}:{env:PASS}@gate.example.com:7000')
  */
-export function template(format: string, options: { insecure?: boolean; name?: string } = {}): ProxyProvider {
+export function template(format: string, options: { insecure?: boolean; name?: string } = {}): ProxyProvider<ProxyEndpoint> {
   const env = typeof process !== 'undefined' ? process.env : {};
   const value = (token: string, context: ProxyContext): string | undefined => {
     const [key = '', ...args] = token.split(':');
@@ -147,12 +178,12 @@ export function template(format: string, options: { insecure?: boolean; name?: s
 }
 
 /** Uses `datacenter` or `residential` per the request's `ipType`. */
-export function byIpType(providers: {
-  datacenter?: ProxyProvider;
-  residential?: ProxyProvider;
+export function byIpType<E extends ProxyEndpoint | ApiEndpoint>(providers: {
+  datacenter?: ProxyProvider<E>;
+  residential?: ProxyProvider<E>;
   /** When the request sets no `ipType`. Default: `datacenter` if given, else `residential`. */
   default?: 'datacenter' | 'residential';
-}): ProxyProvider {
+}): ProxyProvider<E> {
   const fallback = providers.default ?? (providers.datacenter ? 'datacenter' : 'residential');
   return {
     name: 'byIpType',
@@ -169,10 +200,11 @@ export function byIpType(providers: {
  * Tries providers in order across attempts: attempt 0 → first, attempt 1 → second… and wraps.
  * A provider outage (e.g. a 407 on every request) then costs one attempt, not the request.
  */
-export function rotate(providers: readonly ProxyProvider[]): ProxyProvider {
+export function rotate<E extends ProxyEndpoint | ApiEndpoint>(providers: readonly ProxyProvider<E>[]): ProxyProvider<E> {
   if (providers.length === 0) throw new Error('rotate: at least one provider is required');
   return {
     name: `rotate(${providers.map((p) => p.name).join(',')})`,
+    extracts: providers.some((p) => p.extracts),
     resolve: (context) => providers[context.attempt % providers.length]!.resolve(context),
   };
 }
@@ -192,7 +224,7 @@ export function oxylabs(options: {
   port?: number;
   /** Sticky session lifetime, minutes (residential, max 1440). Default 10. */
   sessionMinutes?: number;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   const type = options.type ?? 'residential';
   return {
     name: `oxylabs-${type}`,
@@ -241,7 +273,7 @@ export function brightData(options: {
   host?: string;
   port?: number;
   insecure?: boolean;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'brightdata',
     resolve({ country, sessionId }) {
@@ -277,7 +309,7 @@ export function decodo(options: {
   port?: number;
   /** Sticky session lifetime, minutes (1–1440). Default 10. */
   sessionMinutes?: number;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'decodo',
     resolve({ country, sessionId }) {
@@ -315,7 +347,7 @@ export function iproyal(options: {
   port?: number;
   /** Sticky session lifetime, e.g. `10m`, `1h`. Default `10m`. */
   lifetime?: string;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'iproyal',
     resolve({ country, sessionId }) {
@@ -353,7 +385,7 @@ export function zenrows(options: {
   premiumProxy?: boolean;
   /** Extra ZenRows parameters, e.g. `{ js_render: 'true' }`. */
   params?: Record<string, string>;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'zenrows',
     resolve({ country, sessionId }) {
@@ -380,7 +412,7 @@ export function scrapingBee(options: {
   /** ScrapingBee's hardest-target pool. */
   stealthProxy?: boolean;
   params?: Record<string, string>;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'scrapingbee',
     resolve({ country, sessionId }) {
@@ -407,7 +439,7 @@ export function scraperApi(options: {
   apiKey: string;
   premium?: boolean;
   params?: Record<string, string>;
-}): ProxyProvider {
+}): ProxyProvider<ProxyEndpoint> {
   return {
     name: 'scraperapi',
     resolve({ country, sessionId }) {

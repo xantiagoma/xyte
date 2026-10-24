@@ -31,6 +31,7 @@ import {
   zenrowsBrowser,
   zyteProxy,
   type ProxyContext,
+  type ProxyEndpoint,
   type ProxyProvider,
 } from '../src/index.ts';
 import { startProxy, startTarget } from './fixtures.ts';
@@ -44,7 +45,7 @@ const ctx = (overrides: Partial<ProxyContext> = {}): ProxyContext => ({
   ...overrides,
 });
 
-const parts = async (provider: ProxyProvider, overrides?: Partial<ProxyContext>) => {
+const parts = async (provider: ProxyProvider<ProxyEndpoint>, overrides?: Partial<ProxyContext>) => {
   const endpoint = (await provider.resolve(ctx(overrides)))!;
   const url = new URL(endpoint.url);
   return {
@@ -190,7 +191,8 @@ describe('env names', () => {
       EVOMI_HOST: 'custom.evomi.com',
       EVOMI_PORT: '2000',
     });
-    expect((await provider.resolve(ctx()))!.url).toStartWith('http://u:p_country-US_session-');
-    expect((await provider.resolve(ctx()))!.url).toEndWith('@custom.evomi.com:2000');
+    const { url } = (await provider.resolve(ctx())) as ProxyEndpoint;
+    expect(url).toStartWith('http://u:p_country-US_session-');
+    expect(url).toEndWith('@custom.evomi.com:2000');
   });
 });

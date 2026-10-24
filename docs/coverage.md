@@ -152,6 +152,7 @@ an entry not listed here.
 | Name | Status | Notes |
 | --- | --- | --- |
 | HTTP API `POST /v1/extract` | ✅ supported | `xyte serve`, `createHandler`, `toNodeHandler`. |
+| Zyte API as a provider | ✅ supported | `zyteApi()` (full fidelity, e.g. as a fallback) or `zyteProxy()` (proxy mode). |
 | Proxy mode (`api.zyte.com:8011`) | ❌ unsupported | Planned. |
 | CDP headless browser | ❌ unsupported |  |
 | Stats API | ❌ unsupported |  |

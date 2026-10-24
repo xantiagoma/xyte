@@ -26,6 +26,8 @@ export {
   smartproxy,
   template,
   zenrows,
+  type ApiEndpoint,
+  type ApiResult,
   type ProxyContext,
   type ProxyEndpoint,
   type ProxyProvider,
@@ -57,6 +59,7 @@ export {
   webshare,
   zyteProxy,
 } from './providers.ts';
+export { scrapingBot, scrappey, zyteApi } from './apis.ts';
 export { brightDataBrowser, browserless, nodeMavenBrowser, oxylabsBrowser, zenrowsBrowser } from './browsers.ts';
 export { createHandler, serve, toNodeHandler, type FetchHandler, type HandlerOptions } from './server.ts';
 export type { SessionPoolOptions } from './sessions.ts';

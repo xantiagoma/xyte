@@ -8,7 +8,7 @@ import {
   XyteError,
 } from './errors.ts';
 import { htmlToMarkdown } from './markdown.ts';
-import { direct, type ProxyContext, type ProxyProvider } from './proxy.ts';
+import { direct, isApiEndpoint, type ProxyContext, type ProxyProvider } from './proxy.ts';
 import { SessionPool, type PooledSession, type SessionPoolOptions } from './sessions.ts';
 import { defaultTransport, type Transport } from './transport.ts';
 import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
@@ -154,6 +154,7 @@ export class Xyte {
 
         let jar: CookieJar;
         let result: EngineResult;
+        let trusted = false;
         try {
           if (pooled) {
             pooled.ready ??= this.initSession(request, pooled, context, signal);
@@ -163,9 +164,16 @@ export class Xyte {
             });
           }
           jar = pooled ? new CookieJar(pooled.jar.all()) : this.jarFor(request, pinnedSession);
-          const proxy = await this.proxy.resolve(context);
-          const engineAttempt: EngineAttempt = { request, context, proxy, jar, signal };
-          result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
+          const endpoint = await this.proxy.resolve(context);
+          if (isApiEndpoint(endpoint)) {
+            // A scraping API takes the whole request (it renders, solves and proxies itself).
+            const answer = await endpoint.api(request, { context, signal });
+            result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
+            trusted = answer.trusted === true;
+          } else {
+            const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal };
+            result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
+          }
         } catch (error) {
           if (error instanceof XyteError) throw error;
           if (cancel?.aborted) throw cancel.reason;
@@ -179,7 +187,7 @@ export class Xyte {
           continue;
         }
 
-        if (this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
+        if (!trusted && this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
           lastReason = `ban detected (HTTP ${result.statusCode})`;
           lastCause = undefined;
           lastWasBan = true;
@@ -215,6 +223,8 @@ export class Xyte {
     if (!actions?.length) return;
     const initContext = { ...context, browser: true };
     const proxy = await this.proxy.resolve(initContext);
+    // A scraping API keeps its own sessions; there is no local browser to initialize.
+    if (isApiEndpoint(proxy)) return;
     await this.browser.run({
       request: { url: request.url, browserHtml: true, actions, device: request.device },
       context: initContext,
@@ -250,7 +260,7 @@ export class Xyte {
     for (const field of extractions) {
       // Zyte's markdown is non-AI: built in, unless an extractor overrides it.
       if (field === 'markdown') continue;
-      if (!this.options.extractors?.[field]) {
+      if (!this.options.extractors?.[field] && !this.proxy.extracts) {
         throw unsupported(`"${field}" without an extractor (pass one in \`extractors.${field}\`)`);
       }
     }
@@ -309,8 +319,12 @@ export class Xyte {
   ): Promise<ExtractResponse> {
     const response: ExtractResponse = { ...result.response };
     for (const field of plan.extractions) {
+      // Already answered upstream (e.g. Zyte API itself as the provider).
+      if ((response as Record<string, unknown>)[field] !== undefined) continue;
       const extractor = this.options.extractors?.[field] ?? (field === 'markdown' ? builtInMarkdown : undefined);
-      (response as Record<string, unknown>)[field] = await extractor!({
+      // The provider was expected to extract (see ProxyProvider.extracts) but this one didn't.
+      if (!extractor) throw unsupported(`"${field}" without an extractor (pass one in \`extractors.${field}\`)`);
+      (response as Record<string, unknown>)[field] = await extractor({
         url: response.url ?? request.url,
         html: result.html ?? '',
         request,

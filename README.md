@@ -105,7 +105,8 @@ npx xyte extract --json '{"url":"https://example.com","browserHtml":true}'
 Proxy-Seller, Thordata, Anyip, ABCProxy, ProxyEmpire, RapidProxy, Swiftproxy, 922 S5, LunaProxy,
 plus Crawlbase, Scrape.do, ScrapingAnt, ScrapeOps, Scrapfly, Oxylabs Web Unblocker and Zyte's own
 proxy mode, and hosted browsers (Bright Data Scraping Browser, Browserless, ZenRows, Oxylabs,
-NodeMaven). Full catalog with formats and confidence levels: [docs/providers.md](docs/providers.md).
+NodeMaven), and API-only services (Scrappey, ScrapingBot, or **Zyte API itself** as a fallback
+with full fidelity). Full catalog with formats and confidence levels: [docs/providers.md](docs/providers.md).
 
 Combinators:
 

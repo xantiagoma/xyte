@@ -38,6 +38,8 @@ const ctx = (overrides: Partial<ProxyContext> = {}): ProxyContext => ({
   ...overrides,
 });
 
+/** proxyFromEnv may also return API adapters; these tests expect proxies. */
+const urlOf = (endpoint: unknown) => (endpoint as { url: string }).url;
 const userOf = (url: string) => decodeURIComponent(new URL(url).username);
 const passOf = (url: string) => decodeURIComponent(new URL(url).password);
 
@@ -123,20 +125,20 @@ describe('provider presets', () => {
   test('byIpType picks by the request ipType', async () => {
     const provider = byIpType({ datacenter: proxyUrl('http://dc:1'), residential: proxyUrl('http://resi:1') });
     expect((await provider.resolve(ctx({ ipType: 'residential' })))!.url).toBe('http://resi:1');
-    expect((await provider.resolve(ctx()))!.url).toBe('http://dc:1');
+    expect(urlOf(await provider.resolve(ctx()))).toBe('http://dc:1');
   });
 });
 
 describe('proxyFromEnv', () => {
   test('XYTE_PROXY_URL', async () => {
     const provider = proxyFromEnv({ XYTE_PROXY_URL: 'http://a:b@h:1' });
-    expect((await provider.resolve(ctx()))!.url).toBe('http://a:b@h:1');
+    expect(urlOf(await provider.resolve(ctx()))).toBe('http://a:b@h:1');
   });
 
   test('XYTE_PROVIDER list rotates', async () => {
     const provider = proxyFromEnv({ XYTE_PROVIDER: 'oxylabs,zenrows', OXYLABS_USERNAME: 'u', OXYLABS_PASSWORD: 'p', ZENROWS_API_KEY: 'k' });
-    expect((await provider.resolve(ctx()))!.url).toContain('pr.oxylabs.io');
-    expect((await provider.resolve(ctx({ attempt: 1 })))!.url).toContain('api.zenrows.com');
+    expect(urlOf(await provider.resolve(ctx()))).toContain('pr.oxylabs.io');
+    expect(urlOf(await provider.resolve(ctx({ attempt: 1 })))).toContain('api.zenrows.com');
   });
 
   test('missing credentials are reported', () => {
@@ -159,7 +161,7 @@ describe('template()', () => {
 
   test('drops optional [parts] whose placeholders have no value', async () => {
     const provider = template('http://acme[-cc-{country}]-sid-{session:number:9999}:pw@h:1');
-    expect((await provider.resolve(ctx()))!.url).toMatch(/^http:\/\/acme-sid-\d{1,4}:pw@h:1$/);
+    expect(urlOf(await provider.resolve(ctx()))).toMatch(/^http:\/\/acme-sid-\d{1,4}:pw@h:1$/);
     expect((await provider.resolve(ctx({ country: 'GB' })))!.url).toMatch(/^http:\/\/acme-cc-GB-sid-\d+:pw@h:1$/);
   });
 
@@ -169,7 +171,7 @@ describe('template()', () => {
 
   test('works through XYTE_PROXY_TEMPLATE', async () => {
     const provider = proxyFromEnv({ XYTE_PROXY_TEMPLATE: 'http://u[-{country:lower}]:p@h:1' });
-    expect((await provider.resolve(ctx({ country: 'DE' })))!.url).toBe('http://u-de:p@h:1');
+    expect(urlOf(await provider.resolve(ctx({ country: 'DE' })))).toBe('http://u-de:p@h:1');
   });
 });
 

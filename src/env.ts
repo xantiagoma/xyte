@@ -17,6 +17,7 @@ import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
 import type { ExtractionField } from './types.ts';
 import * as long from './providers.ts';
+import { scrapingBot, scrappey, zyteApi } from './apis.ts';
 import { brightDataBrowser, browserless, nodeMavenBrowser, oxylabsBrowser, zenrowsBrowser } from './browsers.ts';
 
 type Env = Record<string, string | undefined>;
@@ -71,6 +72,9 @@ const PROVIDERS: Record<string, (env: Env) => ProxyProvider> = {
   scrapeops: (env) => long.scrapeOps({ apiKey: required(env, 'SCRAPEOPS_API_KEY') }),
   scrapfly: (env) => long.scrapfly({ apiKey: required(env, 'SCRAPFLY_API_KEY') }),
   zyte: (env) => long.zyteProxy({ apiKey: required(env, 'ZYTE_API_KEY') }),
+  'zyte-api': (env) => zyteApi({ apiKey: required(env, 'ZYTE_API_KEY') }),
+  scrappey: (env) => scrappey({ apiKey: required(env, 'SCRAPPEY_API_KEY') }),
+  scrapingbot: (env) => scrapingBot({ username: required(env, 'SCRAPINGBOT_USERNAME'), apiKey: required(env, 'SCRAPINGBOT_API_KEY') }),
   'oxylabs-unblocker': (env) =>
     long.oxylabsUnblocker({ username: required(env, 'OXYLABS_UNBLOCKER_USERNAME'), password: required(env, 'OXYLABS_UNBLOCKER_PASSWORD') }),
 };
@@ -184,7 +188,7 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
   } else if (env.XYTE_BROWSER_WS) {
     const endpoint = template(env.XYTE_BROWSER_WS);
     const protocol = env.XYTE_BROWSER_WS_PROTOCOL === 'playwright' ? 'playwright' : 'cdp';
-    options.connect = async (context) => ({ endpoint: (await endpoint.resolve(context))!.url, protocol });
+    options.connect = async (context) => ({ endpoint: ((await endpoint.resolve(context)) as { url: string }).url, protocol });
   }
   if (env.XYTE_BLOCK_RESOURCES) options.blockResources = list(env.XYTE_BLOCK_RESOURCES);
   if (env.XYTE_BROWSER_TIME_LIMIT) options.timeLimit = Number(env.XYTE_BROWSER_TIME_LIMIT);

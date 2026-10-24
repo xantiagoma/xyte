@@ -157,6 +157,7 @@ export const ERRORS: Record<string, Entry> = {
 /** Zyte products beyond `/v1/extract`. */
 export const OTHER: Record<string, Entry> = {
   'HTTP API `POST /v1/extract`': { status: 'supported', note: '`xyte serve`, `createHandler`, `toNodeHandler`.' },
+  'Zyte API as a provider': { status: 'supported', note: '`zyteApi()` (full fidelity, e.g. as a fallback) or `zyteProxy()` (proxy mode).' },
   'Proxy mode (`api.zyte.com:8011`)': { status: 'unsupported', note: 'Planned.' },
   'CDP headless browser': { status: 'unsupported' },
   'Stats API': { status: 'unsupported' },

@@ -140,12 +140,24 @@ Formats for providers without a preset (🟡, check your dashboard):
 | Live Proxies | `http://U[-country-{country:lower}]-session-{session}:P@b2b.liveproxies.io:7383` |
 | Proxy-Cheap, Froxy, ProxyLane | Copy the endpoint from the dashboard: `proxyUrl('http://…')` (ProxyLane: "Keep the same IP" in the dashboard) |
 
-## API-only services (not supported yet)
+## API-only services
 
-**Scrappey** (`POST publisher.scrappey.com/api/v1`) and **ScrapingBot**
-(`POST api.scraping-bot.io/scrape/raw-html`) have no proxy port. They need an adapter that maps
-a Zyte request to their API, rather than a proxy. That's planned as a `Transport`-level adapter.
-Today you can implement it with the `transport` option.
+Some services have no proxy port: they take a URL and return the page. These adapters resolve to
+an `ApiEndpoint`: they get the whole Zyte request and answer in Zyte's shape. Retries, ban
+detection, extractors and `rotate()` work as with proxies, so the two kinds can be mixed:
+`rotate([nodeMaven(…), scrappey(…), zyteApi(…)])`.
+
+| Adapter | `XYTE_PROVIDER` · env | Notes | |
+| --- | --- | --- | --- |
+| `zyteApi({ apiKey })` | `zyte-api` · `ZYTE_API_KEY` | Forwards the request to Zyte unchanged, so **every** Zyte feature works (AI extraction, actions, sessions). Zyte's bans and problems pass through. Bans aren't re-checked locally. | ✅ |
+| `scrappey({ apiKey })` | `scrappey` · `SCRAPPEY_API_KEY` | `requestType` browser/request from the request, `proxyCountry`, cookies, headers, POST bodies | 🟡 response fields |
+| `scrapingBot({ username, apiKey, options? })` | `scrapingbot` · `SCRAPINGBOT_USERNAME/API_KEY` | Raw HTML API; the target status isn't reported (assumed 200) | 🟡 option names |
+
+`zyteApi()` vs `zyteProxy()`: the API adapter has full fidelity, AI extraction included. Proxy mode
+only carries HTTP and browser HTML, but goes through xyte's own engines and extractors.
+
+Write your own by returning `{ api: async (request, { context, signal }) => ({ response,
+statusCode, html }) }` from a provider's `resolve`; see `src/apis.ts`.
 
 ## Writing a provider
 
@@ -163,4 +175,4 @@ const mine: ProxyProvider = {
 ```
 
 `resolve` may be async: fetch a proxy from a pool API, skip a provider that's out of credit, or
-return `null` to go direct.
+return `null` to go direct. It can also return an `ApiEndpoint` (see above).
