@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Xyte } from './client.ts';
 import { XyteError } from './errors.ts';
 import type { ExtractRequest } from './types.ts';
@@ -8,20 +9,31 @@ export interface HandlerOptions {
    * empty or omitted, any (or no) key is accepted.
    */
   apiKeys?: readonly string[];
+  /**
+   * Where the routes live, e.g. `/zyte` for `/zyte/v1/extract`. Default: any path ending in
+   * `/v1/extract` (or `/healthz`), so the handler works mounted under a prefix whether or not the
+   * framework strips it.
+   */
+  basePath?: string;
 }
+
+export type FetchHandler = (request: Request) => Promise<Response>;
 
 /**
  * A Web-standard handler serving Zyte's HTTP API: `POST /v1/extract`. Mount it with `Bun.serve`,
  * Deno, Hono, a Cloudflare Worker… then point existing Zyte code at it by changing only the base
  * URL (`https://api.zyte.com/v1/extract` → `http://localhost:8011/v1/extract`).
  */
-export function createHandler(xyte: Xyte, options: HandlerOptions = {}): (request: Request) => Promise<Response> {
+export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHandler {
   const keys = new Set(options.apiKeys ?? []);
+  const base = options.basePath?.replace(/\/+$/, '');
+  const route = (pathname: string, path: string) =>
+    base != null ? pathname === `${base}${path}` : pathname === path || pathname.endsWith(path);
 
   return async (request) => {
     const { pathname } = new URL(request.url);
-    if (pathname === '/healthz') return new Response('ok');
-    if (pathname !== '/v1/extract') {
+    if (route(pathname, '/healthz')) return new Response('ok');
+    if (!route(pathname, '/v1/extract')) {
       return problem({ status: 404, type: '/request/not-found', title: 'Not Found', detail: `no route ${pathname}` });
     }
     if (request.method !== 'POST') {
@@ -42,7 +54,8 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): (reques
     }
 
     try {
-      return Response.json(await xyte.extract(body));
+      // A caller that hangs up cancels the scrape.
+      return Response.json(await xyte.extract(body, { signal: request.signal }));
     } catch (error) {
       if (error instanceof XyteError) return problem(error.toJSON());
       return problem({
@@ -70,11 +83,62 @@ function apiKeyOf(request: Request): string | undefined {
 }
 
 /**
+ * Adapts a fetch handler to Node's `(req, res)` signature, for `node:http`, Express, Fastify
+ * (`reply.hijack()` first) or Next.js API routes:
+ *
+ *     app.use('/zyte', toNodeHandler(createHandler(xyte)));
+ *
+ * A body already parsed by middleware (e.g. `express.json()`) is re-serialized.
+ */
+export function toNodeHandler(
+  handler: FetchHandler,
+): (req: IncomingMessage & { body?: unknown }, res: ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    const abort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
+    try {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(req.headers)) {
+        if (typeof value === 'string') headers.set(name, value);
+        else if (Array.isArray(value)) for (const v of value) headers.append(name, v);
+      }
+      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+      let body: Buffer | undefined;
+      if (hasBody && req.body !== undefined) {
+        body = Buffer.isBuffer(req.body)
+          ? req.body
+          : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+        headers.delete('content-length');
+      } else if (hasBody) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        body = Buffer.concat(chunks);
+      }
+      const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, {
+        method: req.method,
+        headers,
+        body: body ? new Uint8Array(body) : undefined,
+        signal: abort.signal,
+      });
+      const response = await handler(request);
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (error) {
+      if (res.headersSent) return void res.end();
+      res.writeHead(500, { 'content-type': 'text/plain' });
+      res.end(String(error));
+    }
+  };
+}
+
+/**
  * Serves `handler` on Bun (`Bun.serve`) or Node.js (`node:http`). Returns a function that stops
  * the server.
  */
 export async function serve(
-  handler: (request: Request) => Promise<Response>,
+  handler: FetchHandler,
   options: { port?: number; hostname?: string } = {},
 ): Promise<{ url: string; stop: () => Promise<void> }> {
   const port = options.port ?? 8011;
@@ -88,28 +152,7 @@ export async function serve(
   }
 
   const http = await import('node:http');
-  const server = http.createServer(async (req, res) => {
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const headers = new Headers();
-      for (const [name, value] of Object.entries(req.headers)) {
-        if (typeof value === 'string') headers.set(name, value);
-        else if (Array.isArray(value)) for (const v of value) headers.append(name, v);
-      }
-      const request = new Request(`http://${req.headers.host ?? `${hostname}:${port}`}${req.url ?? '/'}`, {
-        method: req.method,
-        headers,
-        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : Buffer.concat(chunks),
-      });
-      const response = await handler(request);
-      res.writeHead(response.status, Object.fromEntries(response.headers));
-      res.end(Buffer.from(await response.arrayBuffer()));
-    } catch (error) {
-      res.writeHead(500, { 'content-type': 'text/plain' });
-      res.end(String(error));
-    }
-  });
+  const server = http.createServer(toNodeHandler(handler));
   server.requestTimeout = 0;
   await new Promise<void>((resolve) => server.listen(port, hostname, resolve));
   const { port: boundPort } = server.address() as { port: number };

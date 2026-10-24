@@ -7,7 +7,7 @@ import {
   unsupported,
   XyteError,
 } from './errors.ts';
-import { direct, type ProxyProvider } from './proxy.ts';
+import { direct, type ProxyContext, type ProxyProvider } from './proxy.ts';
 import { defaultTransport, type Transport } from './transport.ts';
 import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
 import { CookieJar, randomSessionId, sleep } from './util.ts';
@@ -26,6 +26,11 @@ export interface BanCheck {
   statusCode: number;
   headers: { name: string; value: string }[];
   html?: string;
+}
+
+export interface ExtractOptions {
+  /** Aborts the request (all attempts). Rejects with the signal's reason. */
+  signal?: AbortSignal;
 }
 
 export interface XyteOptions {
@@ -93,8 +98,11 @@ export class Xyte {
    * Same contract as `POST https://api.zyte.com/v1/extract`: resolves with the 200 body, rejects
    * with an `XyteError` carrying Zyte's status and problem type.
    */
-  extract(request: ExtractRequest): Promise<ExtractResponse> {
-    return this.limit(() => this.run(request));
+  extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
+    return this.limit(async () => {
+      options.signal?.throwIfAborted();
+      return this.run(request, options.signal);
+    });
   }
 
   /** Closes the shared browser, if one was started. */
@@ -106,7 +114,7 @@ export class Xyte {
     await this.close();
   }
 
-  private async run(request: ExtractRequest): Promise<ExtractResponse> {
+  private async run(request: ExtractRequest, cancel: AbortSignal | undefined): Promise<ExtractResponse> {
     const plan = this.plan(request);
     const country = request.geolocation?.toUpperCase();
     const pinnedSession = request.session?.id;
@@ -118,26 +126,30 @@ export class Xyte {
       if (attempt > 0) {
         this.options.onRetry?.({ attempt, url: request.url, reason: lastReason });
         await sleep(backoff(attempt));
+        cancel?.throwIfAborted();
       }
 
       const sessionId = pinnedSession ?? randomSessionId();
       const jar = this.jarFor(request, pinnedSession);
-      const signal = AbortSignal.timeout(this.timeoutMs);
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout;
 
       let result: EngineResult;
       try {
-        const proxy = await this.proxy.resolve({
+        const context: ProxyContext = {
           url: new URL(request.url),
           country,
           ipType: request.ipType,
           sessionId,
           attempt,
           browser: plan.browser,
-        });
-        const engineAttempt: EngineAttempt = { request, proxy, jar, signal };
+        };
+        const proxy = await this.proxy.resolve(context);
+        const engineAttempt: EngineAttempt = { request, context, proxy, jar, signal };
         result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
       } catch (error) {
         if (error instanceof XyteError) throw error;
+        if (cancel?.aborted) throw cancel.reason;
         const classified = classifyError(error);
         if (classified === 'unreachable') {
           throw domainUnreachable(`could not resolve ${new URL(request.url).hostname}`, error);
@@ -198,7 +210,9 @@ export class Xyte {
 
     // Extraction alone picks its source from `<field>Options.extractFrom`, else HTTP.
     const extractFromBrowser = extractions.some((field) => {
-      const from = (request as unknown as Record<string, { extractFrom?: string } | undefined>)[`${field}Options`]?.extractFrom;
+      const from =
+        (request as unknown as Record<string, { extractFrom?: string } | undefined>)[`${field}Options`]?.extractFrom ??
+        request.extractFrom;
       return from === 'browserHtml' || from === 'browserHtmlOnly';
     });
 
@@ -246,6 +260,7 @@ export class Xyte {
       });
     }
     if (request.responseCookies) response.responseCookies = jar.all();
+    if (request.session?.id) response.session = { id: request.session.id };
     if (request.echoData !== undefined) response.echoData = request.echoData;
     if (request.jobId != null) response.jobId = request.jobId;
     return response;

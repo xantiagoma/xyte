@@ -1,0 +1,33 @@
+# fly launch --copy-config --no-deploy && fly secrets set OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
+# fly deploy --config deploy/fly.toml --dockerfile Dockerfile
+app = "xyte"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+[env]
+  XYTE_PROVIDER = "oxylabs"
+  XYTE_CONCURRENCY = "8"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 8
+    hard_limit = 12
+
+[[http_service.checks]]
+  method = "GET"
+  path = "/healthz"
+  interval = "30s"
+  timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

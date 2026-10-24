@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
-import { proxyFromEnv } from './env.ts';
+import { browserFromEnv, proxyFromEnv } from './env.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -15,10 +15,16 @@ Usage:
 
 Proxy (environment):
   XYTE_PROXY_URL=http://user:pass@host:port[,…]
+  XYTE_PROXY_TEMPLATE='http://user[-country-{country:lower}]-session-{session}:pass@host:port'
   XYTE_PROVIDER=oxylabs|brightdata|decodo|iproyal|zenrows|scrapingbee|scraperapi[,…]
     with its credentials, e.g. OXYLABS_USERNAME / OXYLABS_PASSWORD, ZENROWS_API_KEY
   XYTE_API_KEYS=key1,key2   accepted keys for "serve" (default: any)
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY
+
+Browser (environment):
+  XYTE_BROWSER=playwright|patchright|<package>   XYTE_BROWSER_CHANNEL=chrome
+  XYTE_BROWSER_WS=wss://…{country:lower}…       remote browser per request (CDP)
+  XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
 `;
 
 const { values, positionals } = parseArgs({
@@ -39,6 +45,7 @@ const num = (value: string | undefined) => (value ? Number(value) : undefined);
 
 const xyte = new Xyte({
   proxy: proxyFromEnv(env),
+  browser: browserFromEnv(env),
   retries: num(env.XYTE_RETRIES),
   timeout: num(env.XYTE_TIMEOUT),
   concurrency: num(env.XYTE_CONCURRENCY),

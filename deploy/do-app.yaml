@@ -1,0 +1,28 @@
+# DigitalOcean App Platform: doctl apps create --spec deploy/do-app.yaml
+name: xyte
+services:
+  - name: xyte
+    github:
+      repo: xantiagoma/xyte
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-2gb
+    instance_count: 1
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: XYTE_PROVIDER
+        value: oxylabs
+      - key: XYTE_CONCURRENCY
+        value: "8"
+      - key: OXYLABS_USERNAME
+        type: SECRET
+        value: change-me
+      - key: OXYLABS_PASSWORD
+        type: SECRET
+        value: change-me
+      - key: XYTE_API_KEYS
+        type: SECRET
+        value: change-me

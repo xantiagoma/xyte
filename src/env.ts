@@ -8,9 +8,11 @@ import {
   rotate,
   scraperApi,
   scrapingBee,
+  template,
   zenrows,
   type ProxyProvider,
 } from './proxy.ts';
+import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -48,6 +50,8 @@ const PROVIDERS: Record<string, (env: Env) => ProxyProvider> = {
  * Builds the proxy from environment variables:
  *
  * - `XYTE_PROXY_URL`: one or more proxy URLs, comma-separated (rotated across retries), or
+ * - `XYTE_PROXY_TEMPLATE`: a `template()` format, e.g.
+ *   `http://user-{env:MY_USER}[-country-{country:lower}]-session-{session}:{env:MY_PASS}@host:7000`, or
  * - `XYTE_PROVIDER`: one or more of `oxylabs`, `oxylabs-datacenter`, `brightdata`, `decodo`,
  *   `iproyal`, `zenrows`, `scrapingbee`, `scraperapi`, `direct`, comma-separated (a retry moves to
  *   the next one), each with its credentials (`OXYLABS_USERNAME`, `ZENROWS_API_KEY`, …).
@@ -55,6 +59,9 @@ const PROVIDERS: Record<string, (env: Env) => ProxyProvider> = {
  * Neither set: no proxy.
  */
 export function proxyFromEnv(env: Env = process.env): ProxyProvider {
+  if (env.XYTE_PROXY_TEMPLATE) {
+    return template(env.XYTE_PROXY_TEMPLATE, { insecure: env.XYTE_PROXY_INSECURE === 'true' });
+  }
   if (env.XYTE_PROXY_URL) {
     return proxyUrl(
       env.XYTE_PROXY_URL.split(',').map((url) => url.trim()).filter(Boolean),
@@ -70,4 +77,47 @@ export function proxyFromEnv(env: Env = process.env): ProxyProvider {
     return make(env);
   });
   return providers.length === 1 ? providers[0]! : rotate(providers);
+}
+
+const list = (value: string | undefined) => (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+
+/**
+ * Browser settings from environment variables:
+ *
+ * - `XYTE_BROWSER`: `playwright` (default) or `patchright`, or any installed Playwright-compatible
+ *   package name exporting `chromium` (e.g. `rebrowser-playwright`).
+ * - `XYTE_BROWSER_CHANNEL`: e.g. `chrome` to use installed Google Chrome.
+ * - `XYTE_BROWSER_HEADLESS=false`: headed (needs a display, e.g. xvfb).
+ * - `XYTE_BROWSER_ARGS`: extra Chromium flags, comma-separated.
+ * - `XYTE_BROWSER_WS`: render in a remote browser at this CDP endpoint instead; accepts the same
+ *   placeholders as `XYTE_PROXY_TEMPLATE` (e.g. `{country:lower}`, `{session}`).
+ *   `XYTE_BROWSER_WS_PROTOCOL=playwright` for a Playwright server.
+ * - `XYTE_BLOCK_RESOURCES`: resource types to abort, e.g. `image,media,font`.
+ * - `XYTE_BROWSER_TIME_LIMIT`: seconds per request (default 60).
+ */
+export function browserFromEnv(env: Env = process.env): BrowserOptions {
+  const options: BrowserOptions = {};
+  const name = env.XYTE_BROWSER?.trim();
+  if (name && name !== 'playwright') {
+    options.browserType = async () => {
+      const mod = (await import(name)) as { chromium?: BrowserTypeLike; default?: { chromium?: BrowserTypeLike } };
+      const chromium = mod.chromium ?? mod.default?.chromium;
+      if (!chromium) throw new Error(`xyte: XYTE_BROWSER="${name}" does not export chromium`);
+      return chromium;
+    };
+  }
+  const launchOptions: NonNullable<BrowserOptions['launchOptions']> = {};
+  if (env.XYTE_BROWSER_CHANNEL) launchOptions.channel = env.XYTE_BROWSER_CHANNEL;
+  if (env.XYTE_BROWSER_HEADLESS === 'false') launchOptions.headless = false;
+  if (env.XYTE_BROWSER_ARGS) launchOptions.args = list(env.XYTE_BROWSER_ARGS);
+  if (Object.keys(launchOptions).length > 0) options.launchOptions = launchOptions;
+
+  if (env.XYTE_BROWSER_WS) {
+    const endpoint = template(env.XYTE_BROWSER_WS);
+    const protocol = env.XYTE_BROWSER_WS_PROTOCOL === 'playwright' ? 'playwright' : 'cdp';
+    options.connect = async (context) => ({ endpoint: (await endpoint.resolve(context))!.url, protocol });
+  }
+  if (env.XYTE_BLOCK_RESOURCES) options.blockResources = list(env.XYTE_BLOCK_RESOURCES);
+  if (env.XYTE_BROWSER_TIME_LIMIT) options.timeLimit = Number(env.XYTE_BROWSER_TIME_LIMIT);
+  return options;
 }

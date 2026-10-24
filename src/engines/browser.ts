@@ -1,17 +1,83 @@
-import type { Browser, BrowserContextOptions, Locator, Page, Response as PwResponse } from 'playwright';
-import { unsupported } from '../errors.ts';
-import type { ProxyEndpoint } from '../proxy.ts';
+import type {
+  Browser,
+  BrowserContext,
+  BrowserContextOptions,
+  LaunchOptions,
+  Locator,
+  Page,
+  Response as PwResponse,
+} from 'playwright';
+import { serverError, unsupported, XyteError } from '../errors.ts';
+import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Action, ActionResult, ActionSelector, CapturedResponse, Cookie, NetworkCaptureFilter } from '../types.ts';
 import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
 import type { EngineAttempt, EngineResult } from './http.ts';
 
+/**
+ * The part of a Playwright `BrowserType` xyte uses. Typed loosely on purpose: forks (patchright,
+ * rebrowser-playwright…) declare their own, nominally different, Browser types.
+ */
+export interface BrowserTypeLike {
+  launch(options?: any): Promise<unknown>;
+  connect(wsEndpoint: string, options?: any): Promise<unknown>;
+  connectOverCDP(endpointURL: string, options?: any): Promise<unknown>;
+}
+
+/** A remote browser to render one request in. */
+export interface RemoteBrowser {
+  /** `wss://…` (or `http://…` for CDP discovery). */
+  endpoint: string;
+  /** `cdp` (default) for `connectOverCDP`, `playwright` for a Playwright server (`connect`). */
+  protocol?: 'cdp' | 'playwright';
+  headers?: Record<string, string>;
+  /**
+   * Also route the browser through xyte's `proxy`. Default false: remote browser services
+   * pick their own exit (set the country in the endpoint).
+   */
+  useProxy?: boolean;
+}
+
+/** What hooks get to see about the request being rendered. */
+export interface BrowserHookInfo {
+  request: EngineAttempt['request'];
+  proxy: ProxyEndpoint | null;
+  context: ProxyContext;
+}
+
 export interface BrowserOptions {
   /**
-   * Returns the browser to render in. Default: a shared headless Chromium from `playwright`
-   * (an optional peer dependency). Use it to connect to a remote browser, e.g.
-   * `() => chromium.connectOverCDP(process.env.BROWSER_WS!)`.
+   * The Playwright-compatible browser type to launch. Default: `chromium` from `playwright`
+   * (an optional peer dependency). Swap in a fork for stealth, e.g.
+   * `(await import('patchright')).chromium`, `rebrowser-playwright`, or `playwright-extra`
+   * with its stealth plugin.
    */
-  launch?: () => Promise<Browser>;
+  browserType?: BrowserTypeLike | (() => BrowserTypeLike | Promise<BrowserTypeLike>);
+  /** Options for `browserType.launch()`: `headless`, `channel: 'chrome'`, `args`, `executablePath`… */
+  launchOptions?: LaunchOptions;
+  /** Full control over the shared browser (overrides `browserType` / `launchOptions`). */
+  launch?: () => Promise<unknown>;
+  /**
+   * Render each request in a remote browser instead: Bright Data Scraping Browser, Browserless,
+   * Browserbase… Called per attempt with the country and session, so the endpoint can carry
+   * them. The connection is closed after the request.
+   */
+  connect?: (context: ProxyContext) => string | RemoteBrowser | Promise<string | RemoteBrowser>;
+  /**
+   * Adjust the context options per request. Receives xyte's defaults (proxy, viewport, user
+   * agent, locale…); return the options to use. Patchright, for instance, recommends dropping
+   * the custom `userAgent` and `viewport`.
+   */
+  contextOptions?: (
+    defaults: BrowserContextOptions,
+    info: BrowserHookInfo,
+  ) => BrowserContextOptions | Promise<BrowserContextOptions>;
+  /** Runs on every new page before navigation: init scripts, routes, stealth patches. */
+  onPage?: (page: Page, info: BrowserHookInfo) => void | Promise<void>;
+  /**
+   * Resource types to abort, to save proxy bandwidth (residential traffic is billed per GB),
+   * e.g. `['image', 'media', 'font']`.
+   */
+  blockResources?: readonly string[];
   /** Total browser time per request, seconds. Zyte's limit is 60. */
   timeLimit?: number;
 }
@@ -36,7 +102,8 @@ export class BrowserEngine {
 
   private getBrowser(): Promise<Browser> {
     if (!this.browser) {
-      const launching = (this.options.launch ?? launchChromium)().then(
+      const launch = (this.options.launch ?? (() => launchLocal(this.options))) as () => Promise<Browser>;
+      const launching = launch().then(
         (browser) => {
           // A crashed or remotely closed browser is relaunched on the next request.
           browser.on('disconnected', () => {
@@ -46,7 +113,9 @@ export class BrowserEngine {
         },
         (error) => {
           this.browser = undefined;
-          throw error;
+          // Launching is local: a failure is a setup problem, not something a retry fixes.
+          if (error instanceof XyteError) throw error;
+          throw serverError(`could not start the browser: ${String(error?.message ?? error).split('\n')[0]}`, error);
         },
       );
       this.browser = launching;
@@ -66,15 +135,34 @@ export class BrowserEngine {
     const deadline = Date.now() + timeLimitMs;
     const remaining = () => Math.max(0, deadline - Date.now());
 
-    const browser = await this.getBrowser();
-    const context = await browser.newContext(contextOptions(attempt));
+    const remote = this.options.connect ? await this.connectRemote(attempt) : undefined;
+    const proxy = remote && !remote.useProxy ? null : attempt.proxy;
+    const info: BrowserHookInfo = { request, proxy, context: attempt.context };
+    const browser = remote?.browser ?? (await this.getBrowser());
+
+    const defaults = contextOptions(attempt, proxy);
+    const options = this.options.contextOptions ? await this.options.contextOptions(defaults, info) : defaults;
+    let context: BrowserContext;
+    try {
+      context = await browser.newContext(options);
+    } catch (error) {
+      await remote?.browser.close().catch(() => {});
+      throw error;
+    }
     const abort = () => void context.close().catch(() => {});
     attempt.signal.addEventListener('abort', abort, { once: true });
 
     try {
       if (request.requestCookies?.length) await context.addCookies(request.requestCookies.map(toPlaywrightCookie));
+      if (this.options.blockResources?.length) {
+        const blocked = new Set(this.options.blockResources);
+        await context.route('**/*', (route) =>
+          blocked.has(route.request().resourceType()) ? route.abort() : route.fallback(),
+        );
+      }
 
       const page = await context.newPage();
+      await this.options.onPage?.(page, info);
       const captures = captureNetwork(page, request.networkCapture);
 
       const actions = [...(request.actions ?? [])];
@@ -137,26 +225,47 @@ export class BrowserEngine {
       attempt.signal.removeEventListener('abort', abort);
       for (const cookie of await context.cookies().catch(() => [])) attempt.jar.set(fromPlaywrightCookie(cookie));
       await context.close().catch(() => {});
+      await remote?.browser.close().catch(() => {});
     }
   }
+
+  private async connectRemote(attempt: EngineAttempt): Promise<RemoteBrowser & { browser: Browser }> {
+    const target = await this.options.connect!(attempt.context);
+    const remote: RemoteBrowser = typeof target === 'string' ? { endpoint: target } : target;
+    const browserType = await resolveBrowserType(this.options);
+    const connectOptions = { headers: remote.headers, timeout: 30_000 };
+    // A remote connection failing is a download problem (retried), unlike a local launch.
+    const browser = (
+      remote.protocol === 'playwright'
+        ? await browserType.connect(remote.endpoint, connectOptions)
+        : await browserType.connectOverCDP(remote.endpoint, connectOptions)
+    ) as Browser;
+    return { ...remote, browser };
+  }
 }
 
-async function launchChromium(): Promise<Browser> {
-  let playwright: typeof import('playwright');
+async function resolveBrowserType(options: BrowserOptions): Promise<BrowserTypeLike> {
+  if (options.browserType) {
+    return typeof options.browserType === 'function' ? options.browserType() : options.browserType;
+  }
   try {
-    playwright = await import('playwright');
+    return (await import('playwright')).chromium;
   } catch (error) {
-    throw new Error(
-      'xyte: browser requests (browserHtml, screenshot, actions, networkCapture) need "playwright" ' +
-        '(npm i playwright && npx playwright install chromium), or pass `browser.launch`.',
-      { cause: error },
+    throw serverError(
+      'browser requests (browserHtml, screenshot, actions, networkCapture) need "playwright" ' +
+        '(npm i playwright && npx playwright install chromium), or pass `browser.browserType`',
+      error,
     );
   }
-  return playwright.chromium.launch({ headless: true });
 }
 
-function contextOptions(attempt: EngineAttempt): BrowserContextOptions {
-  const { request, proxy } = attempt;
+async function launchLocal(options: BrowserOptions): Promise<Browser> {
+  const browserType = await resolveBrowserType(options);
+  return (await browserType.launch({ headless: true, ...options.launchOptions })) as Browser;
+}
+
+function contextOptions(attempt: EngineAttempt, proxy: ProxyEndpoint | null): BrowserContextOptions {
+  const { request } = attempt;
   const mobile = request.device === 'mobile';
   return {
     proxy: proxy ? playwrightProxy(proxy) : undefined,
@@ -287,12 +396,7 @@ async function runAction(page: Page, action: Action, remaining: () => number): P
         });
       return;
     case 'evaluate':
-      // Zyte runs the source as a script and does not wait on promises it creates; an indirect
-      // eval matches that (statements allowed, result discarded).
-      await page.evaluate((source) => {
-        void (0, eval)(source);
-      }, action.source);
-      return;
+      return evaluateInPage(page, action.source);
     case 'goto':
       await page.goto(action.url, {
         waitUntil: waitUntil(action.options?.waitUntil),
@@ -342,6 +446,28 @@ async function runAction(page: Page, action: Action, remaining: () => number): P
     }
     default:
       throw new Error(`unsupported action "${(action as Action).action}"`);
+  }
+}
+
+const EVAL_ERROR_ATTRIBUTE = 'data-xyte-evaluate-error';
+
+/**
+ * Zyte runs `evaluate` sources as a page script (main world, page globals visible) without
+ * awaiting the promises they create. A `<script>` tag does exactly that, also under Playwright
+ * forks such as patchright whose `page.evaluate` runs in an isolated world. Errors come back
+ * through a DOM attribute, which both worlds share.
+ */
+async function evaluateInPage(page: Page, source: string): Promise<void> {
+  // The tag removes itself so browserHtml shows the page, not xyte's plumbing.
+  const wrapped = `try { (0, eval)(${JSON.stringify(source)}); } catch (error) {
+    document.documentElement.setAttribute(${JSON.stringify(EVAL_ERROR_ATTRIBUTE)}, String(error && error.message || error));
+  } finally { document.currentScript && document.currentScript.remove(); }`;
+  await page.addScriptTag({ content: wrapped });
+  const root = page.locator('html');
+  const error = await root.getAttribute(EVAL_ERROR_ATTRIBUTE);
+  if (error != null) {
+    await root.evaluate((el, name) => el.removeAttribute(name), EVAL_ERROR_ATTRIBUTE);
+    throw new Error(error);
   }
 }
 

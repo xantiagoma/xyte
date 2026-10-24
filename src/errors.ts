@@ -59,6 +59,10 @@ export const temporaryDownloadError = (
     { cause: options.cause },
   );
 
+/** Misconfiguration on this side (e.g. a missing optional dependency): retrying will not help. */
+export const serverError = (detail: string, cause?: unknown): XyteError =>
+  new XyteError({ status: 500, type: '/server/internal', title: 'Internal Server Error', detail }, { cause });
+
 export const domainUnreachable = (detail: string, cause?: unknown): XyteError =>
   new XyteError(
     { status: 421, type: '/website/domain-unreachable', title: 'Domain Unreachable', detail },

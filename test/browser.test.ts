@@ -111,3 +111,110 @@ describe('browser requests', () => {
     }
   });
 });
+
+describe('browser customization', () => {
+  test('evaluate sees page globals and reports script errors', async () => {
+    const res = await xyte.extract({
+      url: `${target.base}/html`,
+      browserHtml: true,
+      actions: [
+        { action: 'evaluate', source: 'window.answer = 41; document.body.dataset.answer = String(window.answer + 1);' },
+        { action: 'evaluate', source: 'throw new Error("boom")', onError: 'continue' },
+      ],
+    });
+    expect(res.browserHtml).toContain('data-answer="42"');
+    expect(res.actions?.[1]).toMatchObject({ status: 'continued', error: 'boom' });
+    expect(res.browserHtml).not.toContain('data-xyte-evaluate-error');
+  });
+
+  test('contextOptions, onPage and blockResources hooks', async () => {
+    const seen: string[] = [];
+    const custom = new Xyte({
+      retries: 0,
+      browser: {
+        contextOptions: (defaults, info) => {
+          seen.push(`country:${info.context.country}`);
+          return { ...defaults, userAgent: 'xyte-test-agent', locale: 'de-DE' };
+        },
+        onPage: async (page) => {
+          await page.addInitScript(() => {
+            (window as unknown as { injected: boolean }).injected = true;
+          });
+        },
+        blockResources: ['fetch', 'xhr'],
+      },
+    });
+    try {
+      const res = await custom.extract({
+        url: `${target.base}/app`,
+        browserHtml: true,
+        geolocation: 'DE',
+        actions: [
+          {
+            action: 'evaluate',
+            source: 'document.body.dataset.ua = navigator.userAgent; document.body.dataset.injected = String(window.injected);',
+          },
+          { action: 'waitForTimeout', timeout: 0.3 },
+        ],
+      });
+      expect(seen).toEqual(['country:DE']);
+      expect(res.browserHtml).toContain('data-ua="xyte-test-agent"');
+      expect(res.browserHtml).toContain('data-injected="true"');
+      expect(res.browserHtml).not.toContain('secret 42'); // the page's fetch was blocked
+    } finally {
+      await custom.close();
+    }
+  });
+
+  test('connect: renders in a remote browser per request (Playwright server)', async () => {
+    const server = await chromium.launchServer();
+    const endpoints: string[] = [];
+    const remote = new Xyte({
+      retries: 0,
+      browser: {
+        connect: (ctx) => {
+          endpoints.push(ctx.sessionId);
+          return { endpoint: server.wsEndpoint(), protocol: 'playwright' };
+        },
+      },
+    });
+    try {
+      const res = await remote.extract({ url: `${target.base}/html`, browserHtml: true, session: { id: 'remote-1' } });
+      expect(res.browserHtml).toContain('hello');
+      expect(endpoints).toEqual(['remote-1']);
+    } finally {
+      await remote.close();
+      await server.close();
+    }
+  });
+
+  test('patchright as a drop-in browserType', async () => {
+    const { chromium: patchright } = await import('patchright');
+    const stealth = new Xyte({
+      retries: 0,
+      browser: {
+        browserType: patchright,
+        // Patchright's advice: no custom user agent or viewport.
+        contextOptions: ({ userAgent, viewport, ...rest }) => rest,
+      },
+    });
+    try {
+      const res = await stealth.extract({
+        url: `${target.base}/app`,
+        browserHtml: true,
+        networkCapture: [{ filterType: 'url', matchType: 'contains', value: '/api/data', httpResponseBody: true }],
+        actions: [
+          { action: 'waitForSelector', selector: { type: 'css', value: '#done' } },
+          { action: 'evaluate', source: 'document.body.dataset.webdriver = String(navigator.webdriver);' },
+        ],
+      });
+      expect(res.browserHtml).toContain('secret 42');
+      expect(res.browserHtml).toContain('data-webdriver="false"');
+      expect(res.networkCapture).toHaveLength(1);
+      expect(res.actions?.map((a) => a.status)).toEqual(['success', 'success']);
+    } finally {
+      await stealth.close();
+    }
+  });
+});
+

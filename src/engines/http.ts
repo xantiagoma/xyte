@@ -1,10 +1,12 @@
-import type { ProxyEndpoint } from '../proxy.ts';
+import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Transport } from '../transport.ts';
 import type { ExtractRequest, ExtractResponse, HttpHeader } from '../types.ts';
 import { CookieJar, defaultHeaders, fromBase64, MAX_BODY_BYTES, toBase64 } from '../util.ts';
 
 export interface EngineAttempt {
   request: ExtractRequest;
+  /** What the proxy was resolved from (country, session, attempt…). */
+  context: ProxyContext;
   proxy: ProxyEndpoint | null;
   jar: CookieJar;
   signal: AbortSignal;

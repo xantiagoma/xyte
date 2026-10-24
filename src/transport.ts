@@ -1,3 +1,4 @@
+import { serverError } from './errors.ts';
 import type { ProxyEndpoint } from './proxy.ts';
 
 export interface TransportRequest {
@@ -50,7 +51,7 @@ async function nodeTransport(request: TransportRequest): Promise<Response> {
 
   undici ??= import('undici').catch((error) => {
     undici = undefined;
-    throw new Error('xyte: proxies on Node.js need the "undici" package (npm i undici)', { cause: error });
+    throw serverError('proxies on Node.js need the "undici" package (npm i undici)', error);
   });
   const { ProxyAgent, fetch: undiciFetch } = await undici;
 

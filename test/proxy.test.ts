@@ -11,6 +11,8 @@ import {
   rotate,
   scraperApi,
   scrapingBee,
+  template,
+  browserFromEnv,
   Xyte,
   zenrows,
   type ProxyContext,
@@ -145,3 +147,51 @@ describe('proxyFromEnv', () => {
     expect(await proxyFromEnv({}).resolve(ctx())).toBeNull();
   });
 });
+
+describe('template()', () => {
+  test('fills placeholders and URL-encodes values', async () => {
+    process.env.XYTE_TEST_PASS = 'p@ss:word';
+    const provider = template('http://user-acme-country-{country:lower}-session-{session:8}:{env:XYTE_TEST_PASS}@gate.example.com:7000');
+    const { url } = (await provider.resolve(ctx({ country: 'US' })))!;
+    expect(url).toBe('http://user-acme-country-us-session-abc123de:p%40ss%3Aword@gate.example.com:7000');
+    expect(decodeURIComponent(new URL(url).password)).toBe('p@ss:word');
+  });
+
+  test('drops optional [parts] whose placeholders have no value', async () => {
+    const provider = template('http://acme[-cc-{country}]-sid-{session:number:9999}:pw@h:1');
+    expect((await provider.resolve(ctx()))!.url).toMatch(/^http:\/\/acme-sid-\d{1,4}:pw@h:1$/);
+    expect((await provider.resolve(ctx({ country: 'GB' })))!.url).toMatch(/^http:\/\/acme-cc-GB-sid-\d+:pw@h:1$/);
+  });
+
+  test('a required placeholder without value is an error', () => {
+    expect(() => template('http://acme-{country}:pw@h:1').resolve(ctx())).toThrow('required placeholder');
+  });
+
+  test('works through XYTE_PROXY_TEMPLATE', async () => {
+    const provider = proxyFromEnv({ XYTE_PROXY_TEMPLATE: 'http://u[-{country:lower}]:p@h:1' });
+    expect((await provider.resolve(ctx({ country: 'DE' })))!.url).toBe('http://u-de:p@h:1');
+  });
+});
+
+describe('browserFromEnv', () => {
+  test('maps variables to browser options', async () => {
+    const options = browserFromEnv({
+      XYTE_BROWSER: 'patchright',
+      XYTE_BROWSER_CHANNEL: 'chrome',
+      XYTE_BROWSER_ARGS: '--a, --b',
+      XYTE_BLOCK_RESOURCES: 'image,font',
+      XYTE_BROWSER_WS: 'wss://browser.example.com?country={country:lower}&session={session}',
+    });
+    expect(options.launchOptions).toEqual({ channel: 'chrome', args: ['--a', '--b'] });
+    expect(options.blockResources).toEqual(['image', 'font']);
+    const remote = await options.connect!(ctx({ country: 'FR' }));
+    expect(remote).toEqual({ endpoint: 'wss://browser.example.com?country=fr&session=abc123def456', protocol: 'cdp' });
+    const browserType = await (options.browserType as () => Promise<unknown>)();
+    expect(typeof (browserType as { launch: unknown }).launch).toBe('function');
+  });
+
+  test('empty env means defaults', () => {
+    expect(browserFromEnv({})).toEqual({});
+  });
+});
+

@@ -1,5 +1,18 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": { "isolatedDeclarations": false, "declaration": false },
-  "include": [".", "../src", "../tsdown.config.ts"]
+  "compilerOptions": {
+    "isolatedDeclarations": false,
+    "declaration": false,
+    "paths": {
+      "xyte": [
+        "../src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    ".",
+    "../src",
+    "../examples",
+    "../tsdown.config.ts"
+  ]
 }

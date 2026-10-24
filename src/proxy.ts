@@ -87,6 +87,60 @@ export function custom(
   };
 }
 
+/**
+ * Any provider, from its URL format. Placeholders:
+ *
+ * - `{country}` / `{country:lower}`: ISO-2 country from `geolocation`
+ * - `{session}` / `{session:8}`: sticky-session token (alphanumeric, given length, default 12)
+ * - `{session:number}` / `{session:number:99999}`: numeric session id (below the given max)
+ * - `{ipType}`, `{attempt}`
+ * - `{env:NAME}`: an environment variable (e.g. the password)
+ *
+ * Square brackets mark an optional part, dropped when a placeholder inside has no value (no
+ * `geolocation` on the request, say). Substituted values are URL-encoded; literal text is not.
+ *
+ *     template('http://user-{env:USER}[-country-{country:lower}]-session-{session}:{env:PASS}@gate.example.com:7000')
+ */
+export function template(format: string, options: { insecure?: boolean; name?: string } = {}): ProxyProvider {
+  const env = typeof process !== 'undefined' ? process.env : {};
+  const value = (token: string, context: ProxyContext): string | undefined => {
+    const [key = '', ...args] = token.split(':');
+    switch (key) {
+      case 'country':
+        return args[0] === 'lower' ? context.country?.toLowerCase() : context.country;
+      case 'session':
+        if (args[0] === 'number') return String(sessionNumber(context.sessionId, Number(args[1] ?? 1_000_000)));
+        return sessionToken(context.sessionId, Number(args[0] ?? 12));
+      case 'ipType':
+        return context.ipType;
+      case 'attempt':
+        return String(context.attempt);
+      case 'env':
+        return env[args.join(':')];
+      default:
+        throw new Error(`template: unknown placeholder {${token}}`);
+    }
+  };
+  const fill = (part: string, context: ProxyContext): string | undefined => {
+    let missing = false;
+    const out = part.replace(/\{([^}]+)\}/g, (_, token: string) => {
+      const v = value(token, context);
+      if (v == null || v === '') missing = true;
+      return encode(v ?? '');
+    });
+    return missing ? undefined : out;
+  };
+  return {
+    name: options.name ?? 'template',
+    resolve(context) {
+      const withOptional = format.replace(/\[([^\]]*)\]/g, (_, part: string) => fill(part, context) ?? '');
+      const url = fill(withOptional, context);
+      if (url == null) throw new Error(`template: a required placeholder has no value in ${format}`);
+      return { url, insecure: options.insecure };
+    },
+  };
+}
+
 /** Uses `datacenter` or `residential` per the request's `ipType`. */
 export function byIpType(providers: {
   datacenter?: ProxyProvider;

@@ -1,0 +1,20 @@
+# Render Blueprint: New → Blueprint → point at the repo (move this file to the repo root, or set
+# the blueprint path). Secrets marked sync: false are entered in the dashboard.
+services:
+  - type: web
+    name: xyte
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard # 2 GB RAM; use "starter" with the slim image (HTTP only)
+    healthCheckPath: /healthz
+    envVars:
+      - key: XYTE_PROVIDER
+        value: oxylabs
+      - key: XYTE_CONCURRENCY
+        value: "8"
+      - key: OXYLABS_USERNAME
+        sync: false
+      - key: OXYLABS_PASSWORD
+        sync: false
+      - key: XYTE_API_KEYS
+        sync: false

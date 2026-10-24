@@ -18,7 +18,7 @@
   "bin": {
     "xyte": "./dist/cli.mjs"
   },
-  "files": ["dist", "spec"],
+  "files": ["dist", "spec", "docs"],
   "engines": {
     "node": ">=20"
   },
@@ -27,7 +27,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
     "test": "bun test",
     "test:node": "bun run build && node --test test/node/smoke.mjs",
-    "gen:types": "bun scripts/gen-types.ts",
+    "gen:types": "bun scripts/gen-types.ts && bun scripts/coverage.ts",
+    "docs:coverage": "bun scripts/coverage.ts",
     "prepublishOnly": "bun run typecheck && bun test && bun run test:node"
   },
   "peerDependencies": {
@@ -35,11 +36,19 @@
     "undici": ">=6"
   },
   "peerDependenciesMeta": {
-    "playwright": { "optional": true },
-    "undici": { "optional": true }
+    "playwright": {
+      "optional": true
+    },
+    "undici": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
+    "@types/express": "^5.0.6",
+    "express": "^5.3.0",
+    "hono": "^4.13.13",
+    "patchright": "^1.64.1",
     "playwright": "^1.64.1",
     "tsdown": "^0.23.2",
     "typescript": "^7.0.2",
