@@ -27,6 +27,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
     "test": "bun test",
     "test:node": "bun run build && node --test test/node/smoke.mjs",
+    "test:live": "bun run build && bun scripts/live.ts",
     "gen:types": "bun scripts/gen-types.ts && bun scripts/gen-schemas.ts && bun scripts/coverage.ts",
     "docs:coverage": "bun scripts/coverage.ts",
     "prepublishOnly": "bun run typecheck && bun test && bun run test:node"
