@@ -149,7 +149,7 @@ function proxyLabel(proxy: ProxyEndpoint | null): string {
   }
 }
 
-const isRedirect = (status: number) => status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+export const isRedirect = (status: number): boolean => status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 
 function toHeaderList(headers: Headers): HttpHeader[] {
   const list: HttpHeader[] = [];

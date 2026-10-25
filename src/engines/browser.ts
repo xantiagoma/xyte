@@ -11,7 +11,7 @@ import { serverError, unsupported, XyteError } from '../errors.ts';
 import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Action, ActionResult, ActionSelector, CapturedResponse, Cookie, NetworkCaptureFilter } from '../types.ts';
 import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
-import type { EngineAttempt, EngineResult } from './http.ts';
+import { isRedirect, type EngineAttempt, type EngineResult } from './http.ts';
 
 /**
  * The part of a Playwright `BrowserType` xyte uses. Typed loosely on purpose: forks (patchright,
@@ -175,6 +175,16 @@ export class BrowserEngine {
       const page = await context.newPage();
       await this.options.onPage?.(page, info);
       const captures = captureNetwork(page, request.networkCapture);
+      // Main-document responses: the last one is the page's real answer, after a JavaScript
+      // challenge or a client-side redirect replaced the first.
+      const documents: PwResponse[] = [];
+      page.on('response', (res) => {
+        try {
+          if (res.request().isNavigationRequest() && res.frame() === page.mainFrame()) documents.push(res);
+        } catch {
+          // A service worker's response has no frame.
+        }
+      });
 
       const actions = [...(request.actions ?? [])];
       // A leading waitForNavigation configures the initial navigation (Zyte semantics).
@@ -220,11 +230,17 @@ export class BrowserEngine {
 
       if (request.includeIframes) await embedIframes(page);
       const html = truncate(await page.content());
+      const final = documents.findLast((res) => !isRedirect(res.status())) ?? mainResponse;
       const response: EngineResult['response'] = {
         url: page.url(),
-        statusCode: mainResponse?.status() ?? 200,
+        statusCode: final?.status() ?? 200,
       };
       if (request.browserHtml) response.browserHtml = html;
+      // browserFallback: an HTTP request rendered in a browser answers with the raw document.
+      if (request.httpResponseBody) {
+        const raw = await final?.body().catch(() => undefined);
+        response.httpResponseBody = toBase64(raw ?? new TextEncoder().encode(html));
+      }
       if (request.screenshot) {
         const { format = 'jpeg', fullPage = false } = request.screenshotOptions ?? {};
         response.screenshot = toBase64(await page.screenshot({ type: format, fullPage }));
@@ -232,7 +248,7 @@ export class BrowserEngine {
       if (request.actions?.length) response.actions = results;
       if (request.networkCapture?.length) response.networkCapture = await captures();
 
-      const headers = mainResponse ? await mainResponse.headersArray() : [];
+      const headers = final ? await final.headersArray() : [];
       if (request.httpResponseHeaders) response.httpResponseHeaders = headers;
 
       return { response, statusCode: response.statusCode ?? 200, headers, html };

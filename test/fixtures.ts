@@ -71,6 +71,15 @@ export function startTarget() {
         case '/spb-error':
           // ScrapingBee's own error (unresolvable domain, target 5xx): unbilled.
           return Response.json({ error: 'Error with your request', reason: 'Server responded with 613' }, { status: 500, headers: { 'spb-cost': '0' } });
+        case '/js-challenge':
+          // A JavaScript challenge: plain HTTP clients never get past the 403.
+          if (req.headers.get('cookie')?.includes('passed=1')) {
+            return new Response('<html><body><h1>real page</h1></body></html>', { headers: { 'content-type': 'text/html' } });
+          }
+          return new Response(
+            `<html><head><title>Just a moment...</title></head><body><script>document.cookie = 'passed=1; path=/'; location.reload();</script></body></html>`,
+            { status: 403, headers: { 'content-type': 'text/html' } },
+          );
         case '/api/data':
           return Response.json({ secret: 42 });
         case '/api/slow':

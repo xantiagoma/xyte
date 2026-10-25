@@ -11,7 +11,7 @@ import {
   XyteError,
 } from './errors.ts';
 import { htmlToMarkdown } from './markdown.ts';
-import { direct, isApiEndpoint, type ProxyContext, type ProxyProvider } from './proxy.ts';
+import { direct, isApiEndpoint, type AttemptOutcome, type ProxyContext, type ProxyProvider } from './proxy.ts';
 import { SessionPool, type PooledSession, type SessionPoolOptions } from './sessions.ts';
 import { defaultTransport, type Transport } from './transport.ts';
 import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
@@ -72,10 +72,31 @@ export interface XyteOptions {
   /** Called before each retry. */
   onRetry?: (info: { attempt: number; url: string; reason: string }) => void;
   /**
+   * Called after every attempt with the provider that served it (the one a combinator picked),
+   * the outcome, latency and page size: per-provider success rates and costs, in your metrics.
+   */
+  onAttempt?: (info: AttemptInfo) => void;
+  /**
+   * When a plain HTTP request (GET, no body) is banned, retry it in a browser, which gets past
+   * JavaScript challenges, and return the page's raw HTTP response as `httpResponseBody`, as
+   * Zyte does when it picks a browser itself. Needs Playwright (or `browser.connect`). Default false.
+   */
+  browserFallback?: boolean;
+  /**
    * Requests that run but not as asked, e.g. a `geolocation` the exit can't apply (`direct()`,
    * a plain proxy URL). Default: `console.warn`, once per distinct message.
    */
   onWarning?: (message: string, info: { url: string }) => void;
+}
+
+export interface AttemptInfo extends AttemptOutcome {
+  url: string;
+  /** 0 for the first try. */
+  attempt: number;
+  /** The provider that served the attempt: the leaf a combinator chose, e.g. `oxylabs-residential`. */
+  provider: string;
+  /** Rendered in a browser (requested, or `browserFallback`). */
+  browser: boolean;
 }
 
 const warned = new Set<string>();
@@ -158,6 +179,16 @@ export class Xyte {
     let lastReason = 'unknown error';
     let lastCause: unknown;
     let lastWasBan = false;
+    const requestId = randomSessionId();
+    // browserFallback: after a ban, a plain GET goes on in a browser.
+    let inBrowser = plan.browser;
+    const canEscalate =
+      this.options.browserFallback === true &&
+      !plan.browser &&
+      (request.httpRequestMethod ?? 'GET') === 'GET' &&
+      request.httpRequestBody == null &&
+      request.httpRequestText == null &&
+      request.followRedirect !== false;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       if (attempt > 0) {
@@ -169,18 +200,24 @@ export class Xyte {
       // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
       const pooled = poolKey ? this.pool.acquire(poolKey, failedSessions) : undefined;
       let outcome: 'ok' | 'ban' = 'ban';
+      const started = Date.now();
+      const escalated = inBrowser && !plan.browser;
+      const context: ProxyContext = {
+        url: new URL(request.url),
+        country,
+        ipType: request.ipType,
+        sessionId: pooled?.id ?? pinnedSession ?? randomSessionId(),
+        attempt,
+        browser: inBrowser,
+        requestId,
+        path: [],
+      };
+      // The attempt's verdict on the provider, reported in the finally below.
+      let verdict: Omit<AttemptOutcome, 'ms'> = { result: 'aborted' };
+      let resolved = false;
       try {
-        const sessionId = pooled?.id ?? pinnedSession ?? randomSessionId();
         const timeout = AbortSignal.timeout(this.timeoutMs);
         const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout;
-        const context: ProxyContext = {
-          url: new URL(request.url),
-          country,
-          ipType: request.ipType,
-          sessionId,
-          attempt,
-          browser: plan.browser,
-        };
 
         let jar: CookieJar;
         let result: EngineResult;
@@ -195,10 +232,13 @@ export class Xyte {
             });
           }
           jar = pooled ? new CookieJar(pooled.jar.all()) : this.jarFor(request, pinnedSession);
+          resolved = true;
           const endpoint = await Promise.resolve()
             .then(() => this.proxy.resolve(context))
             .catch((error: unknown) => {
-              // A provider that can't build its endpoint is misconfigured; retrying won't help.
+              // A provider's own answer (a spent budget's 429) as is; anything else means it is
+              // misconfigured, and retrying won't help.
+              if (error instanceof XyteError) throw error;
               throw serverError(`proxy provider "${this.proxy.name}" failed: ${describe(error)}`, error);
             });
           direct = endpoint == null;
@@ -215,9 +255,16 @@ export class Xyte {
             trusted = answer.trusted === true;
           } else {
             const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal };
-            result = plan.browser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
+            result = inBrowser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
           }
         } catch (error) {
+          if (escalated && error instanceof XyteError && error.status === 500) {
+            // No browser to fall back to (Playwright missing): go on over HTTP.
+            warn(`browserFallback skipped: ${error.detail ?? error.message}`);
+            inBrowser = false;
+            lastReason = 'ban detected; no browser for browserFallback';
+            continue;
+          }
           if (error instanceof XyteError) throw error;
           if (cancel?.aborted) throw cancel.reason;
           const classified = classifyError(error, { direct, host: context.url.hostname });
@@ -226,18 +273,25 @@ export class Xyte {
           }
           lastReason = describe(error);
           lastCause = error;
-          lastWasBan = false;
+          // An upstream API's ban (Zyte's /download/website-ban) is a ban, not a provider failure.
+          lastWasBan = error instanceof UpstreamProblem && error.problem.type.includes('ban');
+          verdict = { result: lastWasBan ? 'ban' : 'error', reason: lastReason };
           continue;
         }
 
+        const page = { statusCode: result.statusCode, bytes: result.html ? new TextEncoder().encode(result.html).byteLength : undefined };
+
         if (!trusted && this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
-          lastReason = `ban detected (HTTP ${result.statusCode})`;
+          lastReason = `ban detected (HTTP ${result.statusCode})${escalated ? ' in the browser' : ''}`;
           lastCause = undefined;
           lastWasBan = true;
+          verdict = { result: 'ban', reason: lastReason, ...page };
+          if (canEscalate) inBrowser = true;
           continue;
         }
 
         outcome = 'ok';
+        verdict = { result: 'ok', ...page };
         // Merge, not replace: parallel requests on one session each add their cookies.
         if (pooled) pooled.jar.merge(jar);
         else if (pinnedSession) this.rememberSession(pinnedSession, jar);
@@ -246,6 +300,17 @@ export class Xyte {
         if (pooled) {
           this.pool.release(pooled, outcome);
           if (outcome === 'ban') failedSessions.add(pooled.id);
+        }
+        if (resolved) {
+          const report: AttemptOutcome = { ...verdict, ms: Date.now() - started };
+          this.proxy.report?.(context, report);
+          this.options.onAttempt?.({
+            ...report,
+            url: request.url,
+            attempt,
+            provider: context.path?.at(-1) ?? this.proxy.name,
+            browser: context.browser,
+          });
         }
       }
     }
@@ -270,17 +335,26 @@ export class Xyte {
   ): Promise<void> {
     const actions = request.sessionContextParameters?.actions;
     if (!actions?.length) return;
-    const initContext = { ...context, browser: true };
-    const proxy = await this.proxy.resolve(initContext);
-    // A scraping API keeps its own sessions; there is no local browser to initialize.
-    if (isApiEndpoint(proxy)) return;
-    await this.browser.run({
-      request: { url: request.url, browserHtml: true, actions, device: request.device },
-      context: initContext,
-      proxy,
-      jar: session.jar,
-      signal,
-    });
+    // Its own request id: the init's resolve is reported apart from the attempt's.
+    const initContext = { ...context, browser: true, requestId: `${context.requestId}:init`, path: [] };
+    const started = Date.now();
+    let result: AttemptOutcome['result'] = 'aborted';
+    try {
+      const proxy = await this.proxy.resolve(initContext);
+      // A scraping API keeps its own sessions; there is no local browser to initialize.
+      if (isApiEndpoint(proxy)) return;
+      result = 'error';
+      await this.browser.run({
+        request: { url: request.url, browserHtml: true, actions, device: request.device },
+        context: initContext,
+        proxy,
+        jar: session.jar,
+        signal,
+      });
+      result = 'ok';
+    } finally {
+      this.proxy.report?.(initContext, { result, ms: Date.now() - started });
+    }
   }
 
   /** Mirrors Zyte's request validation, and decides HTTP vs browser. */

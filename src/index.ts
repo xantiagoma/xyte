@@ -2,6 +2,7 @@ export {
   createXyte,
   isLikelyBan,
   Xyte,
+  type AttemptInfo,
   type BanCheck,
   type ExtractOptions,
   type Extractor,
@@ -11,8 +12,22 @@ export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } 
 export { browserFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv } from './env.ts';
 export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
 export {
-  brightData,
+  adaptive,
+  budget,
+  byCountry,
   byIpType,
+  byKind,
+  healthy,
+  rotate,
+  route,
+  weighted,
+  type AdaptiveOptions,
+  type AdaptiveProvider,
+  type BudgetOptions,
+  type HealthyOptions,
+} from './combinators.ts';
+export {
+  brightData,
   custom,
   decodo,
   direct,
@@ -20,8 +35,6 @@ export {
   oxylabs,
   proxyEndpointUrl,
   proxyUrl,
-  rotate,
-  route,
   scraperApi,
   scrapingBee,
   smartproxy,
@@ -29,6 +42,7 @@ export {
   zenrows,
   type ApiEndpoint,
   type ApiResult,
+  type AttemptOutcome,
   type EndpointOf,
   type ProxyContext,
   type ProxyEndpoint,

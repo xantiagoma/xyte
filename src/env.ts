@@ -5,8 +5,6 @@ import {
   iproyal,
   oxylabs,
   proxyUrl,
-  rotate,
-  route,
   scraperApi,
   scrapingBee,
   template,
@@ -14,6 +12,7 @@ import {
   type ProxyProvider,
 } from './proxy.ts';
 import type { Extractor } from './client.ts';
+import { adaptive, budget, byKind, healthy, rotate, route, type BudgetOptions } from './combinators.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
 import type { ExtractionField } from './types.ts';
@@ -120,24 +119,34 @@ const REMOTE_BROWSERS: Record<string, (env: Env) => NonNullable<BrowserOptions['
  *   `http://user-{env:MY_USER}[-country-{country:lower}]-session-{session}:{env:MY_PASS}@host:7000`, or
  * - `XYTE_PROVIDER`: one or more provider names, comma-separated (a retry moves to the next one),
  *   each with its credentials (`OXYLABS_USERNAME`, `ZENROWS_API_KEY`, …). See `PROVIDER_NAMES` and
- *   docs/providers.md.
+ *   docs/providers.md, or
+ * - `XYTE_ADAPTIVE`: provider names, cheapest first, for `adaptive()`.
  *
- * Neither set: no proxy.
+ * Neither set: no proxy. On top of that:
+ *
+ * - `XYTE_ROUTES=doordash.com=zyte-api,wolt.com=direct,restaurantguru.com=oxylabs+zyte-api`: a
+ *   provider per site (`route()`), `+` rotating; other sites use the above.
+ * - `XYTE_BROWSER_PROVIDER`: provider names for browser renders (`byKind()`).
+ * - `XYTE_CIRCUIT_BREAKER=5,60`: wraps every named provider in `healthy()` (failures, cooldown s).
+ * - `XYTE_BUDGET=zyte-api=500/hour,scrapingbee=1000/day`: wraps those providers in `budget()`.
+ *
+ * A provider named in several places is one instance, so its budget and circuit are shared.
  */
 export function proxyFromEnv(env: Env = process.env): ProxyProvider {
-  const fallback = baseProxyFromEnv(env);
-  if (!env.XYTE_ROUTES) return fallback;
-  // XYTE_ROUTES=doordash.com=zyte-api,wolt.com=direct,restaurantguru.com=oxylabs+zyte-api
+  const named = namedProviders(env);
+  let provider = baseProxyFromEnv(env, named);
+  if (env.XYTE_BROWSER_PROVIDER) provider = byKind({ http: provider, browser: named.chain(list(env.XYTE_BROWSER_PROVIDER)) });
+  if (!env.XYTE_ROUTES) return provider;
   const routes: Record<string, ProxyProvider> = {};
   for (const entry of list(env.XYTE_ROUTES)) {
     const [host, names] = entry.split('=').map((part) => part.trim());
     if (!host || !names) throw new Error(`xyte: XYTE_ROUTES entry "${entry}" is not host=provider`);
-    routes[host] = providerChain(names.split('+'), env);
+    routes[host] = named.chain(names.split('+'));
   }
-  return route(routes, fallback);
+  return route(routes, provider);
 }
 
-function baseProxyFromEnv(env: Env): ProxyProvider {
+function baseProxyFromEnv(env: Env, named: NamedProviders): ProxyProvider {
   if (env.XYTE_PROXY_TEMPLATE) {
     return template(env.XYTE_PROXY_TEMPLATE, { insecure: env.XYTE_PROXY_INSECURE === 'true' });
   }
@@ -147,20 +156,51 @@ function baseProxyFromEnv(env: Env): ProxyProvider {
       { insecure: env.XYTE_PROXY_INSECURE === 'true' },
     );
   }
-  return providerChain(list(env.XYTE_PROVIDER), env);
+  if (env.XYTE_ADAPTIVE) return adaptive(list(env.XYTE_ADAPTIVE).map((name) => named.get(name)));
+  return named.chain(list(env.XYTE_PROVIDER));
 }
 
-/** Provider names (`XYTE_PROVIDER` names, or `direct`), rotated across attempts when several. */
-function providerChain(names: readonly string[], env: Env): ProxyProvider {
-  if (names.length === 0) return direct();
-  const providers = names.map((raw) => {
+interface NamedProviders {
+  get(name: string): ProxyProvider;
+  /** Several names rotate across attempts. */
+  chain(names: readonly string[]): ProxyProvider;
+}
+
+/** Providers by name (`XYTE_PROVIDER` names, or `direct`), one instance each, with budgets and breakers applied. */
+function namedProviders(env: Env): NamedProviders {
+  const budgets = new Map<string, BudgetOptions>();
+  for (const entry of list(env.XYTE_BUDGET)) {
+    const match = /^([\w-]+)=(\d+)\/(minute|hour|day|\d+)$/.exec(entry.replace(/\s+/g, ''));
+    if (!match) throw new Error(`xyte: XYTE_BUDGET entry "${entry}" is not provider=max/minute|hour|day|seconds`);
+    const per = /^\d+$/.test(match[3]!) ? Number(match[3]) : (match[3] as 'minute' | 'hour' | 'day');
+    budgets.set(match[1]!.toLowerCase(), { max: Number(match[2]), per });
+  }
+  const [failures, cooldown] = list(env.XYTE_CIRCUIT_BREAKER).map(Number);
+  const cache = new Map<string, ProxyProvider>();
+  const get = (raw: string): ProxyProvider => {
     const name = raw.trim().toLowerCase();
-    if (name === 'direct') return direct();
-    const make = PROVIDERS[name];
-    if (!make) throw new Error(`xyte: unknown provider "${name}" (one of direct, ${Object.keys(PROVIDERS).join(', ')})`);
-    return make(env);
-  });
-  return providers.length === 1 ? providers[0]! : rotate(providers);
+    let provider = cache.get(name);
+    if (provider) return provider;
+    if (name === 'direct') provider = direct();
+    else {
+      const make = PROVIDERS[name];
+      if (!make) throw new Error(`xyte: unknown provider "${name}" (one of direct, ${Object.keys(PROVIDERS).join(', ')})`);
+      provider = make(env);
+    }
+    const limit = budgets.get(name);
+    if (limit) provider = budget(provider, limit);
+    if (failures && name !== 'direct') provider = healthy(provider, { failures, cooldown });
+    cache.set(name, provider);
+    return provider;
+  };
+  return {
+    get,
+    chain(names) {
+      if (names.length === 0) return get('direct');
+      const providers = names.map(get);
+      return providers.length === 1 ? providers[0]! : rotate(providers);
+    },
+  };
 }
 
 const list = (value: string | undefined) => (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);

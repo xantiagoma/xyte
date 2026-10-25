@@ -185,3 +185,23 @@ const mine: ProxyProvider = {
 
 `resolve` may be async: fetch a proxy from a pool API, skip a provider that's out of credit, or
 return `null` to go direct. It can also return an `ApiEndpoint` (see above).
+
+Two optional methods let a provider take part in the [combinators](routing.md):
+
+```ts
+const pooled: ProxyProvider = {
+  name: 'pool',
+  resolve: (context) => ({ url: pool.next() }),
+  // False while it shouldn't be used: rotate(), route(), weighted() and adaptive() skip it.
+  available: (context) => pool.size > 0,
+  // How each attempt it served went: 'ok' | 'ban' | 'error' | 'aborted', with ms, statusCode, bytes.
+  report: (context, outcome) => {
+    if (outcome.result === 'ban') pool.retire(context.sessionId);
+  },
+};
+```
+
+Endpoints can also set `appliesCountry: false` (the exit ignores `geolocation`, so requests get a
+warning), and scraping APIs in proxy mode `inspect` (read the final URL or the API's own errors
+from its response headers) and `hiddenHeaders` (drop its bookkeeping headers from
+`httpResponseHeaders`); see `scrapingBee()` in `src/proxy.ts`.

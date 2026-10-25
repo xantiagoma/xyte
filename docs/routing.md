@@ -8,10 +8,23 @@ Your calling code doesn't change; only the `proxy` option (or `XYTE_PROVIDER` / 
 | --- | --- | --- |
 | [`rotate([a, b, …])`](#rotate-fall-back-on-retries) | the attempt number | fall back to another provider after a ban or an outage |
 | [`route({ host: p }, fallback)`](#route-a-provider-per-site) | the target's host | the cheapest exit that works on each site |
+| [`adaptive([cheap, …, expensive])`](#adaptive-learn-the-cheapest-provider-per-site) | what worked on the site lately | `route()` without maintaining it: learns per site, follows changes |
+| [`byKind({ http, browser })`](#bykind-http-or-browser) | HTTP request or browser render | per-request APIs for HTTP, per-GB proxies for renders |
+| [`byCountry({ US: p }, fallback)`](#bycountry-by-geolocation) | the request's `geolocation` | the network that's best (or cheapest) in each country |
 | [`byIpType({ datacenter, residential })`](#byiptype-datacenter-or-residential) | the request's `ipType` | cheap datacenter IPs unless a request asks for residential |
+| [`weighted([[a, 9], [b, 1]])`](#weighted-split-traffic) | a weighted draw per request | trying a new provider on a share of traffic |
 | [`custom(name, ctx => …)`](providers.md#writing-a-provider) | anything in the context | your own rules |
 
-They nest: a `route` can send a site to a `rotate`, which can include `zyteApi()`.
+And two wrappers that guard a provider wherever it's used:
+
+| Wrapper | Does | Typical use |
+| --- | --- | --- |
+| [`healthy(p, { failures, cooldown })`](#healthy-a-circuit-breaker) | takes `p` out for a while after repeated proxy failures | an outage costs no attempts, not one per request |
+| [`budget(p, { max, per })`](#budget-cap-what-a-provider-can-spend) | caps the attempts `p` gets per time window | a Zyte fallback that can't run up the bill |
+
+They all nest: a `route` can send a site to a `rotate` of a `healthy` proxy and a `budget`ed
+`zyteApi()`. [`onAttempt`](#watching-what-happens-onattempt) shows which provider served each
+attempt and how it went.
 
 ## How attempts work
 
@@ -34,6 +47,22 @@ Each attempt asks the provider for an exit with a context: the target URL, the c
 
 What isn't retried: a target's own 4xx/5xx other than the ban statuses (returned in `statusCode`,
 as on Zyte), invalid requests (400/422), and configuration errors (500).
+
+After each attempt the client tells the provider how it went (`ok`, `ban`, `error`, or `aborted`
+when the attempt says nothing about the provider), and combinators pass that on to the child
+they chose. That's what `adaptive`, `healthy` and `budget` learn from; your own providers can
+implement `report()` and `available()` too ([writing a provider](providers.md#writing-a-provider)).
+
+### `browserFallback`: retry a banned page in a browser
+
+`new Xyte({ browserFallback: true })` (env `XYTE_BROWSER_FALLBACK=true`): when a plain HTTP request
+(a GET with no body) is banned, the remaining attempts render it in a browser, which runs
+JavaScript challenges, and return the page's raw HTTP response as `httpResponseBody`, the same
+shape as before. That is what Zyte does when it decides a site needs a browser. It gets past
+challenges that only check for JavaScript; it doesn't help when the site blocks the IP itself
+(Restaurant Guru and yelp.com block a home IP even in a stealth browser): that takes another exit.
+The browser attempts tell providers `browser: true`, so `byKind()` sends them to its browser
+provider.
 
 ## `rotate()`: fall back on retries
 
@@ -90,6 +119,103 @@ the median latency and the page size.
 `direct()` from your laptop is not `direct()` from a cloud host. At home or in an office it exits
 from a residential-looking IP; on Cloud Run or Fly it exits from a datacenter IP, which more sites
 block. Benchmark from where you deploy.
+
+## `adaptive()`: learn the cheapest provider per site
+
+```ts
+const smart = adaptive([direct(), oxylabs({ username, password }), zyteApi({ apiKey })]);
+new Xyte({ proxy: smart });
+smart.scores(); // { 'wolt.com': { direct: 1 }, 'doordash.com': { direct: 0.41, 'oxylabs-residential': 0.33, 'zyte-api': 1 } }
+```
+
+`route()` that maintains itself. List providers cheapest first. For each site (the host without
+`www.`), every provider has a success score that starts at 1 and follows outcomes: an `ok` moves
+it up, a ban or an error moves it down (`learningRate`, default 0.2, so about four failures in a
+row take a fresh score below the threshold). Each request starts at the first provider whose score
+on that site is at least `minSuccess` (default 0.5); a retry moves to the next one up. A share of
+requests (`explore`, default 5%) starts at a cheaper provider again, so when a site stops blocking
+it, traffic moves back down.
+
+What it costs: until it has learned a site, requests try the cheap providers first and spend
+attempts on bans (raise `retries` so the expensive end is still reachable). Scores live in
+memory, per process: each instance learns on its own, and a restart starts over.
+
+From env: `XYTE_ADAPTIVE=direct,oxylabs,zyte-api` (instead of `XYTE_PROVIDER`).
+
+## `byKind()`: HTTP or browser
+
+```ts
+byKind({ http: scrapingBee({ apiKey }), browser: oxylabs({ username, password }) });
+```
+
+Scraping APIs bill every request, and a browser render makes dozens (scripts, images, XHR);
+residential proxies bill per GB. This sends plain HTTP requests to one and renders to the other.
+From env: `XYTE_BROWSER_PROVIDER=oxylabs` (renders), with `XYTE_PROVIDER` for HTTP.
+
+## `byCountry()`: by geolocation
+
+```ts
+byCountry({ US: oxylabs({ username, password }), FI: direct() }, decodo({ username, password }));
+```
+
+Picks by the request's `geolocation` (ISO 3166-1 alpha-2, case-insensitive); requests without one,
+or for other countries, use the fallback.
+
+## `weighted()`: split traffic
+
+```ts
+weighted([[oxylabs({ username, password }), 9], [decodo({ username, password }), 1]]);
+```
+
+Each request draws once (from its id, so all its attempts agree); a retry moves on to the next
+provider in the list. With `onAttempt` feeding your metrics, it's an A/B test of providers on real
+traffic.
+
+## `healthy()`: a circuit breaker
+
+```ts
+rotate([healthy(oxylabs({ username, password }), { failures: 5, cooldown: 60 }), zyteApi({ apiKey })]);
+```
+
+After `failures` consecutive proxy or network errors (rejected logins, an unreachable gateway,
+timeouts), the provider is unavailable for `cooldown` seconds and `rotate()`, `route()`,
+`weighted()` and `adaptive()` go straight past it. Without it, a provider that is down costs one
+attempt per request. After the cooldown, one attempt is let through: success closes the circuit,
+a failure reopens it. Bans don't count (the provider works; the site blocked an IP). Used alone,
+an open circuit doesn't block anything, since there's nothing to fall back to. `onChange(open)`
+reports transitions.
+
+From env: `XYTE_CIRCUIT_BREAKER=5,60` wraps every provider named in `XYTE_PROVIDER`,
+`XYTE_ROUTES`, `XYTE_ADAPTIVE` and `XYTE_BROWSER_PROVIDER`.
+
+## `budget()`: cap what a provider can spend
+
+```ts
+rotate([residential, budget(zyteApi({ apiKey }), { max: 500, per: 'hour' })]);
+```
+
+At most `max` attempts per window (`per`: seconds, or `'minute'`, `'hour'`, `'day'`), counted when
+an attempt goes out; attempts that failed at the network level are given back. Once spent,
+combinators skip it. Used alone (or when every provider of a `rotate` is spent), requests fail with
+**429** `/limits/over-user-limit`, which `error.retryable` marks for a later retry. The window is
+per process.
+
+From env: `XYTE_BUDGET=zyte-api=500/hour,scrapingbee=1000/day`. A provider named in several env
+variables is one instance, so its budget is shared.
+
+## Watching what happens: `onAttempt`
+
+```ts
+new Xyte({
+  proxy,
+  onAttempt: ({ provider, result, ms, bytes, url, attempt, browser }) =>
+    metrics.increment('scrape.attempt', { provider, result, host: new URL(url).hostname }),
+});
+```
+
+Called after every attempt with the provider that served it (the leaf a combinator picked, e.g.
+`oxylabs-residential`, not `rotate(…)`), the result, latency, status and page size. Success rates
+per provider and site, and what each provider costs you, come from there.
 
 ## `byIpType()`: datacenter or residential
 

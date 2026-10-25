@@ -151,7 +151,19 @@ const xyte = new Xyte({
   A fallback after a ban, or when a provider is down. Env: `XYTE_PROVIDER=oxylabs,zyte-api`.
 - **`route({ host: provider }, fallback)`** picks by the target's host (subdomains included).
   Env: `XYTE_ROUTES=wolt.com=direct,doordash.com=zyte-api,restaurantguru.com=oxylabs+zyte-api`.
-- **`byIpType({ datacenter, residential })`** picks by the request's `ipType`.
+- **`adaptive([direct(), residential, zyte])`** learns it instead: per site, the cheapest
+  provider that has been working, moving up after bans and back down when they stop.
+  Env: `XYTE_ADAPTIVE=direct,oxylabs,zyte-api`.
+- **`byKind({ http, browser })`**, **`byCountry({ US: p }, fallback)`**,
+  **`byIpType({ datacenter, residential })`** pick by request kind, `geolocation`, `ipType`;
+  **`weighted([[a, 9], [b, 1]])`** splits traffic.
+- **`healthy(p)`** is a circuit breaker (a provider that keeps failing is skipped for a while
+  instead of costing an attempt per request), **`budget(p, { max: 500, per: 'hour' })`** caps what
+  a provider (say, the Zyte fallback) can spend.
+
+`onAttempt` reports which provider served each attempt and how it went, for your metrics, and
+`browserFallback: true` retries a banned plain GET in a browser (JavaScript challenges), returning
+the raw response as Zyte does.
 
 **Zyte as a provider.** `zyteApi({ apiKey })` forwards the request to Zyte unchanged, so every
 Zyte feature works, AI extraction included, and Zyte's answers (and errors) come back as Zyte

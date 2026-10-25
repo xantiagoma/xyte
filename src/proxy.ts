@@ -19,6 +19,26 @@ export interface ProxyContext {
   attempt: number;
   /** The attempt renders in a browser (every page sub-request goes through the proxy). */
   browser: boolean;
+  /** Unique per `extract()` call: combinators use it to tell attempts of one request apart. */
+  requestId?: string;
+  /** Providers chosen so far by combinators, outermost first; the last is the one that served. */
+  path?: string[];
+}
+
+/** How an attempt went, reported to the provider that served it (and to `onAttempt`). */
+export interface AttemptOutcome {
+  /**
+   * `ok`: the page came back (a target's own 404 included). `ban`: a ban or challenge page.
+   * `error`: the proxy or network failed. `aborted`: no verdict on the provider (an invalid
+   * request, a cancelled call, another attempt's failure).
+   */
+  result: 'ok' | 'ban' | 'error' | 'aborted';
+  /** Milliseconds the attempt took. */
+  ms: number;
+  statusCode?: number;
+  /** Size of the page that came back (decoded body or browser HTML), not of the transfer. */
+  bytes?: number;
+  reason?: string;
 }
 
 export interface ProxyEndpoint {
@@ -80,11 +100,17 @@ export interface ProxyProvider<E extends ProxyEndpoint | ApiEndpoint = ProxyEndp
   readonly extracts?: boolean;
   /** The proxy (or API) for this attempt, or null to connect directly. */
   resolve(context: ProxyContext): E | null | Promise<E | null>;
+  /**
+   * False while the provider shouldn't be used (an open circuit, a spent budget): combinators
+   * skip it. Omitted means always available.
+   */
+  available?(context: ProxyContext): boolean;
+  /** How an attempt this provider resolved went. Combinators forward it to the child they chose. */
+  report?(context: ProxyContext, outcome: AttemptOutcome): void;
 }
 
 /** The endpoint type a provider resolves to. */
 export type EndpointOf<P> = P extends ProxyProvider<infer E> ? E : never;
-type Resolved<E extends ProxyEndpoint | ApiEndpoint> = ReturnType<ProxyProvider<E>['resolve']>;
 
 export const isApiEndpoint = (endpoint: ProxyEndpoint | ApiEndpoint | null): endpoint is ApiEndpoint =>
   endpoint != null && 'api' in endpoint;
@@ -195,61 +221,6 @@ export function template(format: string, options: { insecure?: boolean; name?: s
       if (url == null) throw new Error(`template: a required placeholder has no value in ${format}`);
       return { url, insecure: options.insecure, appliesCountry: format.includes('{country') };
     },
-  };
-}
-
-/** Uses `datacenter` or `residential` per the request's `ipType`. */
-export function byIpType<E extends ProxyEndpoint | ApiEndpoint>(providers: {
-  datacenter?: ProxyProvider<E>;
-  residential?: ProxyProvider<E>;
-  /** When the request sets no `ipType`. Default: `datacenter` if given, else `residential`. */
-  default?: 'datacenter' | 'residential';
-}): ProxyProvider<E> {
-  const fallback = providers.default ?? (providers.datacenter ? 'datacenter' : 'residential');
-  return {
-    name: 'byIpType',
-    resolve(context) {
-      const type = context.ipType ?? fallback;
-      const provider = providers[type] ?? providers[type === 'datacenter' ? 'residential' : 'datacenter'];
-      if (!provider) throw new Error('byIpType: no provider configured');
-      return provider.resolve({ ...context, ipType: type });
-    },
-  };
-}
-
-/**
- * Tries providers in order across attempts: attempt 0 → first, attempt 1 → second… and wraps.
- * A provider outage (e.g. a 407 on every request) then costs one attempt, not the request.
- */
-export function rotate<P extends ProxyProvider>(providers: readonly P[]): ProxyProvider<EndpointOf<P>> {
-  if (providers.length === 0) throw new Error('rotate: at least one provider is required');
-  return {
-    name: `rotate(${providers.map((p) => p.name).join(',')})`,
-    extracts: providers.some((p) => p.extracts),
-    resolve: (context) => providers[context.attempt % providers.length]!.resolve(context) as Resolved<EndpointOf<P>>,
-  };
-}
-
-/**
- * Picks the provider by the target's host, so each site gets the cheapest exit that works on it:
- * `route({ 'doordash.com': zyteApi(…), 'wolt.com': direct() }, residential)`. A key matches the
- * host and its subdomains (`doordash.com` matches `www.doordash.com`); the longest match wins.
- * Every attempt of a request, retries included, stays on its route: nest `rotate()` inside a
- * route for a fallback.
- */
-export function route<R extends Readonly<Record<string, ProxyProvider>>, F extends ProxyProvider>(
-  routes: R,
-  fallback: F,
-): ProxyProvider<EndpointOf<R[keyof R] | F>> {
-  const entries = Object.entries(routes)
-    .map(([host, provider]) => [host.toLowerCase().replace(/^\*?\./, ''), provider] as const)
-    .sort(([a], [b]) => b.length - a.length);
-  const pick = (hostname: string): ProxyProvider =>
-    entries.find(([host]) => hostname === host || hostname.endsWith(`.${host}`))?.[1] ?? fallback;
-  return {
-    name: `route(${[...entries.map(([host, p]) => `${host}→${p.name}`), `*→${fallback.name}`].join(',')})`,
-    extracts: entries.some(([, p]) => p.extracts) || fallback.extracts,
-    resolve: (context) => pick(context.url.hostname.toLowerCase()).resolve(context) as Resolved<EndpointOf<R[keyof R] | F>>,
   };
 }
 

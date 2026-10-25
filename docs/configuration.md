@@ -18,6 +18,8 @@ your own code), the server handler options, and the CLI.
 | `sessions` | `{ size: 8, maxAge: 14400, maxBans: 3 }` | The `sessionContext` pool: sessions per context, seconds before retiring one, bans before retiring one. |
 | `transport` | `fetch` (Bun) / undici (Node) | Low-level HTTP sender, for logging or tests. |
 | `onRetry` | none | `({ attempt, url, reason }) => void`, called before each retry. |
+| `onAttempt` | none | `({ provider, result, ms, statusCode, bytes, url, attempt, browser }) => void` after every attempt; `provider` is the one a combinator picked. See [routing](routing.md#watching-what-happens-onattempt). |
+| `browserFallback` | `false` | Retry a banned plain GET in a browser and return its raw response as `httpResponseBody`. See [routing](routing.md#browserfallback-retry-a-banned-page-in-a-browser). |
 | `onWarning` | `console.warn`, once per message | `(message, { url }) => void`: requests that run, but not as asked (a `geolocation` the exit can't apply). |
 
 `extract(request, { signal, onWarning })` takes an `AbortSignal` that cancels every attempt, and a
@@ -49,9 +51,14 @@ Checked in this order; the first one set wins.
 | `XYTE_PROXY_URL` | `http://u:p@host:port,http://u:p@host2:port` | Plain proxies, rotated across attempts. Can't apply `geolocation`. |
 | `XYTE_PROVIDER` | `oxylabs` or `oxylabs,zyte-api` | Presets by name, rotated across attempts. Each reads its credentials (`OXYLABS_USERNAME`, `ZYTE_API_KEY`…; the full list is in [providers](providers.md)). |
 | `XYTE_PROXY_INSECURE` | `true` | Skip TLS verification for `XYTE_PROXY_URL` / `XYTE_PROXY_TEMPLATE` (proxies that re-sign TLS). |
+| `XYTE_ADAPTIVE` | `direct,oxylabs,zyte-api` | Instead of `XYTE_PROVIDER`: [`adaptive()`](routing.md#adaptive-learn-the-cheapest-provider-per-site) over these, cheapest first. |
 | `XYTE_ROUTES` | `wolt.com=direct,doordash.com=zyte-api,restaurantguru.com=oxylabs+zyte-api` | A provider per site; everything else uses the above. `+` rotates. See [routing](routing.md#route-a-provider-per-site). |
+| `XYTE_BROWSER_PROVIDER` | `oxylabs` | Browser renders go here, HTTP requests to the above ([`byKind()`](routing.md#bykind-http-or-browser)). |
+| `XYTE_CIRCUIT_BREAKER` | `5,60` | Every named provider gets a [circuit breaker](routing.md#healthy-a-circuit-breaker): failures, cooldown seconds. |
+| `XYTE_BUDGET` | `zyte-api=500/hour,scrapingbee=1000/day` | [Attempt caps](routing.md#budget-cap-what-a-provider-can-spend) per provider (`minute`, `hour`, `day` or seconds). |
 
-None set: `direct()`.
+None set: `direct()`. A provider named in several of these is one instance: its budget and circuit
+are shared.
 
 ### Browser
 
@@ -66,6 +73,7 @@ None set: `direct()`.
 | `XYTE_BLOCK_RESOURCES` | none | Resource types to abort, e.g. `image,media,font` (saves per-GB proxy traffic). |
 | `XYTE_BROWSER_TIME_LIMIT` | `60` | Browser seconds per request. |
 | `XYTE_BROWSER_SETTLE` | `3` | Seconds to wait for the network to go quiet after load and actions; `0` to skip. |
+| `XYTE_BROWSER_FALLBACK` | `false` | `true`: retry a banned plain GET in the browser (`browserFallback`). |
 
 ### AI extraction
 

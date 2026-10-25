@@ -19,6 +19,10 @@ Proxy (environment):
   XYTE_PROVIDER=oxylabs|brightdata|decodo|iproyal|zenrows|scrapingbee|scraperapi[,…]
     with its credentials, e.g. OXYLABS_USERNAME / OXYLABS_PASSWORD, ZENROWS_API_KEY
   XYTE_ROUTES=wolt.com=direct,doordash.com=zyte-api,…   a provider per site (+ rotates: oxylabs+zyte-api)
+  XYTE_ADAPTIVE=direct,oxylabs,zyte-api          learn per site the cheapest provider that works
+  XYTE_BROWSER_PROVIDER=oxylabs                  a different provider for browser renders
+  XYTE_CIRCUIT_BREAKER=5,60                      skip a provider for 60 s after 5 straight failures
+  XYTE_BUDGET=zyte-api=500/hour                  cap attempts per provider (then 429 / skipped)
   XYTE_API_KEYS=key1,key2   accepted keys for "serve" (required off-loopback, unless XYTE_ALLOW_ANONYMOUS=true)
   XYTE_ALLOW_PRIVATE_TARGETS=true   let "serve" fetch localhost / private IPs (blocked by default)
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY
@@ -28,6 +32,7 @@ Browser (environment):
   XYTE_BROWSER_WS=wss://…{country:lower}…       remote browser per request (CDP)
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
+  XYTE_BROWSER_FALLBACK=true                     retry a banned plain GET in the browser
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
 
 AI extraction (product, article, customAttributes…) via any OpenAI-compatible API:
@@ -57,6 +62,7 @@ const xyte = new Xyte({
   retries: num(env.XYTE_RETRIES),
   timeout: num(env.XYTE_TIMEOUT),
   concurrency: num(env.XYTE_CONCURRENCY),
+  browserFallback: env.XYTE_BROWSER_FALLBACK === 'true',
   onRetry: ({ attempt, url, reason }) => console.error(`[xyte] retry ${attempt} ${url}: ${reason}`),
 });
 
