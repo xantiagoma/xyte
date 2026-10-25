@@ -252,9 +252,10 @@ ZenRows, ScraperAPI, Zyte, IPRoyal, Webshare; Oxylabs with `OXYLABS_LIMIT_GB`, a
 
 ## Shared state across instances (Redis)
 
-`budget()`, `healthy()` and `watch()` keep their state in the process by default: with several
-instances (Cloud Run scales out), each has its own budget and its own circuits. Pass a shared
-`StateStore` and they share it:
+`budget()`, `healthy()`, `watch()`, `adaptive()`, the `sessionContext` pool and the response cache
+keep their state in the process by default: with several instances (Cloud Run scales out), each
+has its own budget, circuits, learned scores and sessions. Pass a shared `StateStore` and they
+share it:
 
 ```ts
 import { budget, healthy, redisStore, redisStoreFromUrl, watch } from 'xyte';
@@ -265,6 +266,8 @@ const store = redisStoreFromUrl(process.env.REDIS_URL!); // Bun's client, else i
 budget(zyte, { max: 500, per: 'hour', store });          // one budget for the whole deployment
 healthy(oxylabs(…), { failures: 5, cooldown: 60, store }); // a circuit one instance opens is open for all
 watch(bee, { check, store });                              // one instance checks, the others reuse its answer
+adaptive([direct(), residential, zyte], { store });        // every instance learns from every outcome
+new Xyte({ sessions: { store }, cache: { ttl: 3600, store } }); // shared sessionContext pool and cache
 ```
 
 | Wrapper | Key | Shared |
@@ -272,14 +275,21 @@ watch(bee, { check, store });                              // one instance check
 | `budget` | `xyte:budget:<name>:<window>` | the count per window (INCRBY, expiring with the window) |
 | `healthy` | `xyte:circuit:<name>` | an open circuit, for its cooldown (each instance still counts its own failures) |
 | `watch` | `xyte:watch:<name>` | the last check result, for `every` seconds |
+| `adaptive` | `xyte:adaptive:<name>:<site>` | success scores per provider; each outcome updates them (read, update, write), each instance re-reads every `syncEvery` s (5) |
+| `sessions` (`sessionContext`) | `xyte:sessions:<context hash>` | the sessions of a context: cookies, bans, whether they're initialized (a session another instance logged in isn't logged in again); re-read before an acquire every `syncEvery` s (5) |
+| `cache` | `xyte:cache:<request hash>` | responses, for their `ttl` |
 
 `<name>` is the provider's name unless you pass `key`. Nothing waits on Redis except a budget's
 increment when an attempt goes out (one round trip); circuits and checks are read in the
 background. If Redis is down, they fall back to process memory and say so once (`resilient()`),
 so requests never fail because of the store.
 
+Updates are last-writer-wins per key: two instances updating the same site's scores or the same
+context's sessions at the same moment can lose one update, which the next outcome corrects.
+
 From env: `XYTE_REDIS_URL=redis://…` shares the state of everything built from `XYTE_BUDGET`,
-`XYTE_CIRCUIT_BREAKER` and `XYTE_WATCH`.
+`XYTE_CIRCUIT_BREAKER`, `XYTE_WATCH`, `XYTE_ADAPTIVE`, `XYTE_CACHE_TTL` and the `sessionContext`
+pool.
 
 ## Watching what happens: `onAttempt`
 

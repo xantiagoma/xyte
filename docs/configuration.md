@@ -15,7 +15,7 @@ your own code), the server handler options, and the CLI.
 | `isBan` | `isLikelyBan` | `(page: { url, statusCode, headers, html }) => boolean`: whether a page is a ban (retried, then a 520). `false` returns every page as is. |
 | `browser` | Playwright Chromium | `browserType` (patchright…), `launchOptions`, `connect` (remote browser), `contextOptions`, `onPage`, `blockResources`, `timeLimit` (60 s), `settleTime` (3 s). See [browser](browser.md). |
 | `extractors` | `markdown` only | Implementations of Zyte's extraction fields; `llmExtractors()` covers them all with any LLM. See [extraction](extraction.md). |
-| `sessions` | `{ size: 8, maxAge: 14400, maxBans: 3 }` | The `sessionContext` pool: sessions per context, seconds before retiring one, bans before retiring one. |
+| `sessions` | `{ size: 8, maxAge: 14400, maxBans: 3 }` | The `sessionContext` pool: sessions per context, seconds before retiring one, bans before retiring one; `store` (Redis) shares it across instances ([shared state](routing.md#shared-state-across-instances-redis)). |
 | `transport` | `fetch` (Bun) / undici (Node) | Low-level HTTP sender, for logging or tests. |
 | `onRetry` | none | `({ attempt, url, reason }) => void`, called before each retry. |
 | `onAttempt` | none | `({ provider, result, ms, statusCode, bytes, url, attempt, browser }) => void` after every attempt; `provider` is the one a combinator picked. See [routing](routing.md#watching-what-happens-onattempt). |
@@ -67,7 +67,7 @@ Checked in this order; the first one set wins.
 | `XYTE_CIRCUIT_BREAKER` | `5,60` | Every named provider gets a [circuit breaker](routing.md#healthy-a-circuit-breaker): failures, cooldown seconds. |
 | `XYTE_BUDGET` | `zyte-api=500/hour,scrapingbee=1000/day` | [Attempt caps](routing.md#budget-cap-what-a-provider-can-spend) per provider (`minute`, `hour`, `day` or seconds). |
 | `XYTE_WATCH` | `true` | [Check](routing.md#watch-check-providers-ahead-of-requests) every named provider that has a usage API or status page; `XYTE_WATCH_EVERY` seconds (60). Oxylabs needs `OXYLABS_LIMIT_GB` (and `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the account's main one). |
-| `XYTE_REDIS_URL` | `redis://…` | [Share](routing.md#shared-state-across-instances-redis) budgets, circuits and checks across instances. |
+| `XYTE_REDIS_URL` | `redis://…` | [Share](routing.md#shared-state-across-instances-redis) budgets, circuits, checks, `adaptive` scores, the `sessionContext` pool and the cache across instances. |
 
 None set: `direct()`. A provider named in several of these is one instance: its budget and circuit
 are shared.

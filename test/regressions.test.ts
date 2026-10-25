@@ -32,12 +32,12 @@ test('a proxy host that does not resolve is retried (520), not a 421 for the tar
   expect(error.status).toBe(520);
 });
 
-test('sessionContext retries avoid the session that was just banned', () => {
+test('sessionContext retries avoid the session that was just banned', async () => {
   const pool = new SessionPool({ size: 8 });
   const failed = new Set<string>();
   const ids: string[] = [];
   for (let attempt = 0; attempt < 4; attempt++) {
-    const s = pool.acquire('k', failed);
+    const s = await pool.acquire('k', failed);
     ids.push(s.id);
     pool.release(s, 'ban');
     failed.add(s.id);
@@ -45,11 +45,11 @@ test('sessionContext retries avoid the session that was just banned', () => {
   expect(new Set(ids).size).toBe(4);
 });
 
-test('sessionContext: a full pool replaces an excluded session instead of reusing it', () => {
+test('sessionContext: a full pool replaces an excluded session instead of reusing it', async () => {
   const pool = new SessionPool({ size: 1 });
-  const first = pool.acquire('k');
+  const first = await pool.acquire('k');
   pool.release(first, 'ban');
-  expect(pool.acquire('k', new Set([first.id])).id).not.toBe(first.id);
+  expect((await pool.acquire('k', new Set([first.id]))).id).not.toBe(first.id);
 });
 
 describe('cookie jar', () => {

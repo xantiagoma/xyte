@@ -412,7 +412,7 @@ export class Xyte {
       passedOver = false;
 
       // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
-      const pooled = poolKey ? this.pool.acquire(poolKey, failedSessions) : undefined;
+      const pooled = poolKey ? await this.pool.acquire(poolKey, failedSessions) : undefined;
       // 'skip': passed over, no request, so no verdict on the pooled session either.
       let outcome: 'ok' | 'ban' | 'skip' = 'ban';
       const started = Date.now();
@@ -550,7 +550,10 @@ export class Xyte {
         outcome = 'ok';
         verdict = { result: 'ok', ...page };
         // Merge, not replace: parallel requests on one session each add their cookies.
-        if (pooled) pooled.jar.merge(jar);
+        if (pooled) {
+          pooled.jar.merge(jar);
+          this.pool.save(pooled);
+        }
         else if (pinnedSession) this.rememberSession(pinnedSession, jar);
         return this.finish(request, plan, result, jar);
       } finally {

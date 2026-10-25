@@ -67,7 +67,7 @@ A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extr
 | `echoData` | ✅ supported | both |  |
 | `viewport` | ✅ supported | browser only |  |
 | `followRedirect` | ✅ supported | HTTP only | HTTP requests (browsers always follow, as on Zyte). |
-| `sessionContext` | ✅ supported | both | In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances. |
+| `sessionContext` | ✅ supported | both | A pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). In process, or shared across instances with `sessions.store` / `XYTE_REDIS_URL`. |
 | `sessionContextParameters` | 🟡 partial | both | `actions` run once per new session in a browser at the request URL, through the provider resolved for it (an API provider keeps its own sessions: no local init). Zyte's own actions run through `actions` handlers; without one, skipped with a warning, or a 400 with `unsupportedActions: 'error'` (no pass-overs during init). |
 | `session` | ✅ supported | both | Sticky exit IP through the provider, plus a cookie jar kept in memory per process. |
 | `networkCapture` | ✅ supported | browser only | `url` and `resourceType` filters; max 10 captures / 5 MiB. |

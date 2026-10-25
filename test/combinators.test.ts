@@ -7,6 +7,7 @@ import {
   custom,
   decodeBody,
   healthy,
+  memoryStore,
   proxyFromEnv,
   rotate,
   route,
@@ -205,6 +206,25 @@ describe('adaptive', () => {
     const scores = smart.scores();
     expect(scores['hard.example']!.cheap).toBeLessThan(0.5);
     expect(scores['easy.example']!.cheap).toBe(1);
+  });
+
+  test('with a shared store, a second instance starts from what the first learned', async () => {
+    const store = memoryStore(); // stands in for Redis
+    const cheap = fake('cheap', (url) => (url.hostname === 'hard.example' ? 'ban' : 'ok'));
+    const expensive = fake('expensive', () => 'ok');
+    const one = new Xyte({ retries: 1, proxy: adaptive([cheap, expensive], { explore: 0, store, syncEvery: 0 }) });
+    for (let i = 0; i < 4; i++) await one.extract({ url: 'https://hard.example/', httpResponseBody: true });
+    await new Promise((r) => setTimeout(r, 20)); // shared writes are in the background
+
+    const twoProvider = adaptive([cheap, expensive], { explore: 0, store, syncEvery: 0 });
+    const two = new Xyte({ retries: 1, proxy: twoProvider });
+    await two.extract({ url: 'https://easy.example/', httpResponseBody: true }); // any request starts the sync…
+    await twoProvider.resolve({ url: new URL('https://hard.example/'), sessionId: 's', attempt: 0, browser: false, requestId: 'warm' });
+    await new Promise((r) => setTimeout(r, 20)); // …which lands in the background
+    cheap.calls.length = 0;
+    await two.extract({ url: 'https://hard.example/', httpResponseBody: true });
+    expect(cheap.calls).toEqual([]); // straight to the provider that works, learned by the other instance
+    expect(twoProvider.scores()['hard.example']!.cheap).toBeLessThan(0.5);
   });
 
   test('explore re-tests the cheaper provider', async () => {

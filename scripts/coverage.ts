@@ -72,7 +72,7 @@ export const REQUEST: Record<string, Entry> = {
   followRedirect: { status: 'supported', note: 'HTTP requests (browsers always follow, as on Zyte).' },
   sessionContext: {
     status: 'supported',
-    note: 'In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances.',
+    note: 'A pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). In process, or shared across instances with `sessions.store` / `XYTE_REDIS_URL`.',
   },
   sessionContextParameters: {
     status: 'partial',

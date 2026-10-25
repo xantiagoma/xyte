@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
-import { decodeBody, Xyte } from '../src/index.ts';
+import { decodeBody, memoryStore, Xyte } from '../src/index.ts';
 import { SessionPool } from '../src/sessions.ts';
 import { startTarget } from './fixtures.ts';
 
@@ -61,35 +61,68 @@ describe('sessionContext (server-managed sessions)', () => {
   });
 });
 
+describe('SessionPool with a shared store', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+
+  test('a session one instance initialized reaches the other ready, with its cookies', async () => {
+    const store = memoryStore(); // stands in for Redis
+    const one = new SessionPool({ store, syncEvery: 0 });
+    const two = new SessionPool({ store, syncEvery: 0 });
+    const s = await one.acquire('ctx');
+    s.ready = Promise.resolve();
+    s.jar.set({ name: 'login', value: 'yes', domain: 'shop.example' }, true);
+    one.save(s);
+    one.release(s, 'ok');
+    await tick();
+    const t = await two.acquire('ctx');
+    expect(t.id).toBe(s.id);
+    expect(t.ready).toBeDefined(); // not initialized again
+    expect(t.jar.all()).toEqual([expect.objectContaining({ name: 'login', value: 'yes' })]);
+  });
+
+  test('bans are shared: a session banned out on one instance is retired on the other', async () => {
+    const store = memoryStore();
+    const one = new SessionPool({ store, syncEvery: 0, size: 1 });
+    const two = new SessionPool({ store, syncEvery: 0, size: 1 });
+    const s = await one.acquire('ctx');
+    await tick();
+    for (let i = 0; i < 3; i++) {
+      one.release(s, 'ban');
+      await tick();
+    }
+    expect((await two.acquire('ctx')).id).not.toBe(s.id);
+  });
+});
+
 describe('SessionPool', () => {
-  test('reuses an idle session, grows when busy, retires after 3 bans', () => {
+  test('reuses an idle session, grows when busy, retires after 3 bans', async () => {
     const pool = new SessionPool({ size: 2 });
-    const a = pool.acquire('k');
-    const b = pool.acquire('k'); // a is busy → new
+    const a = await pool.acquire('k');
+    const b = await pool.acquire('k'); // a is busy → new
     expect(b.id).not.toBe(a.id);
-    const c = pool.acquire('k'); // full → least busy
+    const c = await pool.acquire('k'); // full → least busy
     expect([a.id, b.id]).toContain(c.id);
     for (const s of [a, b, c]) pool.release(s, 'ok');
 
   });
 
-  test('a session is retired after 3 bans', () => {
+  test('a session is retired after 3 bans', async () => {
     const pool = new SessionPool({ size: 1 });
-    const first = pool.acquire('k');
+    const first = await pool.acquire('k');
     pool.release(first, 'ban');
     for (let i = 0; i < 2; i++) {
-      const again = pool.acquire('k');
+      const again = await pool.acquire('k');
       expect(again.id).toBe(first.id);
       pool.release(again, 'ban');
     }
-    expect(pool.acquire('k').id).not.toBe(first.id);
+    expect((await pool.acquire('k')).id).not.toBe(first.id);
   });
 
-  test('expired sessions are replaced', () => {
+  test('expired sessions are replaced', async () => {
     const pool = new SessionPool({ maxAge: 0 });
-    const a = pool.acquire('k');
+    const a = await pool.acquire('k');
     pool.release(a, 'ok');
-    expect(pool.acquire('k').id).not.toBe(a.id);
+    expect((await pool.acquire('k')).id).not.toBe(a.id);
   });
 });
 

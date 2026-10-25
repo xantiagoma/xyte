@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
-import { browserFromEnv, cacheFromEnv, extractorsFromEnv, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv } from './env.ts';
+import { browserFromEnv, cacheFromEnv, extractorsFromEnv, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv, sessionsFromEnv } from './env.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -72,6 +72,7 @@ const xyte = new Xyte({
   cache: cacheFromEnv(env),
   rateLimits: rateLimitsFromEnv(env),
   rates: ratesFromEnv(env),
+  sessions: sessionsFromEnv(env),
   // One JSON line per request, for log pipelines (Cloud Logging → BigQuery, Datadog…).
   onRequest: env.XYTE_LOG_REQUESTS === 'true' ? (report) => console.log(JSON.stringify({ xyte: 'request', ...report })) : undefined,
   onRetry: ({ attempt, url, reason }) => console.error(`[xyte] retry ${attempt} ${url}: ${reason}`),

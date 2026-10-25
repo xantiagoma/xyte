@@ -419,7 +419,20 @@ export interface AdaptiveOptions {
   learningRate?: number;
   /** The key scores are kept by. Default: the host without `www.`. */
   keyOf?: (url: URL) => string;
+  /**
+   * Shared state: every instance learns from every other's outcomes. Updates go to the store as
+   * they happen; each instance re-reads a site's scores in the background every `syncEvery`
+   * seconds. Default: this process only.
+   */
+  store?: StateStore;
+  /** The scores' key prefix in the store. Default: the adaptive provider's name. */
+  key?: string;
+  /** Seconds between background re-reads of a site's shared scores. Default 5. */
+  syncEvery?: number;
 }
+
+/** Shared adaptive scores are dropped after a week without updates. */
+const SCORES_TTL = 7 * 86_400;
 
 export type AdaptiveProvider<E extends ProxyEndpoint | ApiEndpoint> = ProxyProvider<E> & {
   /** Current scores, by site and provider (1: always works, 0: never). */
@@ -442,6 +455,38 @@ export function adaptive<P extends ProxyProvider>(providers: readonly P[], optio
   const scores = new Map<string, (number | undefined)[]>();
   const starts = new Map<string, number>();
   const served = new Map<string, number>();
+  const name = `adaptive(${providers.map((p) => p.name).join(',')})`;
+  const store = options.store ? resilient(options.store) : undefined;
+  const storeKey = (site: string) => `adaptive:${options.key ?? name}:${site}`;
+  const syncMs = (options.syncEvery ?? 5) * 1000;
+  const readAt = new Map<string, number>();
+  const learn = (score: number | undefined, result: AttemptOutcome['result']) => {
+    const s = score ?? 1;
+    return result === 'ok' ? s + rate * (1 - s) : s * (1 - rate);
+  };
+  /** Shared scores by provider name, into the local list. */
+  const adopt = (site: string, shared: Record<string, number>) => {
+    const list = scoresFor(site);
+    providers.forEach((provider, i) => {
+      if (typeof shared[provider.name] === 'number') list[i] = shared[provider.name];
+    });
+  };
+  const sync = (site: string) => {
+    if (!store || Date.now() - (readAt.get(site) ?? 0) < syncMs) return;
+    remember(readAt, site, Date.now());
+    void store.get(storeKey(site)).then((value) => value && adopt(site, JSON.parse(value) as Record<string, number>));
+  };
+  /** Applies an outcome to the shared scores (read, update this provider, write), then adopts them. */
+  const share = (site: string, index: number, result: AttemptOutcome['result']) => {
+    if (!store) return;
+    void store.get(storeKey(site)).then(async (value) => {
+      const shared = value ? (JSON.parse(value) as Record<string, number>) : {};
+      const provider = providers[index]!.name;
+      shared[provider] = learn(shared[provider] ?? scoresFor(site)[index], result);
+      await store.set(storeKey(site), JSON.stringify(shared), SCORES_TTL);
+      adopt(site, shared);
+    });
+  };
 
   const scoresFor = (site: string) => {
     let list = scores.get(site);
@@ -456,6 +501,7 @@ export function adaptive<P extends ProxyProvider>(providers: readonly P[], optio
     const request = context.requestId ?? context.sessionId;
     let start = context.attempt === 0 ? undefined : starts.get(request);
     if (start === undefined) {
+      sync(keyOf(context.url));
       const site = scoresFor(keyOf(context.url));
       const good = candidates.find((i) => (site[i] ?? 1) >= minSuccess);
       start = good ?? candidates.reduce((best, i) => ((site[i] ?? 1) > (site[best] ?? 1) ? i : best));
@@ -470,7 +516,7 @@ export function adaptive<P extends ProxyProvider>(providers: readonly P[], optio
 
   const delegation = new Delegation();
   return {
-    name: `adaptive(${providers.map((p) => p.name).join(',')})`,
+    name,
     extracts: providers.some((p) => p.extracts),
     zyteActions: providers.some((p) => p.zyteActions),
     resolve(context) {
@@ -484,9 +530,10 @@ export function adaptive<P extends ProxyProvider>(providers: readonly P[], optio
       const index = served.get(key);
       served.delete(key);
       if (index !== undefined && outcome.result !== 'aborted') {
-        const site = scoresFor(keyOf(context.url));
-        const score = site[index] ?? 1;
-        site[index] = outcome.result === 'ok' ? score + rate * (1 - score) : score * (1 - rate);
+        const site = keyOf(context.url);
+        const list = scoresFor(site);
+        list[index] = learn(list[index], outcome.result);
+        share(site, index, outcome.result);
       }
       if (outcome.result === 'ok') starts.delete(context.requestId ?? context.sessionId);
       delegation.report(context, outcome);

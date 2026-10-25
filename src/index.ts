@@ -16,7 +16,16 @@ export {
   type XyteOptions,
 } from './client.ts';
 export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } from './engines/browser.ts';
-export { browserFromEnv, cacheFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv } from './env.ts';
+export {
+  browserFromEnv,
+  cacheFromEnv,
+  extractorsFromEnv,
+  PROVIDER_NAMES,
+  proxyFromEnv,
+  rateLimitsFromEnv,
+  ratesFromEnv,
+  sessionsFromEnv,
+} from './env.ts';
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
 export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';

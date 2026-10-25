@@ -16,6 +16,7 @@ import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOpt
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
 import type { CacheOptions } from './cache.ts';
 import { parseLimit, type RateLimits } from './pace.ts';
+import type { SessionPoolOptions } from './sessions.ts';
 import { redisStoreFromUrl, type StateStore } from './state.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
@@ -164,7 +165,10 @@ function baseProxyFromEnv(env: Env, named: NamedProviders): ProxyProvider {
       { insecure: env.XYTE_PROXY_INSECURE === 'true' },
     );
   }
-  if (env.XYTE_ADAPTIVE) return adaptive(list(env.XYTE_ADAPTIVE).map((name) => named.get(name)));
+  if (env.XYTE_ADAPTIVE) {
+    const store = env.XYTE_REDIS_URL ? sharedStore(env.XYTE_REDIS_URL) : undefined;
+    return adaptive(list(env.XYTE_ADAPTIVE).map((name) => named.get(name)), { store });
+  }
   return named.chain(list(env.XYTE_PROVIDER));
 }
 
@@ -271,6 +275,11 @@ export function rateLimitsFromEnv(env: Env = process.env): RateLimits | undefine
     limits[entry.slice(0, at).trim()] = rate;
   }
   return limits;
+}
+
+/** The `sessionContext` pool from the environment: shared through `XYTE_REDIS_URL` when set. */
+export function sessionsFromEnv(env: Env = process.env): SessionPoolOptions | undefined {
+  return env.XYTE_REDIS_URL ? { store: sharedStore(env.XYTE_REDIS_URL) } : undefined;
 }
 
 const stores = new Map<string, StateStore>();
