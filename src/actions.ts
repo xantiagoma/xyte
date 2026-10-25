@@ -48,11 +48,11 @@ function forHost<A extends ZyteOnlyAction>(handlers: PerSite<A> | undefined, url
   return match ? handlers[match] : undefined;
 }
 
-/** The handler that runs `action` on `url`, if any. */
-export function handlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionHandler<ZyteOnlyAction> | undefined {
+/** The handler you configured for `action` on `url`, if any (not the built-in one). */
+function ownHandlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionHandler<ZyteOnlyAction> | undefined {
   switch (action.action) {
     case 'searchKeyword':
-      return handlers.searchKeyword === false ? undefined : (forHost(handlers.searchKeyword, url) ?? searchBox) as ActionHandler<ZyteOnlyAction>;
+      return handlers.searchKeyword === false ? undefined : (forHost(handlers.searchKeyword, url) as ActionHandler<ZyteOnlyAction> | undefined);
     case 'setLocation':
       return forHost(handlers.setLocation, url) as ActionHandler<ZyteOnlyAction> | undefined;
     case 'interaction': {
@@ -62,19 +62,36 @@ export function handlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url
   }
 }
 
-/** The Zyte-only actions in `actions` that a handler covers on `url`: they run in xyte's browser. */
-export function withHandler(actions: readonly Action[] | undefined, handlers: ActionHandlers, url: URL): ZyteOnlyAction[] {
-  return (actions ?? []).filter((action): action is ZyteOnlyAction => isZyteOnlyAction(action) && handlerFor(action, handlers, url) !== undefined);
+/** The handler that runs `action` on `url` in xyte's browser: yours, else the built-in one (searchKeyword). */
+export function handlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionHandler<ZyteOnlyAction> | undefined {
+  const own = ownHandlerFor(action, handlers, url);
+  if (own) return own;
+  return action.action === 'searchKeyword' && handlers.searchKeyword !== false ? (searchBox as ActionHandler<ZyteOnlyAction>) : undefined;
 }
 
-/** The Zyte-only actions in `actions` that no handler covers on `url`. */
-export function withoutHandler(actions: readonly Action[] | undefined, handlers: ActionHandlers, url: URL): ZyteOnlyAction[] {
-  return (actions ?? []).filter((action): action is ZyteOnlyAction => isZyteOnlyAction(action) && !handlerFor(action, handlers, url));
+/**
+ * The request's Zyte-only actions on `url`, by who would run them in xyte's browser: a handler you
+ * configured (`own`, always run locally), the built-in one (`builtIn`, a fallback for where Zyte
+ * isn't), or nothing (`none`).
+ */
+export function classifyActions(
+  actions: readonly Action[] | undefined,
+  handlers: ActionHandlers,
+  url: URL,
+): { own: ZyteOnlyAction[]; builtIn: ZyteOnlyAction[]; none: ZyteOnlyAction[] } {
+  const groups = { own: [] as ZyteOnlyAction[], builtIn: [] as ZyteOnlyAction[], none: [] as ZyteOnlyAction[] };
+  for (const action of actions ?? []) {
+    if (!isZyteOnlyAction(action)) continue;
+    if (ownHandlerFor(action, handlers, url)) groups.own.push(action);
+    else if (handlerFor(action, handlers, url)) groups.builtIn.push(action);
+    else groups.none.push(action);
+  }
+  return groups;
 }
 
 /** With `unsupportedActions: 'error'`: a 400 for the first Zyte-only action that has no handler. */
 export function assertActionHandlers(actions: readonly Action[] | undefined, handlers: ActionHandlers, url: URL): void {
-  const [action] = withoutHandler(actions, handlers, url);
+  const [action] = classifyActions(actions, handlers, url).none;
   if (!action) return;
   const which = action.action === 'interaction' ? `the "interaction" action (script "${action.id}")` : `the "${action.action}" action`;
   throw unsupported(`${which} without a handler (pass one in \`actions.${action.action}\`, or use zyteApi())`);

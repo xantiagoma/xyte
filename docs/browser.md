@@ -132,21 +132,24 @@ Three of Zyte's actions aren't browser operations but Zyte services: `searchKeyw
 `setLocation` use Zyte's per-site knowledge of where a site keeps its search box and its
 location form, and `interaction` runs a script you saved in Zyte's cloud IDE, by id.
 
-Two rules decide where they run:
+On each attempt, every one of these actions is one of three kinds, and where it runs follows:
 
-1. **An action you have a handler for runs locally, always.** It's your code, in xyte's browser.
-   Inside a combinator, an attempt that lands on an API provider (`zyteApi()` included, whose
-   browser is Zyte's) is passed over for one that can run it: no request, no backoff, no retry
-   used up. With `zyteApi()` as the only provider there's nowhere else to run it, so Zyte gets the
-   action as is and runs its own version.
-2. **An action with no handler** runs wherever Zyte runs it: on `zyteApi()` attempts, Zyte does.
-   On any other provider, `unsupportedActions` decides:
+| | Attempt on `zyteApi()` | Attempt on any other provider |
+| --- | --- | --- |
+| **Your handler** (`actions.…` you configured) | passed over for a provider with a local browser, since your code always runs locally. With `zyteApi()` the only option, Zyte runs its own version and you get a warning | your handler runs |
+| **Built-in** (`searchKeyword`'s heuristic, when you didn't configure one) | Zyte runs its own (the heuristic is a fallback, never a reason to skip Zyte) | the heuristic runs (`'zyte'`: passed over for Zyte if a combinator has it) |
+| **None** (`setLocation` / `interaction` with no handler, or `searchKeyword: false`) | Zyte runs it | depends on `unsupportedActions` ↓ |
 
-| `unsupportedActions` | No handler, attempt on a provider that isn't Zyte |
+| `unsupportedActions` | **None**, on a provider that isn't Zyte |
 | --- | --- |
 | `'warn'` (default) | skipped: `notExecuted` in the response's `actions`, a warning (`onWarning`, `X-Xyte-Warning`), the other actions go on |
-| `'error'` | a 400 naming the action |
-| `'zyte'` | if a combinator includes `zyteApi()`, the attempt is passed over so a later one reaches Zyte (Zyte bills it; if Zyte bans every try, the answer is its 520, not a page without the action). With no way to Zyte for this site (three pass-overs in a row), like `'warn'` |
+| `'error'` | "run it or fail": passed over for Zyte if a combinator has it, else a 400 naming the action. The outcome doesn't depend on which provider an attempt lands on |
+| `'zyte'` | passed over for Zyte if a combinator has it (built-in actions too), else like `'warn'` |
+
+A pass-over makes no request, waits no backoff and uses up no retry; it only happens inside a
+combinator (with a single provider there's nowhere to go), and after three in a row with no
+suitable provider the attempt runs anyway. When Zyte runs an action and bans every try, the answer
+is its 520, not a page without the action.
 
 Pass-overs show in [`onRequest`](observability.md) and `X-Xyte-Attempts` as `aborted` attempts with
 the reason.

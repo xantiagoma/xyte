@@ -180,12 +180,45 @@ describe('with Zyte among the providers', () => {
     ]);
   });
 
-  test('zyteApi() alone: nowhere to run the local handler, so Zyte gets the action as is', async () => {
+  test('zyteApi() alone: nowhere to run your handler, so Zyte gets the action as is, and you hear about it', async () => {
     const zyte = zyteStub();
-    const { xyte } = client({ proxy: zyte.provider, actions: zipHandler });
+    const { xyte, warnings } = client({ proxy: zyte.provider, actions: zipHandler });
     const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
     expect(res.browserHtml).toBe('<p>zyte ran it</p>');
     expect(zyte.received).toEqual([setLocation]);
+    expect(warnings).toEqual([expect.stringContaining('your "setLocation" handler isn\'t used')]);
+  });
+
+  const search = [{ action: 'searchKeyword' as const, keyword: 'pizza' }];
+
+  test('the built-in search heuristic is a fallback: it never passes Zyte over', async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: rotate([zyte.provider, local()]) });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: search });
+    expect(res.browserHtml).toBe('<p>zyte ran it</p>');
+    expect(zyte.received).toEqual([search]);
+  });
+
+  test("'zyte' sends the built-in-only actions to Zyte too", async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: rotate([local(), zyte.provider]), unsupportedActions: 'zyte' });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: search });
+    expect(res.browserHtml).toBe('<p>zyte ran it</p>');
+  });
+
+  test("'error' with Zyte in the combinator: looks for Zyte before failing, so the outcome doesn't depend on the order", async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: rotate([local(), zyte.provider]), unsupportedActions: 'error' });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
+    expect(res.browserHtml).toBe('<p>zyte ran it</p>');
+  });
+
+  test("'error' when no route leads to Zyte for this site: a 400 after the pass-overs", async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: route({ 'zyte-only.example': zyte.provider }, local()), unsupportedActions: 'error' });
+    const error = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation }).catch((e) => e);
+    expect(error).toMatchObject({ status: 400 });
+    expect(zyte.received).toEqual([]);
   });
 
   test("'zyte' with a route that never reaches Zyte for this site: a few pass-overs, then like 'warn'", async () => {

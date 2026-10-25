@@ -1,4 +1,4 @@
-import { assertActionHandlers, withHandler, withoutHandler, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
+import { assertActionHandlers, classifyActions, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
 import { BrowserEngine, type BrowserOptions } from './engines/browser.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
@@ -384,28 +384,32 @@ export class Xyte {
             lastReason = reason;
             verdict = { result: 'aborted', reason };
           };
+          const zyteOnly = inBrowser ? classifyActions(request.actions, this.actionHandlers, context.url) : { own: [], builtIn: [], none: [] };
+          const mode = this.options.unsupportedActions ?? 'warn';
           if (isApiEndpoint(endpoint)) {
             // Your handlers run in xyte's browser, which an API (Zyte's included) doesn't use: look
             // for a provider that runs them. With nothing else to go to, the API gets the request
-            // as is (Zyte then runs its own version).
-            const local = inBrowser ? withHandler(request.actions, this.actionHandlers, context.url) : [];
-            if (local.length > 0 && canPassOver) {
-              passOver(`"${local[0]!.action}" has a local handler: passed over ${leaf}`);
+            // as is (Zyte then runs its own version), and you hear about it.
+            const own = zyteOnly.own[0];
+            if (own && canPassOver) {
+              passOver(`"${own.action}" has your handler: passed over ${leaf}`);
               continue;
             }
+            if (own) warn(`your "${own.action}" handler isn't used: the request went to ${leaf}, which runs its own (no provider with a local browser to go to)`);
             // A scraping API takes the whole request (it renders, solves and proxies itself).
             const answer = await endpoint.api(request, { context, signal });
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
             trusted = answer.trusted === true;
           } else {
-            // Zyte's own actions here run through local handlers. Without one, unsupportedActions:
-            // 'zyte' looks for zyteApi() among the providers.
-            const missing = inBrowser ? withoutHandler(request.actions, this.actionHandlers, context.url) : [];
-            if (missing.length > 0 && this.options.unsupportedActions === 'zyte' && this.proxy.zyteActions && canPassOver) {
-              passOver(`"${missing[0]!.action}" has no local handler: passed over ${leaf} for Zyte`);
+            // Here Zyte's own actions run through local handlers. Those you didn't write a handler for
+            // can go to zyteApi() if a combinator has it: 'zyte' sends them all (the built-in search
+            // heuristic included), 'error' the ones nothing here can run, rather than failing.
+            const forZyte = mode === 'zyte' ? [...zyteOnly.builtIn, ...zyteOnly.none] : mode === 'error' ? zyteOnly.none : [];
+            if (forZyte.length > 0 && this.proxy.zyteActions && canPassOver) {
+              passOver(`"${forZyte[0]!.action}" has no handler of yours: passed over ${leaf} for Zyte`);
               continue;
             }
-            if (missing.length > 0 && this.strictActions) assertActionHandlers(request.actions, this.actionHandlers, context.url);
+            if (zyteOnly.none.length > 0 && mode === 'error') assertActionHandlers(request.actions, this.actionHandlers, context.url);
             const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal, actions: this.actionsFor(warn) };
             result = inBrowser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
           }
