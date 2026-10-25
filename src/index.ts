@@ -31,6 +31,7 @@ export {
 } from './env.ts';
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
+export { camoufox, cloakBrowser, patchright, rebrowser, STEALTH_BROWSERS } from './stealth.ts';
 export {
   capsolver,
   createTaskSolver,

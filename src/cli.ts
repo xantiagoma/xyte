@@ -44,7 +44,7 @@ Proxy (environment):
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY
 
 Browser (environment):
-  XYTE_BROWSER=playwright|patchright|<package>   XYTE_BROWSER_CHANNEL=chrome
+  XYTE_BROWSER=playwright|patchright|rebrowser|camoufox|cloakbrowser|<package>   XYTE_BROWSER_CHANNEL=chrome
   XYTE_BROWSER_WS=wss://…{country:lower}…       remote browser per request (CDP)
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load

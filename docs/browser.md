@@ -59,6 +59,30 @@ Notes:
 - Firefox-based stealth browsers such as Camoufox expose a Playwright `firefox` type or a
   Playwright server. Use `browserType` or `connect` with `protocol: 'playwright'`.
 
+## Stealth presets
+
+One line per browser, as presets you spread into `browser` (or name in `XYTE_BROWSER`):
+
+```ts
+import { camoufox, cloakBrowser, patchright, rebrowser, Xyte } from 'xyte';
+
+new Xyte({ browser: { ...camoufox({ humanize: true }), blockResources: ['image', 'font'] } });
+```
+
+| Preset | Browser | Install | `XYTE_BROWSER` |
+| --- | --- | --- | --- |
+| `patchright()` | Chromium, Playwright patched against CDP detection | `npm i patchright && npx patchright install chromium` | `patchright` |
+| `rebrowser()` | Chromium, Playwright with the rebrowser patches | `npm i rebrowser-playwright && npx rebrowser-playwright install chromium` | `rebrowser` |
+| `camoufox(options?)` | Firefox that spoofs its fingerprint at the C++ level (`camoufox-js`) | `npm i camoufox-js playwright-core && npx camoufox-js fetch` | `camoufox` |
+| `cloakBrowser(options?)` | Chromium patched at the source level against fingerprinting | `npm i cloakbrowser playwright-core` (downloads its build on first launch) | `cloakbrowser` |
+
+The ones that bring their own fingerprint (Patchright per its own advice, Camoufox, CloakBrowser) keep
+their user agent and viewport: xyte's defaults for those would contradict the fingerprint. Options
+for `camoufox()` / `cloakBrowser()` go to their own launchers. A preset whose package isn't
+installed fails with a 500 that says what to install. Patchright is part of the test suite;
+Rebrowser, Camoufox and CloakBrowser are wired to their documented APIs but not launched in tests
+yet.
+
 ## Remote browsers
 
 `connect(ctx)` runs for each request with the request's `country`, `sessionId` and `attempt`,

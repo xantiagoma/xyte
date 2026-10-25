@@ -16,6 +16,7 @@ import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOpt
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
 import type { CacheOptions } from './cache.ts';
 import { capsolver, twoCaptcha } from './captcha.ts';
+import { STEALTH_BROWSERS } from './stealth.ts';
 import { parseLimit, type RateLimits } from './pace.ts';
 import type { JobsOptions } from './jobs.ts';
 import type { SessionPoolOptions } from './sessions.ts';
@@ -352,8 +353,8 @@ const list = (value: string | undefined) => (value ?? '').split(',').map((v) => 
 /**
  * Browser settings from environment variables:
  *
- * - `XYTE_BROWSER`: `playwright` (default) or `patchright`, or any installed Playwright-compatible
- *   package name exporting `chromium` (e.g. `rebrowser-playwright`).
+ * - `XYTE_BROWSER`: `playwright` (default), a stealth preset (`patchright`, `rebrowser`, `camoufox`,
+ *   `cloakbrowser`), or any installed Playwright-compatible package name exporting `chromium`.
  * - `XYTE_BROWSER_CHANNEL`: e.g. `chrome` to use installed Google Chrome.
  * - `XYTE_BROWSER_HEADLESS=false`: headed (needs a display, e.g. xvfb).
  * - `XYTE_BROWSER_ARGS`: extra Chromium flags, comma-separated.
@@ -369,7 +370,9 @@ const list = (value: string | undefined) => (value ?? '').split(',').map((v) => 
 export function browserFromEnv(env: Env = process.env): BrowserOptions {
   const options: BrowserOptions = {};
   const name = env.XYTE_BROWSER?.trim();
-  if (name && name !== 'playwright') {
+  const preset = name ? STEALTH_BROWSERS[name.toLowerCase()] : undefined;
+  if (preset) Object.assign(options, preset());
+  else if (name && name !== 'playwright') {
     options.browserType = async () => {
       const mod = (await import(name)) as { chromium?: BrowserTypeLike; default?: { chromium?: BrowserTypeLike } };
       const chromium = mod.chromium ?? mod.default?.chromium;
