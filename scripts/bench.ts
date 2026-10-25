@@ -130,7 +130,8 @@ const rows = cases.flatMap((c) =>
       `${good.length}/${mine.length}`,
       median(good.map((r) => r.ms)) || '–',
       attempts === undefined ? '–' : Math.round(attempts),
-      megabytes === undefined ? '–' : megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes),
+      // API providers (zyteApi) bill per request and move no bytes we can count.
+      megabytes === undefined || megabytes === 0 ? '–' : megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes),
       failures,
     ];
     return `| ${cells.join(' | ')} |`;
