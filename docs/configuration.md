@@ -108,6 +108,7 @@ The `/v1/extract` handler behind `xyte serve`, for mounting in your own app ([mo
 | `basePath` | any path ending in `/v1/extract` | Where the routes live, e.g. `/zyte`. `GET …/healthz` answers `ok`. |
 | `maxBodyBytes` | 10 MB | Largest accepted request body (413 above). |
 | `blockPrivateTargets` | `false` (`xyte serve`: `true`) | Reject targets (and job `callbackUrl`s) on loopback, private, link-local and metadata addresses. |
+| `stats` | on, in memory | `GET /api/stats` and `/api/v1/stats` ([Stats API](observability.md#a-zyte-compatible-stats-api)); a `StatsRecorder` to share or feed it, `false` to turn it off. |
 | `jobs` | on, in memory | Asynchronous jobs ([below](#asynchronous-jobs)): `{ store?, ttl?, webhookSecret?, webhookAttempts? }`, or `false` to turn the routes off. |
 
 ### Asynchronous jobs

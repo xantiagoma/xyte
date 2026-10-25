@@ -10,6 +10,7 @@ import {
   rateLimitsFromEnv,
   ratesFromEnv,
   sessionsFromEnv,
+  statsFromEnv,
 } from './env.ts';
 import { doctor, formatDoctor } from './doctor.ts';
 import { XyteError } from './errors.ts';
@@ -117,7 +118,7 @@ if (command === 'serve') {
     process.exit(1);
   }
   const server = await serve(
-    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true', jobs: jobsFromEnv(env) }),
+    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true', jobs: jobsFromEnv(env), stats: statsFromEnv(env) }),
     { port: num(values.port ?? env.PORT), hostname },
   );
   console.error(`[xyte] listening on ${server.url}v1/extract`);

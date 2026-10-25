@@ -27,11 +27,13 @@ export {
   rateLimitsFromEnv,
   ratesFromEnv,
   sessionsFromEnv,
+  statsFromEnv,
 } from './env.ts';
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
 export { doctor, formatDoctor, type DoctorOptions, type DoctorResult } from './doctor.ts';
 export { Jobs, verifyWebhook, type Job, type JobsOptions } from './jobs.ts';
+export { StatsQueryError, StatsRecorder, type StatsOptions, type StatsQuery, type StatsResponse } from './stats.ts';
 export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
 export {
   adaptive,

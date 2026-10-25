@@ -177,6 +177,43 @@ real pages, retries included:
 bun scripts/bench.ts cases.json --providers zyte-api,direct,oxylabs --repeat 3 --out results.json
 ```
 
+## A Zyte-compatible Stats API
+
+`xyte serve` (and `createHandler()`) answers `GET /api/stats` and `GET /api/v1/stats` like
+`zyte-api-stats.zyte.com`, from the requests it served: code that reads Zyte's usage (a billing
+check, a Grafana dashboard) reads xyte's by changing the base URL.
+
+```sh
+curl -u key: 'https://xyte.example/api/v1/stats?organization_id=1&start_time=2026-10-01T00:00:00Z&groupby_time=day&groupby_domain=true'
+```
+
+```json
+{ "page": 1, "page_size": 500, "total_result_count": 1, "results": [{
+  "organization_id": 1, "day": "2026-10-20T00:00:00.000Z", "domain": "restaurantguru.com",
+  "request_count": 412, "billed_traffic_bytes": 25480000,
+  "cost_micro_total": [{ "currency": "USD", "value": 152880 }],
+  "cost_micro_avg": [{ "currency": "USD", "value": 371 }], "cost_micro_p80": [{ "currency": "USD", "value": 500 }],
+  "response_time_sec_avg": "2.71", "response_time_sec_p80": "3.00",
+  "status_codes": [{ "code": 200, "count": 409 }, { "code": 520, "count": 3 }] }] }
+```
+
+(illustrative values)
+
+- **Same parameters:** `start_time` / `end_time` (default: the last 7 days), `page`, `page_size`,
+  `domains`, `response_codes`, `tags` (`spider:yelp`, or just `spider`), `groupby_time`
+  (`hour`, `day`, `month`, `year`), `groupby_domain`. `/api/stats` reports costs as
+  `cost_microusd_*` strings, `/api/v1/stats` as per-currency `cost_micro_*` arrays (USD).
+- **Where the numbers come from:** each request's report. `request_count` counts `extract()` calls;
+  `status_codes` has the target's status for an answer, the problem's for a failure (520…), `null`
+  when cancelled; costs come from your [`rates`](configuration.md); `billed_traffic_bytes` is the
+  bytes on the wire.
+- **Differences:** the p80s come from histograms, so they're bucket edges, not exact values;
+  `domain_health` (which compares you with all of Zyte's customers) is `null`; the
+  `requested_features`, `extraction_type` and `apikey_labels` filters are accepted and ignored.
+- **Storage:** hourly buckets per domain and tag set, kept 31 days, in memory or in Redis with
+  `XYTE_REDIS_URL` (every instance adds up). Library use: `new StatsRecorder()`, `record()` from
+  `onRequest`, `query()`.
+
 ## Provider state ahead of requests
 
 What `onRequest` reports after the fact, [`watch()`](routing.md#watch-check-providers-ahead-of-requests)

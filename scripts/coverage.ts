@@ -167,7 +167,10 @@ export const OTHER: Record<string, Entry> = {
   'Zyte API as a provider': { status: 'supported', note: '`zyteApi()` (full fidelity, e.g. as a fallback) or `zyteProxy()` (proxy mode).' },
   'Proxy mode (`api.zyte.com:8011`)': { status: 'unsupported', note: 'Planned.' },
   'CDP headless browser': { status: 'unsupported' },
-  'Stats API': { status: 'unsupported' },
+  'Stats API': {
+    status: 'partial',
+    note: '`GET /api/stats` and `/api/v1/stats` (USD), with the same parameters and shape, from the requests the server handled; p80s are approximate (histograms); `domain_health` is null; `requested_features`, `extraction_type`, `apikey_labels` filters are accepted and ignored.',
+  },
   'Search API': { status: 'unsupported' },
 };
 

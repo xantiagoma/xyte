@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RequestReport, Xyte } from './client.ts';
 import { XyteError } from './errors.ts';
 import { Jobs, type JobsOptions } from './jobs.ts';
+import { StatsQueryError, StatsRecorder, type StatsQuery } from './stats.ts';
 import type { ExtractRequest } from './types.ts';
 
 export interface HandlerOptions {
@@ -32,6 +33,12 @@ export interface HandlerOptions {
    * long, the webhook secret. `false` turns the routes off. On by default, in memory.
    */
   jobs?: JobsOptions | false;
+  /**
+   * `GET /api/stats` and `/api/v1/stats` in the shape of Zyte's Stats API, from the requests this
+   * handler served (extract and jobs). Pass a recorder to share it (e.g. with a Redis store, or to
+   * also `record()` library requests); `false` turns the routes off. On by default, in memory.
+   */
+  stats?: StatsRecorder | false;
 }
 
 const DEFAULT_MAX_BODY = 10 * 1024 * 1024;
@@ -49,7 +56,9 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
   const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY;
   const route = (pathname: string, path: string) =>
     base != null ? pathname === `${base}${path}` : pathname === path || pathname.endsWith(path);
-  const jobs = options.jobs === false ? undefined : new Jobs(xyte, options.jobs ?? {});
+  const stats = options.stats === false ? undefined : (options.stats ?? new StatsRecorder());
+  const record = (report: RequestReport) => stats?.record(report);
+  const jobs = options.jobs === false ? undefined : new Jobs(xyte, { ...(options.jobs ?? {}), onReport: (r) => (record(r), options.jobs && options.jobs.onReport?.(r)) });
   const jobPath = new RegExp(`${base != null ? `^${escapeRegExp(base)}` : ''}/v1/jobs/([\\w-]+)$`);
   const notFound = (pathname: string) => problem({ status: 404, type: '/request/not-found', title: 'Not Found', detail: `no route ${pathname}` });
   const methodNotAllowed = (method: string) => problem({ status: 405, type: '/request/invalid', title: 'Method Not Allowed', detail: `use ${method}` });
@@ -77,8 +86,21 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
   };
 
   return async (request) => {
-    const { pathname } = new URL(request.url);
+    const { pathname, searchParams } = new URL(request.url);
     if (route(pathname, '/healthz')) return new Response('ok');
+    const statsFormat = !stats ? undefined : route(pathname, '/api/v1/stats') ? 'v1' : route(pathname, '/api/stats') ? 'usd' : undefined;
+    if (statsFormat) {
+      if (keys.size > 0 && !keys.has(apiKeyOf(request) ?? '')) {
+        return problem({ status: 401, type: '/auth/key-not-found', title: 'Authentication Key Not Found' });
+      }
+      if (request.method !== 'GET') return methodNotAllowed('GET');
+      try {
+        return Response.json(await stats!.query(Object.fromEntries(searchParams) as StatsQuery, statsFormat));
+      } catch (error) {
+        if (error instanceof StatsQueryError) return problem({ status: 422, type: '/request/unprocessable', title: 'Validation Error', detail: error.message });
+        throw error;
+      }
+    }
     const jobId = jobs ? jobPath.exec(pathname)?.[1] : undefined;
     const isExtract = route(pathname, '/v1/extract');
     const isJobs = jobs != null && route(pathname, '/v1/jobs');
@@ -119,7 +141,7 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
     let report: RequestReport | undefined;
     try {
       // A caller that hangs up cancels the scrape. What it took travels in headers: the body stays Zyte's.
-      const result = await xyte.extract(body as ExtractRequest, { signal: request.signal, onReport: (r) => (report = r) });
+      const result = await xyte.extract(body as ExtractRequest, { signal: request.signal, onReport: (r) => (report = r, record(r)) });
       return Response.json(result, { headers: reportHeaders(report) });
     } catch (error) {
       const problemBody =

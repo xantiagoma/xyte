@@ -18,6 +18,7 @@ import type { CacheOptions } from './cache.ts';
 import { parseLimit, type RateLimits } from './pace.ts';
 import type { JobsOptions } from './jobs.ts';
 import type { SessionPoolOptions } from './sessions.ts';
+import { StatsRecorder } from './stats.ts';
 import { redisStoreFromUrl, type StateStore } from './state.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
@@ -290,6 +291,11 @@ export function jobsFromEnv(env: Env = process.env): JobsOptions {
     ...(env.XYTE_WEBHOOK_SECRET && { webhookSecret: env.XYTE_WEBHOOK_SECRET }),
     ...(env.XYTE_JOBS_TTL && { ttl: Number(env.XYTE_JOBS_TTL) }),
   };
+}
+
+/** The server's stats: kept in `XYTE_REDIS_URL` when set (every instance adds up), else in memory. */
+export function statsFromEnv(env: Env = process.env): StatsRecorder {
+  return new StatsRecorder({ ...(env.XYTE_REDIS_URL && { store: sharedStore(env.XYTE_REDIS_URL) }) });
 }
 
 const stores = new Map<string, StateStore>();

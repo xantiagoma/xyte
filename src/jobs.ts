@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import type { Xyte } from './client.ts';
+import type { RequestReport, Xyte } from './client.ts';
 import { XyteError, type XyteProblem } from './errors.ts';
 import { memoryStore, resilient, type StateStore } from './state.ts';
 import type { ExtractRequest, ExtractResponse } from './types.ts';
@@ -20,6 +20,8 @@ export interface JobsOptions {
   webhookAttempts?: number;
   /** For webhook deliveries (tests, proxies). */
   fetch?: typeof fetch;
+  /** Each job's request report (the server feeds its stats with it). */
+  onReport?: (report: RequestReport) => void;
 }
 
 export interface Job {
@@ -78,7 +80,7 @@ export class Jobs {
     job.startedAt = new Date().toISOString();
     await this.save(job);
     try {
-      job.response = await this.xyte.extract(request);
+      job.response = await this.xyte.extract(request, { onReport: this.options.onReport });
       job.status = 'done';
     } catch (error) {
       job.status = 'failed';
