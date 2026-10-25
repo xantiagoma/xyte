@@ -433,7 +433,11 @@ function classifyError(error: unknown, target: { direct: boolean; host: string }
 
 function describe(error: unknown): string {
   if (error instanceof Error) {
-    const cause = error.cause instanceof Error ? ` (${error.cause.message})` : '';
+    // The root cause: undici nests a proxy's 407 as fetch failed → "Request was cancelled" →
+    // "Proxy response (407) !== 200 when HTTP Tunneling".
+    let root: unknown = error.cause;
+    for (let depth = 0; root instanceof Error && root.cause instanceof Error && depth < 5; depth++) root = root.cause;
+    const cause = root instanceof Error ? ` (${root.message})` : '';
     const code = (error as { code?: string }).code;
     return `${error.message}${code && !error.message.includes(code) ? ` [${code}]` : ''}${cause}`.split('\n')[0]!;
   }
