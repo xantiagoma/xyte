@@ -24,7 +24,7 @@ export const REQUEST: Record<string, Entry> = {
   httpRequestMethod: { status: 'supported' },
   httpRequestBody: { status: 'supported' },
   httpRequestText: { status: 'supported' },
-  customHttpRequestHeaders: { status: 'supported', note: '`Cookie` is rejected, as on Zyte.' },
+  customHttpRequestHeaders: { status: 'supported', note: 'HTTP requests only, as on Zyte. A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)).' },
   httpResponseBody: { status: 'supported', note: 'Truncated at 10 MB.' },
   httpResponseHeaders: { status: 'supported', note: 'HTTP and browser (main document) requests.' },
   browserHtml: { status: 'supported', note: 'Playwright Chromium, or your own `browser.launch`.' },

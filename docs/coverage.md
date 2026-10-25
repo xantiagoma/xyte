@@ -25,7 +25,7 @@ an entry not listed here.
 | `httpRequestMethod` | ✅ supported |  |
 | `httpRequestBody` | ✅ supported |  |
 | `httpRequestText` | ✅ supported |  |
-| `customHttpRequestHeaders` | ✅ supported | `Cookie` is rejected, as on Zyte. |
+| `customHttpRequestHeaders` | ✅ supported | HTTP requests only, as on Zyte. A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)). |
 | `httpResponseBody` | ✅ supported | Truncated at 10 MB. |
 | `httpResponseHeaders` | ✅ supported | HTTP and browser (main document) requests. |
 | `browserHtml` | ✅ supported | Playwright Chromium, or your own `browser.launch`. |

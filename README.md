@@ -230,7 +230,7 @@ gave it. `error.retryable` says whether retrying later makes sense, as with Zyte
 | `sessionContext` | a pool of sessions per context, initialized by `sessionContextParameters.actions`, retired after 4 h or 3 bans |
 | bans | retried on a new exit, then **520** `/download/website-ban` |
 | target 4xx/5xx | **200** with `statusCode` set |
-| a `Cookie` custom header | dropped, as Zyte does (use `requestCookies`) |
+| a `Cookie` custom header | dropped, as Zyte does: cookies go in `requestCookies` ([authenticated pages](docs/authentication.md)) |
 | browser rendering | waits for the network to settle after load, so XHR data lands in `browserHtml` and `networkCapture` |
 
 Checked side by side against api.zyte.com with `bun run test:live`: see

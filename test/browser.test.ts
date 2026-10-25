@@ -67,6 +67,16 @@ describe('browser requests', () => {
     }
   });
 
+  test('browser.onPage can add headers (e.g. a token) to a browser request', async () => {
+    const authed = new Xyte({ retries: 0, browser: { onPage: (page) => page.setExtraHTTPHeaders({ authorization: 'Bearer t0k3n' }) } });
+    try {
+      const res = await authed.extract({ url: `${target.base}/echo`, browserHtml: true });
+      expect(res.browserHtml).toContain('Bearer t0k3n');
+    } finally {
+      await authed.close();
+    }
+  });
+
   test('networkCapture returns matching responses, base64', async () => {
     const res = await xyte.extract({
       url: `${target.base}/app`,
