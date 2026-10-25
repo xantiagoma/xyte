@@ -42,6 +42,11 @@ export interface ProxyEndpoint {
   inspect?: (res: { status: number; headers: Headers }) => { url?: string; failure?: string } | undefined;
   /** The provider's bookkeeping headers, left out of `httpResponseHeaders`. */
   hiddenHeaders?: RegExp;
+  /**
+   * False when this exit ignores the request's `geolocation` (a fixed proxy URL). Such requests
+   * still run, with a warning (`onWarning`, `X-Xyte-Warning`).
+   */
+  appliesCountry?: boolean;
 }
 
 /**
@@ -113,6 +118,7 @@ export function proxyUrl(urls: string | readonly string[], options: { insecure?:
     resolve: ({ attempt, sessionId }) => ({
       url: list[(sessionNumber(sessionId, 1 << 30) + attempt) % list.length]!,
       insecure: options.insecure,
+      appliesCountry: false,
     }),
   };
 }
@@ -183,7 +189,7 @@ export function template(format: string, options: { insecure?: boolean; name?: s
       );
       const url = fill(withOptional, context);
       if (url == null) throw new Error(`template: a required placeholder has no value in ${format}`);
-      return { url, insecure: options.insecure };
+      return { url, insecure: options.insecure, appliesCountry: format.includes('{country') };
     },
   };
 }

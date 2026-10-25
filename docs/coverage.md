@@ -58,7 +58,7 @@ an entry not listed here.
 | `customAttributesOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `serp` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `serpOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `geolocation` | ✅ supported | Encoded into the provider credentials. Accepted but ignored by `direct()`, plain `proxyUrl()` and a `template()` without `{country}`: the exit stays the host's IP. |
+| `geolocation` | ✅ supported | Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can't be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`. |
 | `javascript` | ✅ supported |  |
 | `actions` | 🟡 partial | All but `interaction`, `searchKeyword`, `setLocation` (see Actions). |
 | `jobId` | ✅ supported | Echoed back. |

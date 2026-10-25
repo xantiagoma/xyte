@@ -103,6 +103,24 @@ describe('through a real proxy', () => {
     expect((target.hits.get('/spb-error') ?? 0) - before).toBe(2);
   });
 
+  test('geolocation warns only when the exit ignores it, once per request', async () => {
+    const warningsFor = async (provider: Parameters<typeof rotate>[0][number] | undefined, request: Partial<Parameters<Xyte['extract']>[0]> = {}) => {
+      const warnings: string[] = [];
+      const xyte = new Xyte({ proxy: provider, retries: 1, onWarning: (message) => warnings.push(message) });
+      await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true, geolocation: 'US', ...request }).catch(() => {});
+      return warnings;
+    };
+    const local = `127.0.0.1:${proxy.port}`;
+    expect(await warningsFor(undefined)).toEqual([expect.stringContaining('exit directly from this machine')]);
+    expect(await warningsFor(proxyUrl(`http://bob:secret@${local}`))).toEqual([expect.stringContaining('no country parameter')]);
+    expect(await warningsFor(template(`http://bob:secret@${local}`))).toHaveLength(1);
+    expect(await warningsFor(template(`http://bob[-{country}]:secret@${local}`))).toEqual([]);
+    expect(await warningsFor(oxylabs({ username: 'acme', password: 'secret', host: '127.0.0.1', port: proxy.port }))).toEqual([]);
+    expect(await warningsFor(undefined, { geolocation: undefined })).toEqual([]);
+    // Retried twice (a 403 each time), still one warning.
+    expect(await warningsFor(undefined, { url: `${target.base}/forbidden` })).toHaveLength(1);
+  });
+
   test('rotate() falls over to the next provider when one is down', async () => {
     const broken = proxyUrl(`http://alice:wrong@127.0.0.1:${proxy.port}`);
     const working = proxyUrl(`http://bob:secret@127.0.0.1:${proxy.port}`);

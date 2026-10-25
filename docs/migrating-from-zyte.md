@@ -65,9 +65,11 @@ field-by-field status is in [coverage.md](coverage.md).
 Where xyte answers differently from Zyte, depending on how it's configured:
 
 - **`geolocation` needs a provider that geolocates.** With `direct()` (no `XYTE_PROVIDER` /
-  `XYTE_PROXY_URL`), a plain `proxyUrl()`, or a `template()` without `{country}`, the field is
-  accepted and **ignored**: requests exit from the host's own IP and country. The country is
-  only applied when the preset encodes it ([providers](providers.md)).
+  `XYTE_PROXY_URL`), a plain `proxyUrl()`, or a `template()` without `{country}`, the request
+  still runs, from the host's own IP and country, with a warning: an `X-Xyte-Warning` header
+  from the server (the JSON body stays Zyte's), or `onWarning` in the library (default: one
+  `console.warn` per distinct message). The country is applied when the preset encodes it
+  ([providers](providers.md)).
 - **`direct()` exits from your server's IP.** On Cloud Run, Fly and similar hosts, that is a
   datacenter IP. Easy sites work, but sites that block datacenters (Yelp, DoorDash…) answer
   403, or a challenge page that xyte retries and then reports as a `520`.

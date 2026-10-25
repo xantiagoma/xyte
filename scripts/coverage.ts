@@ -60,7 +60,7 @@ export const REQUEST: Record<string, Entry> = {
   customAttributesOptions: { status: 'pluggable', note: EXTRACTOR_OPTIONS },
   serp: { status: 'pluggable', note: EXTRACTOR },
   serpOptions: { status: 'pluggable', note: EXTRACTOR_OPTIONS },
-  geolocation: { status: 'supported', note: 'Encoded into the provider credentials. Accepted but ignored by `direct()`, plain `proxyUrl()` and a `template()` without `{country}`: the exit stays the host\'s IP.' },
+  geolocation: { status: 'supported', note: 'Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can\'t be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`.' },
   javascript: { status: 'supported' },
   actions: { status: 'partial', note: 'All but `interaction`, `searchKeyword`, `setLocation` (see Actions).' },
   jobId: { status: 'supported', note: 'Echoed back.' },

@@ -35,6 +35,8 @@ export interface BanCheck {
 export interface ExtractOptions {
   /** Aborts the request (all attempts). Rejects with the signal's reason. */
   signal?: AbortSignal;
+  /** This request's warnings, in addition to the client's `onWarning`. */
+  onWarning?: (message: string) => void;
 }
 
 export interface XyteOptions {
@@ -68,7 +70,19 @@ export interface XyteOptions {
   transport?: Transport;
   /** Called before each retry. */
   onRetry?: (info: { attempt: number; url: string; reason: string }) => void;
+  /**
+   * Requests that run but not as asked, e.g. a `geolocation` the exit can't apply (`direct()`,
+   * a plain proxy URL). Default: `console.warn`, once per distinct message.
+   */
+  onWarning?: (message: string, info: { url: string }) => void;
 }
+
+const warned = new Set<string>();
+const warnOnce = (message: string): void => {
+  if (warned.has(message) || warned.size > 1000) return;
+  warned.add(message);
+  console.warn(`[xyte] ${message}`);
+};
 
 const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
 /** Client-managed sessions (`session.id`) remembered per process. */
@@ -111,7 +125,7 @@ export class Xyte {
   extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
     return this.limit(async () => {
       options.signal?.throwIfAborted();
-      return this.run(lenient(request), options.signal);
+      return this.run(lenient(request), options);
     });
   }
 
@@ -124,8 +138,17 @@ export class Xyte {
     await this.close();
   }
 
-  private async run(request: ExtractRequest, cancel: AbortSignal | undefined): Promise<ExtractResponse> {
+  private async run(request: ExtractRequest, options: ExtractOptions): Promise<ExtractResponse> {
+    const cancel = options.signal;
     const plan = this.plan(request);
+    const warnings = new Set<string>();
+    const warn = (message: string) => {
+      if (warnings.has(message)) return;
+      warnings.add(message);
+      if (this.options.onWarning) this.options.onWarning(message, { url: request.url });
+      else warnOnce(message);
+      options.onWarning?.(message);
+    };
     const country = request.geolocation?.toUpperCase();
     const pinnedSession = request.session?.id;
     const poolKey = request.sessionContext ? SessionPool.key(request.sessionContext) : undefined;
@@ -178,6 +201,12 @@ export class Xyte {
               throw serverError(`proxy provider "${this.proxy.name}" failed: ${describe(error)}`, error);
             });
           direct = endpoint == null;
+          const remoteBrowser = plan.browser && this.options.browser?.connect != null;
+          if (country && !isApiEndpoint(endpoint) && !remoteBrowser && (endpoint == null || endpoint.appliesCountry === false)) {
+            warn(
+              `geolocation "${country}" not applied: ${endpoint == null ? 'requests exit directly from this machine' : 'the proxy URL has no country parameter'} (provider "${this.proxy.name}")`,
+            );
+          }
           if (isApiEndpoint(endpoint)) {
             // A scraping API takes the whole request (it renders, solves and proxies itself).
             const answer = await endpoint.api(request, { context, signal });

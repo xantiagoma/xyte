@@ -40,6 +40,16 @@ test('errors are Zyte problem bodies with Zyte statuses', async () => {
   expect(await invalid.json()).toMatchObject({ type: '/request/unprocessable' });
 });
 
+test('a geolocation the exit ignores comes back as an X-Xyte-Warning header, body untouched', async () => {
+  const res = await zyteFetch({ url: `${target.base}/html`, httpResponseBody: true, geolocation: 'DE' });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('x-xyte-warning')).toContain('geolocation "DE" not applied');
+  expect(Object.keys(await res.json())).toEqual(['url', 'statusCode', 'httpResponseBody']);
+
+  const plain = await zyteFetch({ url: `${target.base}/html`, httpResponseBody: true });
+  expect(plain.headers.get('x-xyte-warning')).toBeNull();
+});
+
 test('checks the API key when configured', async () => {
   const res = await zyteFetch({ url: `${target.base}/html`, httpResponseBody: true }, 'WRONG');
   expect(res.status).toBe(401);

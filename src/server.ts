@@ -73,8 +73,13 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
     }
 
     try {
-      // A caller that hangs up cancels the scrape.
-      return Response.json(await xyte.extract(body, { signal: request.signal }));
+      // A caller that hangs up cancels the scrape. Warnings go in a header: the body stays Zyte's.
+      const warnings: string[] = [];
+      const result = await xyte.extract(body, {
+        signal: request.signal,
+        onWarning: (message) => warnings.push(message.replace(/[^\x20-\x7e]/g, '?')),
+      });
+      return Response.json(result, warnings.length > 0 ? { headers: { 'x-xyte-warning': warnings.join('; ') } } : undefined);
     } catch (error) {
       if (error instanceof XyteError) return problem(error.toJSON());
       return problem({

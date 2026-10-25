@@ -148,7 +148,7 @@ Use them with `httpResponseBody`.
 
 | Zyte | xyte |
 | --- | --- |
-| `geolocation` | provider's country parameter |
+| `geolocation` | provider's country parameter; where the exit can't apply it (`direct()`, a plain proxy URL), the request runs with an `X-Xyte-Warning` header / `onWarning` |
 | `ipType` | `byIpType()` |
 | `session.id` | provider sticky session (same exit IP) plus a cookie jar kept across requests |
 | no `session` | fresh exit per attempt: redirects and browser sub-requests share it, retries change it |
