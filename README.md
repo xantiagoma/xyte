@@ -108,6 +108,28 @@ proxy mode, and hosted browsers (Bright Data Scraping Browser, Browserless, ZenR
 NodeMaven), and API-only services (Scrappey, ScrapingBot, or **Zyte API itself** as a fallback
 with full fidelity). Full catalog with formats and confidence levels: [docs/providers.md](docs/providers.md).
 
+### Zyte as the provider
+
+xyte works with Zyte itself behind it: you keep Zyte's anti-ban and AI extraction, and get the
+library (typed requests, `XyteError`s, retries, concurrency) plus the option to switch or fall
+back to another provider later without touching calling code.
+
+```ts
+import { rotate, oxylabs, Xyte, zyteApi } from 'xyte';
+
+// Every Zyte feature, AI extraction included: the request is forwarded unchanged.
+const xyte = new Xyte({ proxy: zyteApi({ apiKey: process.env.ZYTE_API_KEY! }) });
+const { product } = await xyte.extract({ url, product: true });
+
+// A cheaper residential proxy first, Zyte only when it gets banned.
+const hybrid = new Xyte({ proxy: rotate([oxylabs({ username, password }), zyteApi({ apiKey })]) });
+```
+
+`zyteProxy({ apiKey })` uses Zyte's proxy mode (`api.zyte.com:8011`) instead: xyte does the
+fetching and rendering through Zyte's IPs, so you get xyte's browser and Zyte's anti-ban, but not
+Zyte's AI extraction. From env: `XYTE_PROVIDER=zyte-api` or `XYTE_PROVIDER=zyte` with
+`ZYTE_API_KEY`. Both were checked live against Zyte (2026-10-24).
+
 Combinators:
 
 - `rotate([a, b])`: attempt 1 uses `a`, the retry uses `b`. If one provider is down (for example
