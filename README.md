@@ -83,6 +83,10 @@ XYTE_PROVIDER=oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… npx xyte serve -
   });
 ```
 
+Long renders or queues: `POST /v1/jobs` (the same body, plus an optional `callbackUrl`) answers
+`202 { id }` at once; `GET /v1/jobs/{id}` has the result, which is also POSTed (signed) to
+`callbackUrl` ([jobs](docs/configuration.md#asynchronous-jobs)).
+
 Set `XYTE_API_KEYS=key1,key2` to require a key (sent the way Zyte expects it: basic-auth
 username). Docker images (full with Chromium, or slim HTTP-only) and Cloud Run / Fly / Render /
 App Platform / Modal configs: [deploy](docs/deploy.md). To serve it from your own app:

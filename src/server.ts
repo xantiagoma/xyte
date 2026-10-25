@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RequestReport, Xyte } from './client.ts';
 import { XyteError } from './errors.ts';
+import { Jobs, type JobsOptions } from './jobs.ts';
 import type { ExtractRequest } from './types.ts';
 
 export interface HandlerOptions {
@@ -24,6 +25,13 @@ export interface HandlerOptions {
    * proxy's network is what's reachable anyway. Default false; `xyte serve` turns it on.
    */
   blockPrivateTargets?: boolean;
+  /**
+   * `POST /v1/jobs` (a Zyte request plus an optional `callbackUrl`) answers `202 { id, status }`
+   * at once; `GET /v1/jobs/{id}` returns the job, with the Zyte response when `done`; the
+   * result is POSTed to `callbackUrl` when it finishes. Options: where jobs are kept, for how
+   * long, the webhook secret. `false` turns the routes off. On by default, in memory.
+   */
+  jobs?: JobsOptions | false;
 }
 
 const DEFAULT_MAX_BODY = 10 * 1024 * 1024;
@@ -41,51 +49,89 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
   const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY;
   const route = (pathname: string, path: string) =>
     base != null ? pathname === `${base}${path}` : pathname === path || pathname.endsWith(path);
+  const jobs = options.jobs === false ? undefined : new Jobs(xyte, options.jobs ?? {});
+  const jobPath = new RegExp(`${base != null ? `^${escapeRegExp(base)}` : ''}/v1/jobs/([\\w-]+)$`);
+  const notFound = (pathname: string) => problem({ status: 404, type: '/request/not-found', title: 'Not Found', detail: `no route ${pathname}` });
+  const methodNotAllowed = (method: string) => problem({ status: 405, type: '/request/invalid', title: 'Method Not Allowed', detail: `use ${method}` });
 
-  return async (request) => {
-    const { pathname } = new URL(request.url);
-    if (route(pathname, '/healthz')) return new Response('ok');
-    if (!route(pathname, '/v1/extract')) {
-      return problem({ status: 404, type: '/request/not-found', title: 'Not Found', detail: `no route ${pathname}` });
-    }
-    if (request.method !== 'POST') {
-      return problem({ status: 405, type: '/request/invalid', title: 'Method Not Allowed', detail: 'use POST' });
-    }
-    if (keys.size > 0 && !keys.has(apiKeyOf(request) ?? '')) {
-      return problem({ status: 401, type: '/auth/key-not-found', title: 'Authentication Key Not Found' });
-    }
-
+  /** The request's Zyte JSON body, validated; or the problem response to send instead. */
+  const readBody = async (request: Request): Promise<Record<string, unknown> | Response> => {
     const text = await readText(request, maxBody);
     if (text == null) {
       return problem({ status: 413, type: '/request/too-large', title: 'Payload Too Large', detail: `limit is ${maxBody} bytes` });
     }
-    let body: ExtractRequest;
+    let body: unknown;
     try {
-      body = JSON.parse(text) as ExtractRequest;
+      body = JSON.parse(text);
     } catch {
       return problem({ status: 400, type: '/request/invalid-json', title: 'Invalid JSON' });
     }
     if (body == null || typeof body !== 'object' || Array.isArray(body)) {
       return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'body must be an object' });
     }
-    if (options.blockPrivateTargets && typeof body.url === 'string' && isPrivateTarget(body.url)) {
+    const url = (body as { url?: unknown }).url;
+    if (options.blockPrivateTargets && typeof url === 'string' && isPrivateTarget(url)) {
       return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'private and internal addresses are not allowed' });
+    }
+    return body as Record<string, unknown>;
+  };
+
+  return async (request) => {
+    const { pathname } = new URL(request.url);
+    if (route(pathname, '/healthz')) return new Response('ok');
+    const jobId = jobs ? jobPath.exec(pathname)?.[1] : undefined;
+    const isExtract = route(pathname, '/v1/extract');
+    const isJobs = jobs != null && route(pathname, '/v1/jobs');
+    if (!isExtract && !isJobs && !jobId) return notFound(pathname);
+    if (keys.size > 0 && !keys.has(apiKeyOf(request) ?? '')) {
+      return problem({ status: 401, type: '/auth/key-not-found', title: 'Authentication Key Not Found' });
+    }
+
+    if (jobId) {
+      if (request.method !== 'GET') return methodNotAllowed('GET');
+      const job = await jobs!.get(jobId);
+      return job ? Response.json(job) : problem({ status: 404, type: '/job/not-found', title: 'Job Not Found', detail: `no job ${jobId} (finished jobs are kept for a while, then dropped)` });
+    }
+    if (request.method !== 'POST') return methodNotAllowed('POST');
+    const body = await readBody(request);
+    if (body instanceof Response) return body;
+
+    if (isJobs) {
+      // The job API's own field; everything else is the Zyte request.
+      const { callbackUrl, ...extract } = body;
+      if (callbackUrl !== undefined) {
+        let valid = typeof callbackUrl === 'string';
+        try {
+          valid &&= ['http:', 'https:'].includes(new URL(callbackUrl as string).protocol);
+        } catch {
+          valid = false;
+        }
+        if (!valid) return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'callbackUrl must be an http(s) URL' });
+        if (options.blockPrivateTargets && isPrivateTarget(callbackUrl as string)) {
+          return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'callbackUrl: private and internal addresses are not allowed' });
+        }
+      }
+      const job = await jobs!.submit(extract as ExtractRequest, callbackUrl as string | undefined);
+      const location = `${base ?? pathname.slice(0, -'/v1/jobs'.length)}/v1/jobs/${job.id}`;
+      return Response.json(job, { status: 202, headers: { location } });
     }
 
     let report: RequestReport | undefined;
     try {
       // A caller that hangs up cancels the scrape. What it took travels in headers: the body stays Zyte's.
-      const result = await xyte.extract(body, { signal: request.signal, onReport: (r) => (report = r) });
+      const result = await xyte.extract(body as ExtractRequest, { signal: request.signal, onReport: (r) => (report = r) });
       return Response.json(result, { headers: reportHeaders(report) });
     } catch (error) {
-      const body =
+      const problemBody =
         error instanceof XyteError
           ? error.toJSON()
           : { status: 500, type: '/server/internal', title: 'Internal Server Error', detail: error instanceof Error ? error.message : String(error) };
-      return problem(body, reportHeaders(report));
+      return problem(problemBody, reportHeaders(report));
     }
   };
 }
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The body as text, or undefined past `max` bytes. */
 async function readText(request: Request, max: number): Promise<string | undefined> {

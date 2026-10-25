@@ -16,6 +16,7 @@ import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOpt
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
 import type { CacheOptions } from './cache.ts';
 import { parseLimit, type RateLimits } from './pace.ts';
+import type { JobsOptions } from './jobs.ts';
 import type { SessionPoolOptions } from './sessions.ts';
 import { redisStoreFromUrl, type StateStore } from './state.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
@@ -280,6 +281,15 @@ export function rateLimitsFromEnv(env: Env = process.env): RateLimits | undefine
 /** The `sessionContext` pool from the environment: shared through `XYTE_REDIS_URL` when set. */
 export function sessionsFromEnv(env: Env = process.env): SessionPoolOptions | undefined {
   return env.XYTE_REDIS_URL ? { store: sharedStore(env.XYTE_REDIS_URL) } : undefined;
+}
+
+/** The server's job options: `XYTE_WEBHOOK_SECRET`, `XYTE_JOBS_TTL` (seconds), kept in `XYTE_REDIS_URL` when set. */
+export function jobsFromEnv(env: Env = process.env): JobsOptions {
+  return {
+    ...(env.XYTE_REDIS_URL && { store: sharedStore(env.XYTE_REDIS_URL) }),
+    ...(env.XYTE_WEBHOOK_SECRET && { webhookSecret: env.XYTE_WEBHOOK_SECRET }),
+    ...(env.XYTE_JOBS_TTL && { ttl: Number(env.XYTE_JOBS_TTL) }),
+  };
 }
 
 const stores = new Map<string, StateStore>();

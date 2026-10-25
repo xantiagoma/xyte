@@ -21,6 +21,7 @@ export {
   browserFromEnv,
   cacheFromEnv,
   extractorsFromEnv,
+  jobsFromEnv,
   PROVIDER_NAMES,
   proxyFromEnv,
   rateLimitsFromEnv,
@@ -30,6 +31,7 @@ export {
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
 export { doctor, formatDoctor, type DoctorOptions, type DoctorResult } from './doctor.ts';
+export { Jobs, verifyWebhook, type Job, type JobsOptions } from './jobs.ts';
 export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
 export {
   adaptive,

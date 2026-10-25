@@ -42,6 +42,7 @@ default to `process.env`).
 | --- | --- | --- |
 | `PORT` | `8011` (`8080` in the Docker images) | Listening port. |
 | `HOST` | `127.0.0.1` (`0.0.0.0` in the images) | Listening interface. |
+| `XYTE_WEBHOOK_SECRET`, `XYTE_JOBS_TTL` | none, `86400` | Job webhook signing secret, and how long jobs are kept. |
 | `XYTE_API_KEYS` | none | Comma-separated keys clients must send (Basic auth username, as on Zyte). Required off-loopback. |
 | `XYTE_ALLOW_ANONYMOUS` | `false` | `true` to listen off-loopback without keys. |
 | `XYTE_ALLOW_PRIVATE_TARGETS` | `false` | `true` to let requests target localhost, private IPs, `*.internal`… |
@@ -106,7 +107,29 @@ The `/v1/extract` handler behind `xyte serve`, for mounting in your own app ([mo
 | `apiKeys` | any key accepted | Accepted keys (Basic auth username). |
 | `basePath` | any path ending in `/v1/extract` | Where the routes live, e.g. `/zyte`. `GET …/healthz` answers `ok`. |
 | `maxBodyBytes` | 10 MB | Largest accepted request body (413 above). |
-| `blockPrivateTargets` | `false` (`xyte serve`: `true`) | Reject targets on loopback, private, link-local and metadata addresses. |
+| `blockPrivateTargets` | `false` (`xyte serve`: `true`) | Reject targets (and job `callbackUrl`s) on loopback, private, link-local and metadata addresses. |
+| `jobs` | on, in memory | Asynchronous jobs ([below](#asynchronous-jobs)): `{ store?, ttl?, webhookSecret?, webhookAttempts? }`, or `false` to turn the routes off. |
+
+### Asynchronous jobs
+
+For renders that outlast an HTTP timeout, or work fed from a queue:
+
+```sh
+curl -u key: localhost:8011/v1/jobs -d '{"url":"https://example.com","browserHtml":true,"callbackUrl":"https://you.example/hook"}'
+# 202 {"id":"…","status":"queued", …}   Location: /v1/jobs/…
+curl -u key: localhost:8011/v1/jobs/…
+# {"id":"…","status":"done","response":{…the Zyte response…}, "callback":{"status":"delivered","attempts":1}}
+```
+
+- The body is a Zyte request plus an optional `callbackUrl`. `status` goes `queued`, `running`,
+  then `done` (with `response`) or `failed` (with the Zyte problem in `error`).
+- With `callbackUrl`, the finished job is POSTed there (header `X-Xyte-Job-Id`), retried with
+  backoff (`webhookAttempts`, default 3); `callback` on the job says how it went. With
+  `webhookSecret` (`XYTE_WEBHOOK_SECRET`), deliveries carry `X-Xyte-Signature: sha256=<hex
+  HMAC-SHA256 of the body>`; `verifyWebhook(body, signature, secret)` checks it.
+- Jobs are kept `ttl` seconds (a day; `XYTE_JOBS_TTL`), in memory or in Redis with
+  `XYTE_REDIS_URL` so any instance answers `GET /v1/jobs/{id}`. A job runs on the instance that
+  received it: if that instance stops, the job stays `running`.
 
 Responses are Zyte's. What a request took travels in headers so the body stays identical:
 `X-Xyte-Request-Id`, `X-Xyte-Attempts` (`provider:result,…`), `X-Xyte-Transfer-Bytes`, and

@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
-import { browserFromEnv, cacheFromEnv, extractorsFromEnv, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv, sessionsFromEnv } from './env.ts';
+import {
+  browserFromEnv,
+  cacheFromEnv,
+  extractorsFromEnv,
+  jobsFromEnv,
+  proxyFromEnv,
+  rateLimitsFromEnv,
+  ratesFromEnv,
+  sessionsFromEnv,
+} from './env.ts';
 import { doctor, formatDoctor } from './doctor.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
@@ -29,6 +38,7 @@ Proxy (environment):
   XYTE_CIRCUIT_BREAKER=5,60                      skip a provider for 60 s after 5 straight failures
   XYTE_BUDGET=zyte-api=500/hour                  cap attempts per provider (then 429 / skipped)
   XYTE_API_KEYS=key1,key2   accepted keys for "serve" (required off-loopback, unless XYTE_ALLOW_ANONYMOUS=true)
+  XYTE_WEBHOOK_SECRET=…     signs job webhooks (POST /v1/jobs with callbackUrl); XYTE_JOBS_TTL=86400
   XYTE_ALLOW_PRIVATE_TARGETS=true   let "serve" fetch localhost / private IPs (blocked by default)
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY
 
@@ -107,7 +117,7 @@ if (command === 'serve') {
     process.exit(1);
   }
   const server = await serve(
-    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true' }),
+    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true', jobs: jobsFromEnv(env) }),
     { port: num(values.port ?? env.PORT), hostname },
   );
   console.error(`[xyte] listening on ${server.url}v1/extract`);
