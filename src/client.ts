@@ -70,12 +70,14 @@ export interface XyteOptions {
    */
   actions?: ActionHandlers;
   /**
-   * A Zyte-only action with no handler, on a provider that isn't Zyte (and actions on an
-   * HTML-only API): `warn` (default) skips it (`notExecuted` in the response's `actions`, plus a
-   * warning) and runs the rest; `error` passes over to `zyteApi()` when a combinator has it, else
-   * rejects with a 400; `zyte` passes over to `zyteApi()` when a combinator has it (the built-in
-   * search heuristic's actions too), else like `warn`. Actions you have a handler for always run
-   * locally. See docs/actions.md.
+   * What happens to an action that can't run where the attempt landed: a Zyte-only action with
+   * no handler on a local-browser provider (proxies, `direct()`, remote browsers), or any action
+   * on an HTML-only API (Scrappey, ScrapingBot), once there's no provider to pass over to.
+   * `warn` (default) skips it (`notExecuted` in the response's `actions`, plus a warning) and runs
+   * the rest; `error` passes over to `zyteApi()` when a combinator has it, else rejects with a
+   * 400; `zyte` passes over to `zyteApi()` when a combinator has it (the built-in search
+   * heuristic's actions too), else like `warn`. Actions you have a handler for always run locally.
+   * See docs/actions.md.
    */
   unsupportedActions?: 'warn' | 'error' | 'zyte';
   /**

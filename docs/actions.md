@@ -64,13 +64,30 @@ On each attempt, each of these actions is one of three kinds:
   where Zyte isn't, never a reason to skip Zyte.
 - **None**: `setLocation` or `interaction` with no handler, or `searchKeyword: false`.
 
-| | Attempt on `zyteApi()` | Attempt on any other provider |
-| --- | --- | --- |
-| **Yours** | passed over for a provider with a local browser. With `zyteApi()` the only option: `searchKeyword` / `setLocation` go to Zyte, which runs its own, plus a warning; your `interaction` script isn't sent (see below) | your handler runs |
-| **Built-in** | Zyte runs its own | the heuristic runs (with `'zyte'`: passed over for Zyte if a combinator has it) |
-| **None** | Zyte runs it | `unsupportedActions` decides ↓ |
+What happens depends on the kind and on what the attempt's provider is. There are three types
+of providers here:
 
-| `unsupportedActions` | **None**, on a provider that isn't Zyte |
+- **Local browser**: proxies (`oxylabs`, `decodo`, `direct()`, `template()`…), scraping APIs in
+  proxy mode, remote browsers, `zyteProxy()`. xyte's browser runs the actions.
+- **`zyteApi()`**: Zyte's browser runs them, its own three included. Your code can't run there.
+- **HTML-only APIs** (`scrappey()`, `scrapingBot()`): no browser at all, so no action of any kind
+  runs, standard ones (`click`…) included. See [below](#html-only-apis-scrappey-scrapingbot).
+
+| | Attempt on a local-browser provider | Attempt on `zyteApi()` | Attempt on an HTML-only API |
+| --- | --- | --- | --- |
+| **Yours** | your handler runs | passed over for a local-browser provider. With nowhere to go: `searchKeyword` / `setLocation` go to Zyte, which runs its own, plus a warning; your `interaction` script isn't sent (see below) | passed over. With nowhere to go: skipped, like every action on it |
+| **Built-in** | the heuristic runs (with `'zyte'`: passed over for Zyte if a combinator has it) | Zyte runs its own | passed over. With nowhere to go: skipped, like every action on it |
+| **None** | `unsupportedActions` decides ↓ | Zyte runs it | passed over. With nowhere to go: skipped, like every action on it |
+
+On an HTML-only API with nowhere to go, "skipped" means `'warn'` and `'zyte'` return the page with
+every action `notExecuted` (the reason in `error`) plus a warning, and `'error'` is a 400.
+
+An `ApiEndpoint` you write that doesn't declare `unsupported` is assumed to run everything: it
+gets the request as is, except actions with your handler, which look for a local-browser provider
+first (and with nowhere to go, as on `zyteApi()`: your `interaction` scripts aren't sent, the
+other two go with a warning).
+
+| `unsupportedActions` | **None**, on a local-browser provider |
 | --- | --- |
 | `'warn'` (default) | skipped: `notExecuted` in the response's `actions`, a warning (`onWarning`, `X-Xyte-Warning`), the other actions go on |
 | `'error'` | run it or fail: passed over for Zyte if a combinator has it, else a 400 naming the action. While Zyte is reachable the outcome doesn't depend on which provider an attempt lands on; when it isn't (a `route()` that never sends this site to Zyte, or the pass-over limits below), it's the 400. With no `zyteApi()` among the providers at all, the 400 comes before any request |
