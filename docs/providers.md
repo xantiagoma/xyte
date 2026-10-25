@@ -18,10 +18,16 @@ new Xyte({
 });
 ```
 
-**Confidence**: ✅ format taken from the provider's own docs. 🟡 from partial or third-party
-sources: check it against your dashboard on the first request. None of these presets has been
-run against a live account by the xyte tests; the tests check the exact credentials each preset
-produces. If one is off for your plan, use [`template()`](#any-other-provider-template) with the
+**Confidence**: 🟢 run against a live account (`XYTE_LIVE_PROVIDER=<name> bun run test:live`).
+✅ format taken from the provider's own docs. 🟡 from partial or third-party sources: check it
+against your dashboard on the first request. The unit tests check the exact credentials each
+preset produces.
+
+Checked live on 2026-10-24: `scrapingbee` (HTTP suite 16/16, `geolocation` exits on residential
+ISPs), `zyte-api` (AI extraction), `zyte` (proxy mode, `geolocation`). ScrapingBee notes: the
+preset sets `forward_headers_pure` so custom headers and cookies reach the site, reads its
+`Resolved-Url` header for the final URL after redirects, hides its `Spb-*` headers, and retries its
+own unbilled 5xx answers (unresolvable domain, target 5xx), which end as a `520`. If one is off for your plan, use [`template()`](#any-other-provider-template) with the
 format from your dashboard, and please open an issue.
 
 ## Residential and datacenter networks
@@ -64,7 +70,7 @@ as the retry fallback: `rotate([nodeMaven(…), zenrows(…)])`.
 | Preset | `XYTE_PROVIDER` · env | Endpoint | Parameters go in | |
 | --- | --- | --- | --- | --- |
 | `zenrows({ apiKey })` | `zenrows` · `ZENROWS_API_KEY` | `api.zenrows.com:8001` | password | ✅ |
-| `scrapingBee({ apiKey })` | `scrapingbee` | `proxy.scrapingbee.com:8886` | password | ✅ |
+| `scrapingBee({ apiKey })` | `scrapingbee` | `proxy.scrapingbee.com:8886` | password | 🟢 |
 | `scraperApi({ apiKey })` | `scraperapi` | `proxy-server.scraperapi.com:8001` | username | ✅ |
 | `crawlbase({ token })` | `crawlbase` · `CRAWLBASE_TOKEN` | `smartproxy.crawlbase.com:8012` | `CrawlbaseAPI-*` headers | ✅ |
 | `scrapeDo({ token })` | `scrapedo` · `SCRAPEDO_TOKEN` | `proxy.scrape.do:8080` | password | ✅ |
@@ -73,7 +79,7 @@ as the retry fallback: `rotate([nodeMaven(…), zenrows(…)])`.
 | `scrapfly({ apiKey })` | `scrapfly` | `proxy.scrapfly.io:7777` | username | 🟡 |
 | `oxylabsUnblocker({ username, password })` | `oxylabs-unblocker` | `unblock.oxylabs.io:60000` | `x-oxylabs-*` headers | ✅ |
 | `brightData({ … zone: 'your-unlocker-zone' })` | `brightdata` | `brd.superproxy.io:33335` | username (Web Unlocker is a zone) | ✅ |
-| `zyteProxy({ apiKey })` | `zyte` · `ZYTE_API_KEY` | `api.zyte.com:8011` | `Zyte-*` headers | ✅ |
+| `zyteProxy({ apiKey })` | `zyte` · `ZYTE_API_KEY` | `api.zyte.com:8011` | `Zyte-*` headers | 🟢 |
 
 `zyteProxy` lets Zyte itself be one provider among others, for example the last resort in
 `rotate([residential, zyteProxy({ apiKey })])`.
@@ -149,7 +155,7 @@ detection, extractors and `rotate()` work as with proxies, so the two kinds can 
 
 | Adapter | `XYTE_PROVIDER` · env | Notes | |
 | --- | --- | --- | --- |
-| `zyteApi({ apiKey })` | `zyte-api` · `ZYTE_API_KEY` | Forwards the request to Zyte unchanged, so **every** Zyte feature works (AI extraction, actions, sessions). Zyte's bans and problems pass through. Bans aren't re-checked locally. | ✅ |
+| `zyteApi({ apiKey })` | `zyte-api` · `ZYTE_API_KEY` | Forwards the request to Zyte unchanged, so **every** Zyte feature works (AI extraction, actions, sessions). Zyte's bans and problems pass through. Bans aren't re-checked locally. | 🟢 |
 | `scrappey({ apiKey })` | `scrappey` · `SCRAPPEY_API_KEY` | `requestType` browser/request from the request, `proxyCountry`, cookies, headers, POST bodies | 🟡 response fields |
 | `scrapingBot({ username, apiKey, options? })` | `scrapingbot` · `SCRAPINGBOT_USERNAME/API_KEY` | Raw HTML API; the target status isn't reported (assumed 200) | 🟡 option names |
 

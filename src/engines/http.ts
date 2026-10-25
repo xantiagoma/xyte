@@ -60,6 +60,12 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
       await res.body?.cancel();
       throw new ProxyError(`proxy rejected the credentials (407)${proxyLabel(attempt.proxy)}`);
     }
+    const seen = attempt.proxy?.inspect?.({ status: res.status, headers: res.headers });
+    if (seen?.failure) {
+      await res.body?.cancel();
+      throw new ProxyError(`${seen.failure}${proxyLabel(attempt.proxy)}`);
+    }
+    if (seen?.url) url = safeUrl(seen.url, url) ?? url;
 
     jar.setFromHeaders(res.headers.getSetCookie(), url);
 
@@ -81,7 +87,8 @@ export async function runHttp(attempt: EngineAttempt, transport: Transport): Pro
     }
 
     const truncated = await readCapped(res, MAX_BODY_BYTES);
-    const headerList = toHeaderList(res.headers);
+    const hidden = attempt.proxy?.hiddenHeaders;
+    const headerList = toHeaderList(res.headers).filter((h) => !hidden?.test(h.name));
 
     const response: ExtractResponse = { url: url.toString(), statusCode: res.status };
     if (request.httpResponseBody) response.httpResponseBody = toBase64(truncated);

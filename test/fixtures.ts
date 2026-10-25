@@ -63,6 +63,14 @@ export function startTarget() {
           });
         case '/big':
           return new Response('x'.repeat(12 * 1024 * 1024));
+        case '/spb-ok':
+          // What ScrapingBee answers after following a redirect itself.
+          return new Response('final page', {
+            headers: { 'resolved-url': `${url.origin}/landing`, 'spb-cost': '10', 'initial-status-code': '200', 'x-real': '1' },
+          });
+        case '/spb-error':
+          // ScrapingBee's own error (unresolvable domain, target 5xx): unbilled.
+          return Response.json({ error: 'Error with your request', reason: 'Server responded with 613' }, { status: 500, headers: { 'spb-cost': '0' } });
         case '/api/data':
           return Response.json({ secret: 42 });
         case '/api/slow':

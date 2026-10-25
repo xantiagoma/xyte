@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   brightData,
   byIpType,
+  custom,
   decodo,
   decodeBody,
   iproyal,
@@ -82,6 +83,26 @@ describe('through a real proxy', () => {
     expect(error.detail).toContain('407');
   });
 
+  test('ScrapingBee: final url, hidden bookkeeping headers, its own errors retried', async () => {
+    // The real preset's endpoint, pointed at the local proxy.
+    const bee = await scrapingBee({ apiKey: 'K' }).resolve(ctx({}));
+    const provider = custom('bee', () => ({ ...bee!, url: `http://bob:secret@127.0.0.1:${proxy.port}`, insecure: false }));
+    const xyte = new Xyte({ retries: 1, proxy: provider });
+
+    const ok = await xyte.extract({ url: `${target.base}/spb-ok`, httpResponseBody: true, httpResponseHeaders: true });
+    expect(ok.url).toBe(`${target.base}/landing`);
+    const names = ok.httpResponseHeaders!.map((h) => h.name.toLowerCase());
+    expect(names).toContain('x-real');
+    expect(names).not.toContain('spb-cost');
+    expect(names).not.toContain('resolved-url');
+
+    const before = target.hits.get('/spb-error') ?? 0;
+    const error = await xyte.extract({ url: `${target.base}/spb-error`, httpResponseBody: true }).catch((e) => e);
+    expect(error.status).toBe(520);
+    expect(error.detail).toContain('ScrapingBee could not fetch the page');
+    expect((target.hits.get('/spb-error') ?? 0) - before).toBe(2);
+  });
+
   test('rotate() falls over to the next provider when one is down', async () => {
     const broken = proxyUrl(`http://alice:wrong@127.0.0.1:${proxy.port}`);
     const working = proxyUrl(`http://bob:secret@127.0.0.1:${proxy.port}`);
@@ -120,7 +141,7 @@ describe('provider presets', () => {
     expect(z!.insecure).toBe(true);
 
     const s = await scrapingBee({ apiKey: 'K' }).resolve(ctx({ country: 'US' }));
-    expect(passOf(s!.url)).toMatch(/^render_js=False&premium_proxy=True&country_code=us&session_id=\d+$/);
+    expect(passOf(s!.url)).toMatch(/^render_js=False&forward_headers_pure=True&premium_proxy=True&country_code=us&session_id=\d+$/);
 
     const a = await scraperApi({ apiKey: 'K' }).resolve(ctx({ country: 'US' }));
     expect(userOf(a!.url)).toMatch(/^scraperapi\.country_code=us\.session_number=\d+$/);

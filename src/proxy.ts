@@ -34,6 +34,14 @@ export interface ProxyEndpoint {
    * parameters as headers in proxy mode (Crawlbase, Zyte, Oxylabs Web Unblocker).
    */
   headers?: Record<string, string>;
+  /**
+   * Reads what a scraping API in proxy mode adds to its answers (HTTP requests only): the final
+   * URL after redirects it followed itself, and its own error answers, which are retried as a
+   * provider failure instead of being returned as the target's status.
+   */
+  inspect?: (res: { status: number; headers: Headers }) => { url?: string; failure?: string } | undefined;
+  /** The provider's bookkeeping headers, left out of `httpResponseHeaders`. */
+  hiddenHeaders?: RegExp;
 }
 
 /**
@@ -419,7 +427,8 @@ export function scrapingBee(options: {
   return {
     name: 'scrapingbee',
     resolve({ country, sessionId }) {
-      const params = new URLSearchParams({ render_js: 'False', ...options.params });
+      // forward_headers_pure: send our headers (cookies included) as they are.
+      const params = new URLSearchParams({ render_js: 'False', forward_headers_pure: 'True', ...options.params });
       if (options.stealthProxy) params.set('stealth_proxy', 'True');
       else if (options.premiumProxy !== false) params.set('premium_proxy', 'True');
       if (country && (options.stealthProxy || options.premiumProxy !== false)) {
@@ -429,6 +438,15 @@ export function scrapingBee(options: {
       return {
         url: `http://${encode(options.apiKey)}:${encode(params.toString())}@proxy.scrapingbee.com:8886`,
         insecure: true,
+        inspect: (res) => ({
+          url: res.headers.get('resolved-url') ?? res.headers.get('spb-resolved-url') ?? undefined,
+          // Its own errors (unresolvable domain, target 5xx) are unbilled 5xx answers.
+          failure:
+            res.status >= 500 && (res.headers.get('spb-cost') ?? res.headers.get('cost')) === '0'
+              ? `ScrapingBee could not fetch the page (${res.status}, not billed)`
+              : undefined,
+        }),
+        hiddenHeaders: /^(spb-.*|cost|initial-status-code|resolved-url)$/i,
       };
     },
   };

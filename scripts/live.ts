@@ -3,6 +3,8 @@
 //   bun run test:live                                    # builds, serves dist/ on Node with direct(), checks it
 //   XYTE_LIVE_URL=https://xyte.example/v1/extract XYTE_LIVE_KEY=… bun scripts/live.ts   # a deployed xyte
 //   XYTE_LIVE_URL=https://api.zyte.com/v1/extract bun scripts/live.ts  # Zyte itself, key from ZYTE_API_KEY (.env)
+//   XYTE_LIVE_PROVIDER=oxylabs bun scripts/live.ts       # the local server through a provider (credentials from .env)
+//   XYTE_LIVE_HTTP_ONLY=true …                           # skip browser checks (scraping APIs bill every sub-request)
 //
 // The same requests against xyte and Zyte, so the answers can be compared. Checks of xyte-only
 // behaviour (SSRF guard, AI fields without an extractor) are skipped against Zyte.
@@ -11,12 +13,14 @@ import { spawn, type ChildProcess } from 'node:child_process';
 const PORT = 8099;
 let base = process.env.XYTE_LIVE_URL;
 const againstZyte = base?.includes('api.zyte.com') ?? false;
+const provider = process.env.XYTE_LIVE_PROVIDER ?? '';
+const httpOnly = process.env.XYTE_LIVE_HTTP_ONLY === 'true';
 const key = process.env.XYTE_LIVE_KEY ?? (againstZyte ? process.env.ZYTE_API_KEY : undefined) ?? 'live-test-key';
 let server: ChildProcess | undefined;
 
 if (!base) {
   base = `http://127.0.0.1:${PORT}/v1/extract`;
-  server = spawn('node', ['dist/cli.mjs', 'serve'], { env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', XYTE_API_KEYS: key, XYTE_PROVIDER: '', XYTE_PROXY_URL: '', XYTE_PROXY_TEMPLATE: '' }, stdio: 'inherit' });
+  server = spawn('node', ['dist/cli.mjs', 'serve'], { env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', XYTE_API_KEYS: key, XYTE_PROVIDER: provider, XYTE_PROXY_URL: '', XYTE_PROXY_TEMPLATE: '' }, stdio: 'inherit' });
   for (let i = 0; i < 50; i++) {
     if (await fetch(`http://127.0.0.1:${PORT}/healthz`).then((r) => r.ok, () => false)) break;
     await new Promise((r) => setTimeout(r, 200));
@@ -38,8 +42,8 @@ async function call(body: unknown, opts: { key?: string; raw?: string } = {}): P
 
 let passed = 0;
 let failed = 0;
-async function check(name: string, fn: () => Promise<[boolean, string]>, { xyteOnly = false } = {}): Promise<void> {
-  if (xyteOnly && againstZyte) return void console.log(`SKIP  ${name}`);
+async function check(name: string, fn: () => Promise<[boolean, string]>, { xyteOnly = false, browser = false } = {}): Promise<void> {
+  if ((xyteOnly && againstZyte) || (browser && httpOnly)) return void console.log(`SKIP  ${name}`);
   const [ok, info] = await fn().catch((e): [boolean, string] => [false, String(e)]);
   ok ? passed++ : failed++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${info}`);
@@ -91,7 +95,7 @@ await check('browserHtml renders JavaScript', async () => {
   const raw = (decode(http.json.httpResponseBody).match(/class="quote"/g) ?? []).length;
   const rendered = (r.json.browserHtml?.match(/class="quote"/g) ?? []).length;
   return [rendered >= 10 && raw === 0, `quotes: ${raw} over HTTP, ${rendered} rendered, ${r.ms} ms`];
-});
+}, { browser: true });
 
 await check('actions: waitForSelector, evaluate, onError continue', async () => {
   const r = await call({
@@ -106,20 +110,20 @@ await check('actions: waitForSelector, evaluate, onError continue', async () => 
   const statuses: string[] = r.json.actions?.map((a: { status: string }) => a.status) ?? [];
   const ok = statuses[0] === 'success' && statuses[1] === 'success' && statuses[2] !== 'success' && r.json.browserHtml?.includes('data-live="1"');
   return [r.status === 200 && ok, `action statuses ${statuses}`];
-});
+}, { browser: true });
 
 await check('networkCapture of the page’s XHR', async () => {
   const r = await call({ url: 'https://quotes.toscrape.com/scroll', browserHtml: true, networkCapture: [{ filterType: 'url', matchType: 'contains', value: 'api/quotes', httpResponseBody: true }] });
   const capture = r.json.networkCapture?.[0];
   const quotes = capture ? JSON.parse(decode(capture.httpResponseBody)).quotes?.length : 0;
   return [quotes > 0, `${r.json.networkCapture?.length} captures, ${capture?.url}, ${quotes} quotes`];
-});
+}, { browser: true });
 
 await check('screenshot: JPEG by default, PNG on request', async () => {
   const jpeg = Buffer.from((await call({ url: 'https://example.com', screenshot: true })).json.screenshot ?? '', 'base64');
   const png = Buffer.from((await call({ url: 'https://example.com', screenshot: true, screenshotOptions: { format: 'png' } })).json.screenshot ?? '', 'base64');
   return [jpeg[0] === 0xff && jpeg[1] === 0xd8 && png.subarray(1, 4).toString() === 'PNG', `jpeg ${jpeg.length} B, png ${png.length} B`];
-});
+}, { browser: true });
 
 await check('markdown', async () => {
   const r = await call({ url: 'https://en.wikipedia.org/wiki/Web_scraping', markdown: true });
@@ -153,9 +157,12 @@ await check('invalid JSON is 400 /request/invalid-json', async () => {
   return [r.status === 400 && r.json?.type === '/request/invalid-json', `${r.status} ${r.json?.type}`];
 });
 
-await check('an unresolvable domain is 421 /website/domain-unreachable', async () => {
+// Direct connections see the DNS failure (421). Through a proxy it is the provider's error,
+// retried like any proxy failure, then a 520.
+await check(`an unresolvable domain is ${provider ? '520' : '421 /website/domain-unreachable'}`, async () => {
   const r = await call({ url: 'https://this-domain-does-not-exist-xyte-live.com', httpResponseBody: true });
-  return [r.status === 421 && r.json?.type === '/website/domain-unreachable', `${r.status} ${r.json?.type}`];
+  const ok = provider ? r.status === 520 : r.status === 421 && r.json?.type === '/website/domain-unreachable';
+  return [ok, `${r.status} ${r.json?.type} ${r.ms} ms`];
 });
 
 await check('private targets are rejected', async () => {
@@ -168,6 +175,6 @@ await check('an AI field without an extractor is a 400 that says so', async () =
   return [r.status === 400 && /extractor/.test(r.json?.detail ?? ''), `${r.status} ${r.json?.detail}`];
 }, { xyteOnly: true });
 
-console.log(`\n${passed} passed, ${failed} failed (${base})`);
+console.log(`\n${passed} passed, ${failed} failed (${base}${provider ? `, provider ${provider}` : ''})`);
 server?.kill();
 process.exit(failed ? 1 : 0);
