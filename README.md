@@ -91,6 +91,7 @@ CLI one-offs:
 npx xyte extract https://example.com --raw              # HTTP, prints the body
 npx xyte extract https://example.com --browser --country GB
 npx xyte extract --json '{"url":"https://example.com","browserHtml":true}'
+npx xyte doctor --country US   # each configured provider: credentials, exit IP/country, quota
 ```
 
 ## Providers

@@ -21,6 +21,7 @@ your scrapers ──POST /v1/extract──▶ xyte (Cloud Run, Fly, Render…) �
 | Browser | `XYTE_BROWSER`, `XYTE_BROWSER_WS`, `XYTE_BLOCK_RESOURCES`… ([browser](browser.md)) |
 | Tuning | `XYTE_CONCURRENCY`, `XYTE_RETRIES` (3), `XYTE_TIMEOUT` (60 s per attempt) |
 | Shutdown | `SIGTERM` closes the server and the browser |
+| Pre-flight | `xyte doctor` (same image and env) checks every configured provider's credentials, exit and quota; exits 1 on a failure |
 
 In your scraper code:
 

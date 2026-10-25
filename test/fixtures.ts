@@ -114,6 +114,9 @@ export function startTarget() {
           const q = url.searchParams.get('q') ?? url.searchParams.get('query') ?? '';
           return new Response(`<html><body><h1>Results for ${q.replace(/[<>&]/g, '')}</h1></body></html>`, { headers: { 'content-type': 'text/html' } });
         }
+        case '/ipinfo':
+          // Like ipinfo.io/json, for `xyte doctor`.
+          return Response.json({ ip: '203.0.113.7', country: 'AR', city: 'Rosario', org: 'AS0 Test Net' });
         case '/gzip':
           // 200 KB of HTML that compresses to a few KB.
           return new Response(Bun.gzipSync(`<html><body>${'<p>same paragraph again</p>'.repeat(8000)}</body></html>`), {

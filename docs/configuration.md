@@ -118,6 +118,21 @@ Responses are Zyte's. What a request took travels in headers so the body stays i
 xyte serve [--port 8011] [--host 127.0.0.1]
 xyte extract <url> [--browser] [--country US] [--raw]
 xyte extract --json '{"url": "…", "httpResponseBody": true}'
+xyte doctor [--providers oxylabs,zyte-api] [--country US] [--url https://ipinfo.io/json]
+```
+
+`doctor` checks `direct` and every provider the environment configures (or `--providers`): that
+its credentials are there, that a request through it works and where it exits (IP, country, ISP,
+via ipinfo.io), whether `--country` is applied, and its quota or status where it has a usage API
+or status page. It exits with 1 when anything fails, so it also works as a deploy check:
+
+```
+provider     status  exit / error                                         time     quota / notes
+direct       ok      179.15.5.159 · CO · AS13489 UNE EPM TELECOMUNICACIONES  891 ms  exits from CO, not US: geolocation isn't applied
+oxylabs      ok      47.146.129.143 · US · AS5650 Verizon Business          1743 ms
+zyte-api     ok      174.140.236.200 · US · AS9009 M247 Europe SRL          1066 ms  status.zyte.com: All Systems Operational
+scrapingbee  ok      139.55.174.21 · US · AS7029 Windstream                 3016 ms  scrapingbee 320/1000 credits used
+zenrows      FAIL    ZENROWS_API_KEY is required
 ```
 
 `extract` prints the Zyte response JSON, or with `--raw` just the page (decoded body or browser

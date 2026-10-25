@@ -2,6 +2,7 @@
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
 import { browserFromEnv, cacheFromEnv, extractorsFromEnv, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv, sessionsFromEnv } from './env.ts';
+import { doctor, formatDoctor } from './doctor.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -12,6 +13,8 @@ Usage:
   xyte serve [--port 8011] [--host 127.0.0.1]
   xyte extract <url> [--browser] [--country US] [--raw]
   xyte extract --json '{"url": "…", "httpResponseBody": true}'
+  xyte doctor [--providers oxylabs,zyte-api] [--country US] [--url https://ipinfo.io/json]
+      checks each configured provider: credentials, a real request (exit IP and country), quota
 
 Proxy (environment):
   XYTE_PROXY_URL=http://user:pass@host:port[,…]
@@ -54,6 +57,8 @@ const { values, positionals } = parseArgs({
     country: { type: 'string' },
     json: { type: 'string' },
     raw: { type: 'boolean' },
+    providers: { type: 'string' },
+    url: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
 });
@@ -61,7 +66,8 @@ const { values, positionals } = parseArgs({
 const env = process.env;
 const num = (value: string | undefined) => (value ? Number(value) : undefined);
 
-const xyte = new Xyte({
+// Built on demand: `doctor` must run even when a provider's credentials are missing.
+const makeXyte = () => new Xyte({
   proxy: proxyFromEnv(env),
   browser: browserFromEnv(env),
   extractors: extractorsFromEnv(env),
@@ -86,6 +92,7 @@ if (values.help || !command) {
 }
 
 if (command === 'serve') {
+  const xyte = makeXyte();
   const apiKeys = env.XYTE_API_KEYS?.split(',').map((k) => k.trim()).filter(Boolean) ?? [];
   const hostname = values.host ?? env.HOST ?? '127.0.0.1';
   const loopback = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
@@ -109,6 +116,7 @@ if (command === 'serve') {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 } else if (command === 'extract') {
+  const xyte = makeXyte();
   const request = values.json
     ? JSON.parse(values.json)
     : {
@@ -129,6 +137,15 @@ if (command === 'serve') {
   } finally {
     await xyte.close();
   }
+} else if (command === 'doctor') {
+  const results = await doctor({
+    env,
+    providers: values.providers ? values.providers.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
+    country: values.country,
+    url: values.url,
+  });
+  console.log(formatDoctor(results));
+  if (results.some((r) => !r.ok || (r.quota && (!('available' in r.quota) || !r.quota.available)))) process.exitCode = 1;
 } else {
   console.error(`unknown command "${command}"\n\n${HELP}`);
   process.exit(1);

@@ -290,8 +290,28 @@ function sharedStore(url: string): StateStore {
   return store;
 }
 
+/** A provider by its `XYTE_PROVIDER` name (or `direct`), as is: no budget, breaker or watch. */
+export function providerFromName(name: string, env: Env = process.env): ProxyProvider {
+  const key = name.trim().toLowerCase();
+  if (key === 'direct') return direct();
+  const make = PROVIDERS[key];
+  if (!make) throw new Error(`xyte: unknown provider "${key}" (one of direct, ${Object.keys(PROVIDERS).join(', ')})`);
+  return make(env);
+}
+
+/** Every provider name the environment configures (XYTE_PROVIDER, XYTE_ROUTES, XYTE_ADAPTIVE, XYTE_BROWSER_PROVIDER). */
+export function configuredProviderNames(env: Env = process.env): string[] {
+  const names = [
+    ...list(env.XYTE_PROVIDER),
+    ...list(env.XYTE_ADAPTIVE),
+    ...list(env.XYTE_BROWSER_PROVIDER),
+    ...list(env.XYTE_ROUTES).flatMap((entry) => (entry.split('=')[1] ?? '').split('+')),
+  ].map((name) => name.trim().toLowerCase());
+  return [...new Set(names.filter(Boolean))];
+}
+
 /** The usage API or status page `XYTE_WATCH` uses for a provider name, if there is one. */
-function checkFor(name: string, env: Env): ProviderCheck | undefined {
+export function checkFor(name: string, env: Env): ProviderCheck | undefined {
   switch (name) {
     case 'scrapingbee':
       return env.SCRAPINGBEE_API_KEY ? scrapingBeeUsage({ apiKey: env.SCRAPINGBEE_API_KEY }) : undefined;
