@@ -80,8 +80,10 @@ Where xyte answers differently from Zyte, depending on how it's configured:
 - **`markdown` is built in**, like Zyte's: non-AI, no LLM needed. `pageContent` is the AI field.
 - **Zyte decides HTTP vs browser per site; xyte does what you ask.** A site that needs
   JavaScript returns its empty shell to `httpResponseBody`. Request `browserHtml` instead.
-- **Zyte-only features:** the `searchKeyword`, `setLocation` and `interaction` actions return a
-  400. Zyte's proxy mode (port 8011) and its Stats API aren't implemented: xyte serves only
+- **Zyte-only features:** the `searchKeyword`, `setLocation` and `interaction` actions rely on
+  Zyte's per-site knowledge and hosted scripts. They work with `zyteApi()` as the provider (e.g.
+  `route({ 'doordash.com': zyteApi(…) }, …)` for the sites that use them) and return a 400
+  elsewhere. Zyte's proxy mode (port 8011) and its Stats API aren't implemented: xyte serves only
   `POST /v1/extract`.
 
 These match Zyte, so they need no changes: `screenshot` defaults to JPEG (`screenshotOptions.format:

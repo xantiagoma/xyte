@@ -346,6 +346,8 @@ export class Xyte {
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
             trusted = answer.trusted === true;
           } else {
+            // A combinator that includes Zyte landed on a provider that can't run Zyte's own actions.
+            if (inBrowser) assertSupportedActions(request.actions);
             const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal };
             result = inBrowser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
           }
@@ -443,6 +445,7 @@ export class Xyte {
       const proxy = await this.proxy.resolve(initContext);
       // A scraping API keeps its own sessions; there is no local browser to initialize.
       if (isApiEndpoint(proxy)) return;
+      assertSupportedActions(actions);
       result = 'error';
       await this.browser.run({
         request: { url: request.url, browserHtml: true, actions, device: request.device },
@@ -468,7 +471,8 @@ export class Xyte {
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw invalidRequest('"url" must be http or https');
 
-    if (request.sessionContext) assertSupportedActions(request.sessionContextParameters?.actions);
+    // Zyte's own actions run only where Zyte runs them (zyteApi()); checked per attempt then.
+    if (request.sessionContext && !this.proxy.zyteActions) assertSupportedActions(request.sessionContextParameters?.actions);
 
     const extractions = EXTRACTION_FIELDS.filter((field) => request[field] != null && request[field] !== false);
     if (request.markdown && (request.serp || request.customAttributes)) {
@@ -514,7 +518,7 @@ export class Xyte {
       for (const field of HTTP_ONLY) {
         if (request[field] != null) throw unprocessable(`"${field}" can only be used with httpResponseBody`);
       }
-      assertSupportedActions(request.actions);
+      if (!this.proxy.zyteActions) assertSupportedActions(request.actions);
     } else {
       for (const field of BROWSER_ONLY) {
         if (request[field] != null) throw unprocessable(`"${field}" requires browserHtml or screenshot`);

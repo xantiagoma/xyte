@@ -265,8 +265,9 @@ Without either, those fields get a 400.
 **Sessions**: `session.id` (client-managed: sticky exit + cookie jar) and `sessionContext` +
 `sessionContextParameters` (server-managed pool).
 
-**Not supported:** the Zyte-specific actions `searchKeyword`, `setLocation` and `interaction`
-(400), and serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
+**Zyte-only:** the actions `searchKeyword`, `setLocation` and `interaction` rely on Zyte's
+per-site knowledge and its hosted scripts: they run when the provider is `zyteApi()` (route those
+sites there), and are a 400 elsewhere. **Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
 proxy-mode port or the Stats API (xyte can still *use* Zyte's proxy mode as a provider:
 `zyteProxy()`). Field-by-field status: [coverage](docs/coverage.md).
 

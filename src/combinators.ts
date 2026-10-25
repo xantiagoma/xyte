@@ -46,6 +46,7 @@ function combine<E extends ProxyEndpoint | ApiEndpoint>(
   return {
     name,
     extracts: children.some((child) => child.extracts),
+    zyteActions: children.some((child) => child.zyteActions),
     resolve: (context) => delegation.resolve(options.context?.(context) ?? context, pick(context)) as Resolved<E>,
     available: options.available ?? ((context) => isAvailable(pick(context), context)),
     report: (context, outcome) => delegation.report(context, outcome),
@@ -197,6 +198,7 @@ export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOp
   return {
     name: provider.name,
     extracts: provider.extracts,
+    zyteActions: provider.zyteActions,
     resolve: (context) => provider.resolve(context) as Resolved<EndpointOf<P>>,
     available(context) {
       if (shared && Date.now() - sharedReadAt > SHARED_REFRESH_MS) {
@@ -263,6 +265,7 @@ export function budget<P extends ProxyProvider>(provider: P, options: BudgetOpti
   return {
     name: provider.name,
     extracts: provider.extracts,
+    zyteActions: provider.zyteActions,
     async resolve(context) {
       const key = windowKey();
       const used = await store.incr(key, 1, windowSeconds);
@@ -392,6 +395,7 @@ export function watch<P extends ProxyProvider>(provider: P, options: WatchOption
   return {
     name: provider.name,
     extracts: provider.extracts,
+    zyteActions: provider.zyteActions,
     resolve(context) {
       refreshIfStale();
       return provider.resolve(context) as Resolved<EndpointOf<P>>;
@@ -468,6 +472,7 @@ export function adaptive<P extends ProxyProvider>(providers: readonly P[], optio
   return {
     name: `adaptive(${providers.map((p) => p.name).join(',')})`,
     extracts: providers.some((p) => p.extracts),
+    zyteActions: providers.some((p) => p.zyteActions),
     resolve(context) {
       const index = pickIndex(context);
       remember(served, attemptKey(context), index);

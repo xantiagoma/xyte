@@ -60,7 +60,7 @@ an entry not listed here.
 | `serpOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `geolocation` | ✅ supported | Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can't be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`. |
 | `javascript` | ✅ supported |  |
-| `actions` | 🟡 partial | All but `interaction`, `searchKeyword`, `setLocation` (see Actions). |
+| `actions` | 🟡 partial | All but `interaction`, `searchKeyword`, `setLocation`, which run with `zyteApi()` only (see Actions). |
 | `jobId` | ✅ supported | Echoed back. |
 | `echoData` | ✅ supported |  |
 | `viewport` | ✅ supported |  |
@@ -115,14 +115,14 @@ an entry not listed here.
 | `goto` | ✅ supported |  |
 | `hide` | ✅ supported |  |
 | `hover` | ✅ supported |  |
-| `interaction` | ❌ unsupported | Zyte-hosted browser scripts. |
+| `interaction` | ❌ unsupported | Runs a script stored in Zyte's cloud IDE, by id. Forwarded with `zyteApi()`; a 400 elsewhere. |
 | `keyPress` | ✅ supported |  |
 | `reload` | ✅ supported |  |
 | `scrollBottom` | ✅ supported | `timeout`, `maxScrollDelay`, `maxPageHeight`, `maxScrollCount`; `scrollStep` ignored. |
 | `scrollTo` | ✅ supported |  |
-| `searchKeyword` | ❌ unsupported | Needs Zyte site-specific knowledge. |
+| `searchKeyword` | ❌ unsupported | Zyte's per-site knowledge of where the search box is. Forwarded with `zyteApi()`; a 400 elsewhere. |
 | `select` | ✅ supported |  |
-| `setLocation` | ❌ unsupported | Needs Zyte site-specific knowledge. |
+| `setLocation` | ❌ unsupported | Zyte's per-site knowledge of location forms. Forwarded with `zyteApi()`; a 400 elsewhere. |
 | `type` | ✅ supported |  |
 | `waitForNavigation` | ✅ supported | As the first action, configures the initial navigation. |
 | `waitForRequest` | ✅ supported |  |

@@ -47,6 +47,27 @@ describe('zyteApi', () => {
     expect(error.toJSON()).toEqual(ban);
   });
 
+  test('Zyte’s own actions (searchKeyword, setLocation, interaction) are forwarded, not rejected', async () => {
+    const { fetch, calls } = stub(() => Response.json({ url: 'https://shop.example/', statusCode: 200, browserHtml: '<p>results</p>' }));
+    const actions = [
+      { action: 'setLocation' as const, address: { postalCode: '10001' } },
+      { action: 'searchKeyword' as const, keyword: 'pizza' },
+      { action: 'interaction' as const, id: 'my-script' },
+    ];
+    const res = await new Xyte({ proxy: zyteApi({ apiKey: 'K', fetch }) }).extract({ url: 'https://shop.example/', browserHtml: true, actions });
+    expect(res.browserHtml).toBe('<p>results</p>');
+    expect(calls[0]!.body.actions).toEqual(actions);
+  });
+
+  test('mixed with a proxy: an attempt that lands on the proxy is a 400 naming the action', async () => {
+    const { fetch } = stub(() => Response.json({ url: 'https://shop.example/', statusCode: 200, browserHtml: 'x' }));
+    const error = await new Xyte({ proxy: rotate([proxyUrl('http://u:p@127.0.0.1:1'), zyteApi({ apiKey: 'K', fetch })]) })
+      .extract({ url: 'https://shop.example/', browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'pizza' }] })
+      .catch((e) => e);
+    expect(error).toMatchObject({ status: 400 });
+    expect(error.detail).toContain('searchKeyword');
+  });
+
   test('a 400 problem passes through untouched', async () => {
     const { fetch } = stub(() =>
       Response.json({ type: '/request/invalid', status: 400, title: 'Invalid Request', detail: 'bad combo' }, { status: 400 }),

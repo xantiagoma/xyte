@@ -103,6 +103,11 @@ export interface ProxyProvider<E extends ProxyEndpoint | ApiEndpoint = ProxyEndp
    * rejected upfront for lack of a local extractor.
    */
   readonly extracts?: boolean;
+  /**
+   * The provider runs Zyte's own actions itself (`searchKeyword`, `setLocation`, `interaction`):
+   * requests using them are not rejected upfront.
+   */
+  readonly zyteActions?: boolean;
   /** The proxy (or API) for this attempt, or null to connect directly. */
   resolve(context: ProxyContext): E | null | Promise<E | null>;
   /**

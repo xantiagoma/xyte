@@ -35,6 +35,7 @@ export function zyteApi(options: { apiKey: string; endpoint?: string; fetch?: ty
   return {
     name: 'zyte-api',
     extracts: true,
+    zyteActions: true,
     resolve: () => ({
       async api(request, { signal }) {
         const res = await doFetch(endpoint, {
