@@ -29,7 +29,9 @@ your own code), the server handler options, and the CLI.
 | `onWarning` | `console.warn`, once per message | `(message, { url }) => void`: requests that run, but not as asked (a `geolocation` the exit can't apply). |
 
 `extract(request, { signal, onWarning, onReport })` takes an `AbortSignal` that cancels every
-attempt, and per-call warning and report callbacks. `close()` (or `await using xyte = new Xyte(…)`) closes the shared browser.
+attempt, and per-call warning and report callbacks. `close()` closes the shared browser the first render launched; `await using xyte = new Xyte(…)`
+does it when the block ends ([closing the client](../README.md#closing-the-client), including
+where that syntax works).
 
 ## Environment variables
 

@@ -17,7 +17,7 @@ A test (`test/api-docs.test.ts`) fails when something is exported but missing he
 | `xyte.extract(request, options?)` | One Zyte request (`ExtractRequest`) → the Zyte 200 body (`ExtractResponse`), or rejects with an `XyteError`. `options`: `{ signal, onWarning, onReport }`. |
 | `xyte.extractMany(requests, options?)` | Many requests from any iterable or async iterable; an async iterator of `BatchResult`s as they finish. `options`: `{ concurrency, signal }`. |
 | `xyte.extractAll(requests, options?)` | `extractMany()` collected in input order. |
-| `xyte.close()` | Closes the shared browser. Also `await using xyte = new Xyte(…)`. |
+| `xyte.close()` | Closes the shared browser the first render launched (it keeps the process alive until then). With `await using xyte = new Xyte(…)` it's called when the block ends: [closing the client](../README.md#closing-the-client) has where that syntax works. |
 | `createXyte(options?)` | Shorthand for `new Xyte(options)`. |
 | `XyteOptions` | The client's options. |
 | `ExtractOptions` | Per-call options of `extract()`: `signal`, `onWarning`, `onReport`. |

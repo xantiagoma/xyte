@@ -61,6 +61,47 @@ const rendered = await xyte.extract({
 await xyte.close(); // closes the shared browser
 ```
 
+### Closing the client
+
+The first browser request (`browserHtml`, `screenshot`, `actions`…) launches a Chromium that the
+client keeps and reuses for every later render. It stays open, and keeps the process alive,
+until you close the client with `close()`. A client that only made HTTP requests has nothing to
+close; calling `close()` anyway is harmless.
+
+The usual way, anywhere:
+
+```ts
+const xyte = new Xyte({ proxy });
+try {
+  await xyte.extract({ url, browserHtml: true });
+} finally {
+  await xyte.close(); // runs even if extract() threw
+}
+```
+
+The same, written with `await using` (JavaScript's explicit resource management): the client is
+closed automatically when the block ends, normally or by an exception. `Xyte` supports it by
+implementing `Symbol.asyncDispose`, which calls `close()`.
+
+```ts
+{
+  await using xyte = new Xyte({ proxy });
+  await xyte.extract({ url, browserHtml: true });
+} // closed here
+```
+
+| Where | `await using` |
+| --- | --- |
+| Bun | works |
+| Node.js 24+ | works |
+| TypeScript (5.2+, or `tsc` 7) compiled for Node.js 22 | works: the compiler turns it into plain code, and Node.js 22 has `Symbol.asyncDispose` |
+| Plain JavaScript on Node.js 22 | a syntax error: use `try` / `finally` |
+
+In a long-running service, create one client at startup and close it on shutdown (e.g. on
+`SIGTERM`), as `xyte serve` does: a client per request would launch a browser per request.
+
+### Many at once
+
 Many at once: `for await (const r of xyte.extractMany(requests)) …` yields results as they finish
 (`{ index, response }` or `{ index, error }`), at most `concurrency` in flight, from any list or
 async source; `extractAll()` collects them in order. From a shell: `xyte batch urls.txt > out.jsonl`.
