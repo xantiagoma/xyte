@@ -122,6 +122,41 @@ describe('your own handlers', () => {
   });
 });
 
+describe("'*': a fallback for any site or id, null for explicitly none", () => {
+  const mark = (text: string) => async (page: import('playwright').Page) => {
+    await page.evaluate((t) => (document.getElementById('loc')!.textContent = t), text);
+  };
+  const run = async (actions: ActionHandlers, list: Parameters<Xyte['extract']>[0]['actions']) => {
+    const { xyte, warnings } = client({ actions });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: list });
+    return { res, warnings };
+  };
+  const setLocation = [{ action: 'setLocation' as const, address: { postalCode: '1' } }];
+
+  test('setLocation: a listed site wins, any other site takes the fallback', async () => {
+    const { res } = await run({ setLocation: { 'doordash.com': mark('doordash'), '*': mark('fallback') } }, setLocation);
+    expect(res.browserHtml).toContain('<p id="loc">fallback</p>');
+  });
+
+  test('interaction: a listed id wins, any other id takes the fallback, null turns one off', async () => {
+    const actions: ActionHandlers = { interaction: { 'accept-cookies': mark('cookies'), skip: null, '*': mark('any script') } };
+    const ran = await run(actions, [{ action: 'interaction', id: 'something-else' }]);
+    expect(ran.res.browserHtml).toContain('<p id="loc">any script</p>');
+    const off = await run(actions, [{ action: 'interaction', id: 'skip' }]);
+    expect(off.res.actions![0]!.status).toBe('notExecuted');
+  });
+
+  test("searchKeyword: '*' is the heuristic unless you set it; null on a site turns it off there only", async () => {
+    const search = [{ action: 'searchKeyword' as const, keyword: 'pizza' }];
+    const host = new URL(target.base).hostname;
+    expect((await run({}, search)).res.browserHtml).toContain('Results for pizza');
+    const offHere = await run({ searchKeyword: { [host]: null } }, search);
+    expect(offHere.res.actions![0]!.status).toBe('notExecuted');
+    expect((await run({ searchKeyword: { 'elsewhere.example': null } }, search)).res.browserHtml).toContain('Results for pizza');
+    expect((await run({ searchKeyword: { '*': null } }, search)).res.actions![0]!.status).toBe('notExecuted');
+  });
+});
+
 describe('with Zyte among the providers', () => {
   /** A Zyte stub that records the actions it was asked to run. */
   function zyteStub(answer: 'ok' | 'ban' = 'ok') {

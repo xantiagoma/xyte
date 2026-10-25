@@ -37,8 +37,11 @@ export {
 export {
   isZyteOnlyAction,
   searchBox,
+  type ActionEntry,
   type ActionHandler,
   type ActionHandlerContext,
+  type ById,
+  type PerSite,
   type ActionHandlers,
   type InteractionAction,
   type SearchKeywordAction,

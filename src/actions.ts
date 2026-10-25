@@ -24,50 +24,64 @@ export interface ActionHandlerContext {
 /** Runs one action on the page; throw to fail it (its `onError` then applies, as for any action). */
 export type ActionHandler<A extends ZyteOnlyAction> = (page: Page, action: A, context: ActionHandlerContext) => Promise<void>;
 
-/** A handler for every site, or one per site keyed by host (subdomains included, the longest key wins). */
-export type PerSite<A extends ZyteOnlyAction> = ActionHandler<A> | Readonly<Record<string, ActionHandler<A>>>;
+/** A handler, or `null` for explicitly none (no fallback, no built-in). */
+export type ActionEntry<A extends ZyteOnlyAction> = ActionHandler<A> | null;
+
+/**
+ * Handlers by site: keys are hosts (subdomains included, the longest key wins), `'*'` is every
+ * other site. A plain function is the same as `{ '*': fn }`.
+ */
+export type PerSite<A extends ZyteOnlyAction> = ActionHandler<A> | Readonly<Record<string, ActionEntry<A>>>;
+
+/** Handlers by the `id` the action names; `'*'` is every other id. A plain function is `{ '*': fn }`. */
+export type ById<A extends ZyteOnlyAction> = ActionHandler<A> | Readonly<Record<string, ActionEntry<A>>>;
 
 export interface ActionHandlers {
-  /** Default: `searchBox`, a heuristic that finds the page's search box. `false` turns it off. */
+  /** `'*'` defaults to `searchBox`, a heuristic that finds the page's search box; `null` (or `false`) turns it off. */
   searchKeyword?: PerSite<SearchKeywordAction> | false;
-  /** No default: forms to set a location are different on every site. */
+  /** `'*'` defaults to none: forms to set a location are different on every site. */
   setLocation?: PerSite<SetLocationAction>;
-  /** Scripts by the `id` the action names, or one function that gets them all. */
-  interaction?: ActionHandler<InteractionAction> | Readonly<Record<string, ActionHandler<InteractionAction>>>;
+  /** Your scripts by id; `'*'` defaults to none. */
+  interaction?: ById<InteractionAction>;
 }
 
 const ZYTE_ONLY = new Set<string>(['searchKeyword', 'setLocation', 'interaction']);
 
 export const isZyteOnlyAction = (action: Action): action is ZyteOnlyAction => ZYTE_ONLY.has(action.action);
 
-function forHost<A extends ZyteOnlyAction>(handlers: PerSite<A> | undefined, url: URL): ActionHandler<A> | undefined {
-  if (!handlers || typeof handlers === 'function') return handlers;
-  const host = url.hostname.toLowerCase();
-  const match = Object.keys(handlers)
-    .filter((key) => host === key.toLowerCase() || host.endsWith(`.${key.toLowerCase()}`))
-    .sort((a, b) => b.length - a.length)[0];
-  return match ? handlers[match] : undefined;
+/** The entry a table has for `matches` keys, else its `'*'`; undefined when it says nothing. */
+function lookup<A extends ZyteOnlyAction>(
+  table: ActionHandler<A> | Readonly<Record<string, ActionEntry<A>>> | undefined,
+  pick: (keys: string[]) => string | undefined,
+): ActionEntry<A> | undefined {
+  if (table === undefined || typeof table === 'function') return table;
+  const key = pick(Object.keys(table).filter((k) => k !== '*'));
+  if (key !== undefined) return table[key];
+  return '*' in table ? table['*'] : undefined;
 }
 
-/** The handler you configured for `action` on `url`, if any (not the built-in one). */
-function ownHandlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionHandler<ZyteOnlyAction> | undefined {
+const byHost = (url: URL) => (keys: string[]) => {
+  const host = url.hostname.toLowerCase();
+  return keys.filter((key) => host === key.toLowerCase() || host.endsWith(`.${key.toLowerCase()}`)).sort((a, b) => b.length - a.length)[0];
+};
+
+/** What you configured for `action` on `url`: a handler, `null` (explicitly none), or undefined (nothing). */
+function ownEntryFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionEntry<ZyteOnlyAction> | undefined {
   switch (action.action) {
     case 'searchKeyword':
-      return handlers.searchKeyword === false ? undefined : (forHost(handlers.searchKeyword, url) as ActionHandler<ZyteOnlyAction> | undefined);
+      return handlers.searchKeyword === false ? null : (lookup(handlers.searchKeyword, byHost(url)) as ActionEntry<ZyteOnlyAction> | undefined);
     case 'setLocation':
-      return forHost(handlers.setLocation, url) as ActionHandler<ZyteOnlyAction> | undefined;
-    case 'interaction': {
-      const h = handlers.interaction;
-      return (typeof h === 'function' ? h : h?.[action.id]) as ActionHandler<ZyteOnlyAction> | undefined;
-    }
+      return lookup(handlers.setLocation, byHost(url)) as ActionEntry<ZyteOnlyAction> | undefined;
+    case 'interaction':
+      return lookup(handlers.interaction, (keys) => keys.find((key) => key === action.id)) as ActionEntry<ZyteOnlyAction> | undefined;
   }
 }
 
 /** The handler that runs `action` on `url` in xyte's browser: yours, else the built-in one (searchKeyword). */
 export function handlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url: URL): ActionHandler<ZyteOnlyAction> | undefined {
-  const own = ownHandlerFor(action, handlers, url);
-  if (own) return own;
-  return action.action === 'searchKeyword' && handlers.searchKeyword !== false ? (searchBox as ActionHandler<ZyteOnlyAction>) : undefined;
+  const own = ownEntryFor(action, handlers, url);
+  if (own !== undefined) return own ?? undefined;
+  return action.action === 'searchKeyword' ? (searchBox as ActionHandler<ZyteOnlyAction>) : undefined;
 }
 
 /**
@@ -83,7 +97,7 @@ export function classifyActions(
   const groups = { own: [] as ZyteOnlyAction[], builtIn: [] as ZyteOnlyAction[], none: [] as ZyteOnlyAction[] };
   for (const action of actions ?? []) {
     if (!isZyteOnlyAction(action)) continue;
-    if (ownHandlerFor(action, handlers, url)) groups.own.push(action);
+    if (ownEntryFor(action, handlers, url)) groups.own.push(action);
     else if (handlerFor(action, handlers, url)) groups.builtIn.push(action);
     else groups.none.push(action);
   }

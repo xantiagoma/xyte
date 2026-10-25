@@ -4,7 +4,8 @@ import { Xyte } from 'xyte';
 
 const xyte = new Xyte({
   actions: {
-    searchKeyword: { 'shop.example': async (page, { keyword }) => page.fill('#find', keyword) },
+    // '*' (every other site) stays the built-in heuristic; null turns it off for one site.
+    searchKeyword: { 'shop.example': async (page, { keyword }) => page.fill('#find', keyword), 'odd-site.example': null },
     setLocation: {
       'doordash.com': async (page, { address }) => {
         await page.click('[data-anchor-id="AddressButton"]');
@@ -16,6 +17,10 @@ const xyte = new Xyte({
       'accept-cookies': async (page) => page.click('#onetrust-accept-btn-handler'),
       'load-all-reviews': async (page, { args }) => {
         for (let i = 0; i < Number(args?.pages ?? 3); i++) await page.click('text=More reviews');
+      },
+      // Any other script id.
+      '*': async (_page, { id }) => {
+        throw new Error(`no port of the Zyte script "${id}" yet`);
       },
     },
   },

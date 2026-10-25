@@ -37,18 +37,34 @@ handlers:
 ```ts
 new Xyte({
   actions: {
-    // Default: searchBox, a heuristic (search inputs, role=searchbox, q/query/search fields, a
-    // "search" placeholder or label; it opens a search toggle when the box hides behind one).
-    // Per site where it's wrong, or false to turn it off.
-    searchKeyword: { 'shop.example': async (page, { keyword }) => page.fill('#find', keyword) },
-    // No default: every site's location form is different. Per site, subdomains included.
-    setLocation: { 'doordash.com': async (page, { address }) => { /* … */ } },
-    // Your ports of the Zyte IDE scripts, by the id the action names.
-    interaction: { 'accept-cookies': async (page, { args }) => page.click('#onetrust-accept-btn-handler') },
+    searchKeyword: {
+      'shop.example': async (page, { keyword }) => page.fill('#find', keyword),
+      'odd-site.example': null, // the heuristic gets it wrong here: no handler on this site
+      // '*': the built-in heuristic unless you set it (null turns it off everywhere)
+    },
+    setLocation: {
+      'doordash.com': async (page, { address }) => { /* … */ },
+      '*': async (page, { address }) => { /* your generic attempt, for every other site */ },
+    },
+    interaction: {
+      'accept-cookies': async (page) => page.click('#onetrust-accept-btn-handler'),
+      '*': async (page, { id, args }) => myScripts.run(id, page, args), // any other script id
+    },
   },
   unsupportedActions: 'warn', // or 'error', 'zyte': below
 });
 ```
+
+Each takes a table: keys are hosts for `searchKeyword` and `setLocation` (subdomains included, the
+longest key wins) and script ids for `interaction`, and `'*'` covers everything not listed. A
+value of `null` means explicitly no handler, so a listed `null` also beats `'*'`. A plain function
+is short for `{ '*': fn }`.
+
+| | `'*'` by default |
+| --- | --- |
+| `searchKeyword` | `searchBox`: a heuristic (search inputs, role=searchbox, q/query/search fields, a "search" placeholder or label; it opens a search toggle when the box hides behind one). `null` or `searchKeyword: false` turns it off |
+| `setLocation` | none: every site's location form is different |
+| `interaction` | none: the scripts are yours |
 
 A handler gets the Playwright page, the action as Zyte defines it (`keyword`, `address`, `id` and
 `args`), and `{ url, timeout }`. Throwing fails the action, and its `onError` applies, as for any
@@ -58,11 +74,12 @@ action. [`examples/actions.ts`](../examples/actions.ts) is a typechecked version
 
 On each attempt, each of these actions is one of three kinds:
 
-- **Yours**: you configured a handler for it. It always runs locally: it's your code, and Zyte
-  doesn't have it.
+- **Yours**: a handler you configured covers it (a listed key or your own `'*'`). It always runs
+  locally: it's your code, and Zyte doesn't have it.
 - **Built-in**: `searchKeyword` with no handler of yours, so the heuristic. It's a fallback for
   where Zyte isn't, never a reason to skip Zyte.
-- **None**: `setLocation` or `interaction` with no handler, or `searchKeyword: false`.
+- **None**: no handler covers it: `setLocation` / `interaction` without a matching key or `'*'`,
+  a `null` entry, or `searchKeyword` turned off.
 
 What happens depends on the kind and on what the attempt's provider is. There are three types
 of providers here:
