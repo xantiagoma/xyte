@@ -6,6 +6,9 @@
  * when docs/coverage.md is stale.
  */
 
+import { BROWSER_ONLY, BROWSER_OUTPUTS, HTTP_ONLY } from '../src/fields.ts';
+import { EXTRACTION_FIELDS } from '../src/types.ts';
+
 export type Status = 'supported' | 'partial' | 'pluggable' | 'accepted' | 'unsupported';
 
 export interface Entry {
@@ -24,7 +27,7 @@ export const REQUEST: Record<string, Entry> = {
   httpRequestMethod: { status: 'supported' },
   httpRequestBody: { status: 'supported' },
   httpRequestText: { status: 'supported' },
-  customHttpRequestHeaders: { status: 'supported', note: 'HTTP requests only, as on Zyte. A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)).' },
+  customHttpRequestHeaders: { status: 'supported', note: 'A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)). On a browser request, Zyte answers 422 (checked live).' },
   httpResponseBody: { status: 'supported', note: 'Truncated at 10 MB.' },
   httpResponseHeaders: { status: 'supported', note: 'HTTP and browser (main document) requests.' },
   browserHtml: { status: 'supported', note: 'Playwright Chromium, or your own `browser.launch`.' },
@@ -173,12 +176,34 @@ const ICON: Record<Status, string> = {
   unsupported: '❌',
 };
 
-function table(title: string, entries: Record<string, Entry>, code = true): string {
-  const rows = Object.entries(entries).map(
-    ([name, { status, note }]) => `| ${code ? `\`${name}\`` : name} | ${ICON[status]} ${status} | ${note ?? ''} |`,
-  );
-  return [`## ${title}`, '', '| Name | Status | Notes |', '| --- | --- | --- |', ...rows, ''].join('\n');
+/**
+ * The kind of request a request field belongs to, from the lists the client validates with
+ * (src/fields.ts): a field of the other kind is a 422, as on Zyte.
+ */
+export function appliesTo(field: string): string {
+  const has = (list: readonly string[]) => list.includes(field);
+  if (has(BROWSER_OUTPUTS)) return 'browser (makes it one)';
+  if (field === 'httpResponseBody') return 'HTTP (makes it one)';
+  if (has(BROWSER_ONLY)) return 'browser only';
+  if (has(HTTP_ONLY)) return 'HTTP only';
+  const extraction = field === 'extractFrom' || has(EXTRACTION_FIELDS) || has(EXTRACTION_FIELDS.map((f) => `${f}Options`));
+  if (extraction) return 'either (`extractFrom`)';
+  return 'both';
 }
+
+function table(title: string, entries: Record<string, Entry>, code = true, applies?: (name: string) => string): string {
+  const rows = Object.entries(entries).map(
+    ([name, { status, note }]) =>
+      `| ${code ? `\`${name}\`` : name} | ${ICON[status]} ${status} |${applies ? ` ${applies(name)} |` : ''} ${note ?? ''} |`,
+  );
+  const head = applies ? ['| Name | Status | Applies to | Notes |', '| --- | --- | --- | --- |'] : ['| Name | Status | Notes |', '| --- | --- | --- |'];
+  return [`## ${title}`, '', ...(applies ? [APPLIES_LEGEND, ''] : []), ...head, ...rows, ''].join('\n');
+}
+
+const APPLIES_LEGEND =
+  'A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extraction from HTTP) or a browser request ' +
+  '(`browserHtml`, `screenshot`, or extraction from the browser). **Applies to** says which kind each field belongs to: ' +
+  'a field of the other kind is a **422** `/request/unprocessable`, as on Zyte.';
 
 function summary(): string {
   const count = (entries: Record<string, Entry>) => {
@@ -210,7 +235,7 @@ export function render(): string {
       `${ICON.accepted} accepted, no effect · ${ICON.unsupported} not supported (request fields: rejected with a 400)`,
     '',
     summary(),
-    table('Request fields', REQUEST),
+    table('Request fields', REQUEST, true, appliesTo),
     table('Response fields', RESPONSE),
     table('Actions', ACTIONS),
     table('Errors', ERRORS),

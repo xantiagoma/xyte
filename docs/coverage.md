@@ -16,64 +16,66 @@ an entry not listed here.
 
 ## Request fields
 
-| Name | Status | Notes |
-| --- | --- | --- |
-| `url` | ✅ supported | IP-address hosts are accepted too (Zyte rejects them). |
-| `requestHeaders` | ✅ supported | `referer`, on HTTP and browser requests. |
-| `tags` | ✅ supported | No Stats API to send them to: they label the `onRequest` / `onAttempt` reports and request logs instead, for your own analytics. |
-| `ipType` | 🟡 partial | Reaches the provider as `ctx.ipType`; `byIpType()` routes on it. Presets ignore it. |
-| `httpRequestMethod` | ✅ supported |  |
-| `httpRequestBody` | ✅ supported |  |
-| `httpRequestText` | ✅ supported |  |
-| `customHttpRequestHeaders` | ✅ supported | HTTP requests only, as on Zyte. A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)). |
-| `httpResponseBody` | ✅ supported | Truncated at 10 MB. |
-| `httpResponseHeaders` | ✅ supported | HTTP and browser (main document) requests. |
-| `browserHtml` | ✅ supported | Playwright Chromium, or your own `browser.launch`. |
-| `screenshot` | ✅ supported |  |
-| `screenshotOptions` | ✅ supported | `format`, `fullPage`. |
-| `extractFrom` | 🔌 pluggable | Picks HTTP vs browser for extractors; `userHtml` is not supported. |
-| `article` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `articleOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `articleList` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `articleListOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `articleNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `articleNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `forumThread` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `forumThreadOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `jobPosting` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `jobPostingOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `jobPostingNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `jobPostingNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `pageContent` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `pageContentOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `markdown` | ✅ supported | Built in and non-AI, like Zyte's: dependency-free converter with heuristic main-content detection. `extractors.markdown` overrides it. |
-| `markdownOptions` | ✅ supported | `scope` (`mainContent` / `fullPage`), `extractFrom`. |
-| `product` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `productOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `productList` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `productListOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `productNavigation` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `productNavigationOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `customAttributes` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `customAttributesOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `serp` | 🔌 pluggable | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
-| `serpOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
-| `geolocation` | ✅ supported | Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can't be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`. |
-| `javascript` | ✅ supported |  |
-| `actions` | ✅ supported | All of them; `searchKeyword`, `setLocation` and `interaction` through handlers or `zyteApi()` (see Actions). |
-| `jobId` | ✅ supported | Echoed back. |
-| `echoData` | ✅ supported |  |
-| `viewport` | ✅ supported |  |
-| `followRedirect` | ✅ supported | HTTP requests (browsers always follow, as on Zyte). |
-| `sessionContext` | ✅ supported | In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances. |
-| `sessionContextParameters` | 🟡 partial | `actions` run once per new session in a browser at the request URL, through the provider resolved for it (an API provider keeps its own sessions: no local init). Zyte's own actions run through `actions` handlers; without one, skipped with a warning, or a 400 with `unsupportedActions: 'error'` (no pass-overs during init). |
-| `session` | ✅ supported | Sticky exit IP through the provider, plus a cookie jar kept in memory per process. |
-| `networkCapture` | ✅ supported | `url` and `resourceType` filters; max 10 captures / 5 MiB. |
-| `device` | ✅ supported | Mobile user agent and client hints; mobile viewport in the browser. |
-| `cookieManagement` | ✅ supported |  |
-| `requestCookies` | ✅ supported |  |
-| `responseCookies` | ✅ supported |  |
-| `includeIframes` | 🟡 partial | Each frame's document is written into its `<iframe>` element; Zyte doesn't document its exact format. |
+A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extraction from HTTP) or a browser request (`browserHtml`, `screenshot`, or extraction from the browser). **Applies to** says which kind each field belongs to: a field of the other kind is a **422** `/request/unprocessable`, as on Zyte.
+
+| Name | Status | Applies to | Notes |
+| --- | --- | --- | --- |
+| `url` | ✅ supported | both | IP-address hosts are accepted too (Zyte rejects them). |
+| `requestHeaders` | ✅ supported | both | `referer`, on HTTP and browser requests. |
+| `tags` | ✅ supported | both | No Stats API to send them to: they label the `onRequest` / `onAttempt` reports and request logs instead, for your own analytics. |
+| `ipType` | 🟡 partial | both | Reaches the provider as `ctx.ipType`; `byIpType()` routes on it. Presets ignore it. |
+| `httpRequestMethod` | ✅ supported | HTTP only |  |
+| `httpRequestBody` | ✅ supported | HTTP only |  |
+| `httpRequestText` | ✅ supported | HTTP only |  |
+| `customHttpRequestHeaders` | ✅ supported | HTTP only | A `Cookie` header is dropped, as on Zyte: cookies go in `requestCookies` ([authentication](authentication.md)). On a browser request, Zyte answers 422 (checked live). |
+| `httpResponseBody` | ✅ supported | HTTP (makes it one) | Truncated at 10 MB. |
+| `httpResponseHeaders` | ✅ supported | both | HTTP and browser (main document) requests. |
+| `browserHtml` | ✅ supported | browser (makes it one) | Playwright Chromium, or your own `browser.launch`. |
+| `screenshot` | ✅ supported | browser (makes it one) |  |
+| `screenshotOptions` | ✅ supported | browser only | `format`, `fullPage`. |
+| `extractFrom` | 🔌 pluggable | either (`extractFrom`) | Picks HTTP vs browser for extractors; `userHtml` is not supported. |
+| `article` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `articleOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `articleList` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `articleListOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `articleNavigation` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `articleNavigationOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `forumThread` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `forumThreadOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `jobPosting` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `jobPostingOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `jobPostingNavigation` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `jobPostingNavigationOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `pageContent` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `pageContentOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `markdown` | ✅ supported | either (`extractFrom`) | Built in and non-AI, like Zyte's: dependency-free converter with heuristic main-content detection. `extractors.markdown` overrides it. |
+| `markdownOptions` | ✅ supported | either (`extractFrom`) | `scope` (`mainContent` / `fullPage`), `extractFrom`. |
+| `product` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `productOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `productList` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `productListOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `productNavigation` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `productNavigationOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `customAttributes` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `customAttributesOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `serp` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
+| `serpOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
+| `geolocation` | ✅ supported | both | Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can't be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`. |
+| `javascript` | ✅ supported | browser only |  |
+| `actions` | ✅ supported | browser only | All of them; `searchKeyword`, `setLocation` and `interaction` through handlers or `zyteApi()` (see Actions). |
+| `jobId` | ✅ supported | both | Echoed back. |
+| `echoData` | ✅ supported | both |  |
+| `viewport` | ✅ supported | browser only |  |
+| `followRedirect` | ✅ supported | HTTP only | HTTP requests (browsers always follow, as on Zyte). |
+| `sessionContext` | ✅ supported | both | In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances. |
+| `sessionContextParameters` | 🟡 partial | both | `actions` run once per new session in a browser at the request URL, through the provider resolved for it (an API provider keeps its own sessions: no local init). Zyte's own actions run through `actions` handlers; without one, skipped with a warning, or a 400 with `unsupportedActions: 'error'` (no pass-overs during init). |
+| `session` | ✅ supported | both | Sticky exit IP through the provider, plus a cookie jar kept in memory per process. |
+| `networkCapture` | ✅ supported | browser only | `url` and `resourceType` filters; max 10 captures / 5 MiB. |
+| `device` | ✅ supported | both | Mobile user agent and client hints; mobile viewport in the browser. |
+| `cookieManagement` | ✅ supported | both |  |
+| `requestCookies` | ✅ supported | both |  |
+| `responseCookies` | ✅ supported | both |  |
+| `includeIframes` | 🟡 partial | browser only | Each frame's document is written into its `<iframe>` element; Zyte doesn't document its exact format. |
 
 ## Response fields
 

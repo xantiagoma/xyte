@@ -1,5 +1,6 @@
 import { assertActionHandlers, classifyActions, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
 import { BrowserEngine, type BrowserOptions } from './engines/browser.ts';
+import { BROWSER_ONLY, BROWSER_OUTPUTS, HTTP_ONLY } from './fields.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
   type XyteProblem,
@@ -203,19 +204,10 @@ const warnOnce = (message: string): void => {
   console.warn(`[xyte] ${message}`);
 };
 
-const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
 /** Providers passed over in one request (see docs/actions.md#pass-overs), at most. */
 const MAX_PASS_OVERS = 10;
 /** Client-managed sessions (`session.id`) remembered per process. */
 const MAX_CLIENT_SESSIONS = 10_000;
-const BROWSER_ONLY = ['actions', 'networkCapture', 'javascript', 'viewport', 'screenshotOptions', 'includeIframes'] as const;
-const HTTP_ONLY = [
-  'httpRequestMethod',
-  'httpRequestBody',
-  'httpRequestText',
-  'customHttpRequestHeaders',
-  'followRedirect',
-] as const;
 
 export class Xyte {
   private readonly proxy: ProxyProvider;
