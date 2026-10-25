@@ -19,6 +19,8 @@ export interface ActionHandlerContext {
   url: URL;
   /** Milliseconds the action may take: 30 s, within the browser time left (these actions have no `timeout` of their own). */
   timeout: number;
+  /** Adds a line to the action's `interactionLogs` in the response, as Zyte does with its scripts' `console.log`. */
+  log: (message: string, level?: 'debug' | 'info' | 'warning' | 'error') => void;
 }
 
 /** Runs one action on the page; throw to fail it (its `onError` then applies, as for any action). */

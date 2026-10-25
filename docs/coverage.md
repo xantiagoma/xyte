@@ -33,7 +33,7 @@ A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extr
 | `browserHtml` | ✅ supported | browser (makes it one) | Playwright Chromium, or your own `browser.launch`. |
 | `screenshot` | ✅ supported | browser (makes it one) |  |
 | `screenshotOptions` | ✅ supported | browser only | `format`, `fullPage`. |
-| `extractFrom` | 🔌 pluggable | either (`extractFrom`) | Picks HTTP vs browser for extractors; `userHtml` is not supported. |
+| `extractFrom` | 🔌 pluggable | either (`extractFrom`) | `httpResponseBody`, `browserHtml`, or `userHtml` (from `<field>Options.userHtml`: with a local extractor there is no download at all). Unset, xyte extracts from HTTP; Zyte currently defaults to `browserHtml` for AI extraction, so set it to match. |
 | `article` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
 | `articleOptions` | 🔌 pluggable | either (`extractFrom`) | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `articleList` | 🔌 pluggable | either (`extractFrom`) | `llmExtractors()` with any LLM (Zyte output schema), or your own `extractors.<field>`; 400 without one. |
@@ -102,7 +102,7 @@ A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extr
 | `customAttributes` | 🔌 pluggable |  |
 | `echoData` | ✅ supported |  |
 | `jobId` | ✅ supported |  |
-| `actions` | 🟡 partial | `action`, `elapsedTime`, `status`, `error`; no `interactionLogs`. |
+| `actions` | ✅ supported | `action`, `elapsedTime`, `status`, `error`; `interactionLogs` from your action handlers' `log()`. |
 | `responseCookies` | ✅ supported |  |
 | `networkCapture` | 🟡 partial | `url`, `statusCode`, `headers`, `httpResponseBody`, `filter`; no `request` / `interceptionStatus`. |
 | `serp` | 🔌 pluggable |  |

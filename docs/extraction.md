@@ -34,6 +34,19 @@ How it works:
 outputTokens, textInputTokens } }`, as on Zyte. `customAttributesOptions.maxInputTokens` caps the
 page text.
 
+## Extracting from your own HTML
+
+`extractFrom: "userHtml"` in a field's options extracts from HTML you send instead of downloading
+the page, as on Zyte (the `url` is still required):
+
+```json
+{ "url": "https://shop.example/item", "product": true,
+  "productOptions": { "extractFrom": "userHtml", "userHtml": "<html>…</html>" } }
+```
+
+When every output is such an extraction and runs locally (the built-in `markdown`, or your
+extractors), there's no request at all. With `zyteApi()` and no local extractor, Zyte does it.
+
 ## Models
 
 `openAICompatible()` speaks the Chat Completions API with `response_format: json_schema`:

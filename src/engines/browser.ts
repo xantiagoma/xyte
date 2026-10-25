@@ -10,6 +10,9 @@ import type {
 import { serverError, unsupported, XyteError } from '../errors.ts';
 import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Action, ActionResult, ActionSelector, CapturedResponse, Cookie, NetworkCaptureFilter } from '../types.ts';
+import type { ZyteSchemas } from '../types.ts';
+
+type InteractionLogEntry = ZyteSchemas['InteractionLogEntry'];
 import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
 import { handlerFor, isZyteOnlyAction, type ZyteOnlyAction } from '../actions.ts';
 import { isRedirect, type EngineAttempt, type EngineResult } from './http.ts';
@@ -224,15 +227,21 @@ export class BrowserEngine {
           results.push({ action: action.action, elapsedTime: 0, status: 'notExecuted', error: 'no handler for this action outside Zyte: skipped' });
           continue;
         }
+        // A handler's log() lines come back as the action's interactionLogs, as Zyte returns its scripts' console.log.
+        const logs: InteractionLogEntry[] = [];
+        const log = (message: string, level: InteractionLogEntry['level'] = 'info') => {
+          logs.push({ time: new Date().toISOString(), level, message: String(message) });
+        };
+        const withLogs = (r: ActionResult) => (logs.length > 0 ? { ...r, interactionLogs: logs } : r);
         try {
           const run = handler
-            ? handler(page, action as ZyteOnlyAction, { url: new URL(page.url()), timeout: Math.min(remaining(), 30_000) })
+            ? handler(page, action as ZyteOnlyAction, { url: new URL(page.url()), timeout: Math.min(remaining(), 30_000), log })
             : runAction(page, action, remaining);
           await withTimeout(run, remaining());
-          results.push(result(action, start, 'success'));
+          results.push(withLogs(result(action, start, 'success')));
         } catch (error) {
           const onError = action.onError ?? 'return';
-          results.push(result(action, start, onError === 'continue' ? 'continued' : 'returned', error));
+          results.push(withLogs(result(action, start, onError === 'continue' ? 'continued' : 'returned', error)));
           if (onError === 'return') stopped = true;
         }
       }

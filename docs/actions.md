@@ -67,7 +67,8 @@ is short for `{ '*': fn }`.
 | `interaction` | none: the scripts are yours |
 
 A handler gets the Playwright page, the action as Zyte defines it (`keyword`, `address`, `id` and
-`args`), and `{ url, timeout }`. Throwing fails the action, and its `onError` applies, as for any
+`args`), and `{ url, timeout, log }`: `log(message, level?)` lines come back in the action's
+`interactionLogs`, as Zyte returns its scripts' `console.log`. Throwing fails the action, and its `onError` applies, as for any
 action. [`examples/actions.ts`](../examples/actions.ts) is a typechecked version.
 
 ### Where they run

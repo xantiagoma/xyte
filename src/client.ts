@@ -417,6 +417,10 @@ export class Xyte {
   private async run(request: ExtractRequest, options: ExtractOptions, trace: Trace): Promise<ExtractResponse> {
     const cancel = options.signal;
     const plan = this.plan(request);
+    if (plan.offline) {
+      // Only extractions from HTML in the request: no provider, no attempt.
+      return this.finish(request, plan, { response: { url: request.url }, statusCode: 200, headers: [] }, new CookieJar());
+    }
     const warnings = new Set<string>();
     const warn = (message: string) => {
       if (warnings.has(message)) return;
@@ -740,7 +744,7 @@ export class Xyte {
   }
 
   /** Mirrors Zyte's request validation, and decides HTTP vs browser. */
-  private plan(request: ExtractRequest): { browser: boolean; extractions: ExtractionField[] } {
+  private plan(request: ExtractRequest): { browser: boolean; extractions: ExtractionField[]; offline: boolean } {
     if (typeof request.url !== 'string') throw invalidRequest('"url" is required');
     let url: URL;
     try {
@@ -788,11 +792,26 @@ export class Xyte {
 
     // Extraction alone picks its source from `<field>Options.extractFrom`, else HTTP.
     const extractFromBrowser = extractions.some((field) => {
-      const from =
-        (request as unknown as Record<string, { extractFrom?: string } | undefined>)[`${field}Options`]?.extractFrom ??
-        request.extractFrom;
+      const from = extractionSource(request, field);
       return from === 'browserHtml' || from === 'browserHtmlOnly';
     });
+    // extractFrom: "userHtml" extracts from HTML sent in the request: no download for that field.
+    const fromUserHtml = extractions.filter((field) => extractionSource(request, field) === 'userHtml');
+    for (const field of fromUserHtml) {
+      if (typeof fieldOptions(request, field)?.userHtml !== 'string') {
+        throw invalidRequest(`"${field}Options.userHtml" is required with extractFrom: "userHtml"`);
+      }
+    }
+    const localExtractor = (field: ExtractionField) => this.options.extractors?.[field] != null || field === 'markdown';
+    // Nothing to download: every output is an extraction from userHtml that runs here.
+    const offline =
+      extractions.length > 0 &&
+      fromUserHtml.length === extractions.length &&
+      extractions.every(localExtractor) &&
+      !wantsBrowser &&
+      !request.httpResponseBody &&
+      !request.httpResponseHeaders &&
+      !request.responseCookies;
 
     const browser = wantsBrowser || (!request.httpResponseBody && extractFromBrowser);
     if (browser) {
@@ -810,7 +829,7 @@ export class Xyte {
         throw unprocessable('no output requested: set httpResponseBody, browserHtml, screenshot or an extraction field');
       }
     }
-    return { browser, extractions };
+    return { browser, extractions, offline };
   }
 
   private rememberSession(sessionId: string, jar: CookieJar): void {
@@ -847,7 +866,7 @@ export class Xyte {
       if (!extractor) throw unsupported(`"${field}" without an extractor (pass one in \`extractors.${field}\`)`);
       (response as Record<string, unknown>)[field] = await extractor({
         url: response.url ?? request.url,
-        html: result.html ?? '',
+        html: extractionSource(request, field) === 'userHtml' ? String(fieldOptions(request, field)?.userHtml) : (result.html ?? ''),
         request,
         options: (request as Record<string, unknown>)[`${field}Options`],
       });
@@ -897,6 +916,16 @@ function mergeActionResults(
     const result = answered.shift();
     return result ? [result] : [];
   });
+}
+
+/** A field's `<field>Options` (where `extractFrom` and `userHtml` live). */
+function fieldOptions(request: ExtractRequest, field: ExtractionField): { extractFrom?: string; userHtml?: unknown } | undefined {
+  return (request as unknown as Record<string, { extractFrom?: string; userHtml?: unknown } | undefined>)[`${field}Options`];
+}
+
+/** Where an extraction field reads from: its own `extractFrom`, else the request's. */
+function extractionSource(request: ExtractRequest, field: ExtractionField): string | undefined {
+  return fieldOptions(request, field)?.extractFrom ?? request.extractFrom;
 }
 
 /** How a request ended, for its report. */

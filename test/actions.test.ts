@@ -133,6 +133,17 @@ describe("'*': a fallback for any site or id, null for explicitly none", () => {
   };
   const setLocation = [{ action: 'setLocation' as const, address: { postalCode: '1' } }];
 
+  test("a handler's log() lines come back as the action's interactionLogs", async () => {
+    const { res } = await run(
+      { interaction: { 'with-logs': async (_page, _action, { log }) => (log('opened the menu'), log('no cookie banner', 'warning')) } },
+      [{ action: 'interaction', id: 'with-logs' }],
+    );
+    expect(res.actions![0]!.interactionLogs).toEqual([
+      { time: expect.any(String), level: 'info', message: 'opened the menu' },
+      { time: expect.any(String), level: 'warning', message: 'no cookie banner' },
+    ]);
+  });
+
   test('setLocation: a listed site wins, any other site takes the fallback', async () => {
     const { res } = await run({ setLocation: { 'doordash.com': mark('doordash'), '*': mark('fallback') } }, setLocation);
     expect(res.browserHtml).toContain('<p id="loc">fallback</p>');
