@@ -37,6 +37,16 @@ describe('zyteApi', () => {
     expect(calls).toHaveLength(1);
   });
 
+  test('after the retries, Zyte’s own last problem is returned (a ban stays a website-ban)', async () => {
+    const ban = { type: '/download/website-ban', title: 'Website Ban', status: 520, detail: 'no ban-free response' };
+    const { fetch, calls } = stub(() => Response.json(ban, { status: 520 }));
+    const error = await new Xyte({ retries: 1, proxy: zyteApi({ apiKey: 'K', fetch }) })
+      .extract({ url: 'https://x.example/', httpResponseBody: true })
+      .catch((e) => e);
+    expect(calls).toHaveLength(2);
+    expect(error.toJSON()).toEqual(ban);
+  });
+
   test('a 400 problem passes through untouched', async () => {
     const { fetch } = stub(() =>
       Response.json({ type: '/request/invalid', status: 400, title: 'Invalid Request', detail: 'bad combo' }, { status: 400 }),

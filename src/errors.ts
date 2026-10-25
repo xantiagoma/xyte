@@ -36,6 +36,20 @@ export class XyteError extends Error {
 export const invalidRequest = (detail: string): XyteError =>
   new XyteError({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail });
 
+/**
+ * A retryable failure an upstream Zyte-compatible API answered with its own problem (a 520 ban,
+ * a 429). Retried like any download error; if it is the last one, that problem is returned as is.
+ */
+export class UpstreamProblem extends Error {
+  override name = 'UpstreamProblem';
+  readonly problem: XyteProblem;
+
+  constructor(problem: XyteProblem) {
+    super(`${problem.status} ${problem.type}${problem.detail ? `: ${problem.detail}` : ''}`);
+    this.problem = problem;
+  }
+}
+
 /** A well-formed request whose parameters can't be combined (or that asks for nothing): Zyte's 422. */
 export const unprocessable = (detail: string): XyteError =>
   new XyteError({ status: 422, type: '/request/unprocessable', title: 'Unprocessable Request', detail });

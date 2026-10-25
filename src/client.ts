@@ -7,6 +7,7 @@ import {
   temporaryDownloadError,
   unprocessable,
   unsupported,
+  UpstreamProblem,
   XyteError,
 } from './errors.ts';
 import { htmlToMarkdown } from './markdown.ts';
@@ -249,6 +250,8 @@ export class Xyte {
       }
     }
 
+    // The upstream API's own last answer (Zyte's 520 /download/website-ban…), as Zyte gave it.
+    if (lastCause instanceof UpstreamProblem) throw new XyteError(lastCause.problem, { cause: lastCause });
     throw temporaryDownloadError(`${lastReason} after ${this.retries + 1} attempts`, {
       ban: lastWasBan,
       cause: lastCause,

@@ -195,6 +195,7 @@ bun install
 bun test             # unit + integration (local target site, local proxy, real Chromium + patchright)
 bun run test:node    # build, then run the dist on Node.js
 bun run test:live    # real public sites through a local `xyte serve` (network required)
+bun scripts/bench.ts cases.json --providers zyte-api,direct,oxylabs   # same requests per provider: real-page rate, latency, size
 bun run typecheck
 bun run build        # tsdown → dist/
 bun run gen:types    # regenerate src/zyte.gen.ts from spec/zyte-openapi.json (and the coverage doc)

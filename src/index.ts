@@ -9,7 +9,7 @@ export {
 } from './client.ts';
 export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } from './engines/browser.ts';
 export { browserFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv } from './env.ts';
-export { XyteError, type XyteProblem } from './errors.ts';
+export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
 export {
   brightData,
   byIpType,

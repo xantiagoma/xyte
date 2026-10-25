@@ -3,7 +3,7 @@
  * they take the whole Zyte request and answer in Zyte's shape, so they mix with proxies in
  * `rotate()`.
  */
-import { XyteError } from './errors.ts';
+import { UpstreamProblem, XyteError } from './errors.ts';
 import type { ApiEndpoint, ApiResult, ProxyProvider } from './proxy.ts';
 import type { ExtractRequest, ExtractResponse } from './types.ts';
 import { decodeBody, fromBase64 } from './util.ts';
@@ -49,7 +49,14 @@ export function zyteApi(options: { apiKey: string; endpoint?: string; fetch?: ty
           return { response: body, statusCode: body.statusCode ?? 200, html, trusted: true };
         }
         // Rate limits, bans and server errors: retry (or move on to the next provider).
-        if (res.status === 429 || res.status >= 500) throw new ApiError(`Zyte API ${res.status} ${body.type ?? ''}`.trim());
+        if (res.status === 429 || res.status >= 500) {
+          throw new UpstreamProblem({
+            status: res.status,
+            type: body.type ?? '/download/temporary-error',
+            title: body.title ?? 'Zyte API error',
+            detail: body.detail,
+          });
+        }
         // Request and account errors are final: pass Zyte's problem through.
         throw new XyteError({
           status: res.status,
