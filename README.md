@@ -23,7 +23,7 @@ Three ways to use it:
 [combining providers](docs/routing.md) · [actions](docs/actions.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
 [browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) ·
 [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
-[migrating from Zyte](docs/migrating-from-zyte.md) · [examples](examples/)
+[migrating from Zyte](docs/migrating-from-zyte.md) · [API reference](docs/api.md) · [examples](examples/)
 
 ```sh
 npm i xyte
@@ -45,7 +45,7 @@ const xyte = new Xyte({
 // Raw HTTP (cheap, fast)
 const page = await xyte.extract({ url: 'https://example.com', httpResponseBody: true, geolocation: 'US' });
 page.statusCode; // 200; a target 404 is a successful response with statusCode 404, as on Zyte
-decodeBody(page.httpResponseBody!); // the HTML
+decodeBody(page.httpResponseBody!); // the HTML (bodies are base64, as on Zyte)
 
 // Rendered in a browser, with Zyte actions
 const rendered = await xyte.extract({

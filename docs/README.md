@@ -2,6 +2,7 @@
 
 | Page | What's in it |
 | --- | --- |
+| [api.md](api.md) | Every export of the package, grouped by purpose, with links to the pages above |
 | [coverage.md](coverage.md) | How much of the Zyte API is implemented, field by field (generated from the spec) |
 | [routing.md](routing.md) | Combining providers: `rotate`, `route`, `adaptive` (learns per site), `byKind`, `byCountry`, `weighted`; `healthy` (circuit breaker), `budget` and `watch` (usage APIs, status pages); shared state in Redis; `onAttempt`, `browserFallback`; how attempts, sessions and costs work |
 | [actions.md](actions.md) | Which actions there are, which providers run them, Zyte's own three (`searchKeyword`, `setLocation`, `interaction`) through handlers, `unsupportedActions`, HTML-only APIs, pass-overs |
