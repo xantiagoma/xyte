@@ -15,6 +15,7 @@ import type { Extractor, Rate, Rates } from './client.ts';
 import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOptions, type ProviderCheck } from './combinators.ts';
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
 import type { CacheOptions } from './cache.ts';
+import { capsolver, twoCaptcha } from './captcha.ts';
 import { parseLimit, type RateLimits } from './pace.ts';
 import type { JobsOptions } from './jobs.ts';
 import type { SessionPoolOptions } from './sessions.ts';
@@ -396,6 +397,12 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
   if (env.XYTE_BLOCK_RESOURCES) options.blockResources = list(env.XYTE_BLOCK_RESOURCES);
   if (env.XYTE_BROWSER_TIME_LIMIT) options.timeLimit = Number(env.XYTE_BROWSER_TIME_LIMIT);
   if (env.XYTE_BROWSER_SETTLE) options.settleTime = Number(env.XYTE_BROWSER_SETTLE);
+  if (env.XYTE_CAPTCHA) {
+    const service = env.XYTE_CAPTCHA.trim().toLowerCase();
+    if (service === 'capsolver') options.captcha = capsolver({ apiKey: required(env, 'CAPSOLVER_API_KEY') });
+    else if (service === '2captcha' || service === 'twocaptcha') options.captcha = twoCaptcha({ apiKey: required(env, 'TWOCAPTCHA_API_KEY') });
+    else throw new Error(`xyte: unknown XYTE_CAPTCHA "${env.XYTE_CAPTCHA}" (capsolver or 2captcha)`);
+  }
   return options;
 }
 

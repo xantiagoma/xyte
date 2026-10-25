@@ -44,6 +44,8 @@ export interface AttemptOutcome {
    */
   transferBytes?: number;
   reason?: string;
+  /** Captchas met in a browser render with `browser.captcha`, and whether they were solved. */
+  captchas?: { kind: string; solver: string; solved: boolean; ms: number; error?: string }[];
 }
 
 export interface ProxyEndpoint {

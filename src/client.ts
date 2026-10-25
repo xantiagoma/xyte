@@ -599,6 +599,7 @@ export class Xyte {
           statusCode: result.statusCode,
           bytes: result.html ? new TextEncoder().encode(result.html).byteLength : undefined,
           transferBytes: result.transferBytes,
+          ...(result.captchas && { captchas: result.captchas }),
         };
 
         if (!trusted && this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {

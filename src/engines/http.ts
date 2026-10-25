@@ -1,5 +1,6 @@
 import { brotliCompressSync, constants as zlibConstants, deflateSync, gzipSync } from 'node:zlib';
 import type { ActionHandlers, ZyteOnlyAction } from '../actions.ts';
+import type { CaptchaOutcome } from '../captcha.ts';
 import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Transport } from '../transport.ts';
 import type { ExtractRequest, ExtractResponse, HttpHeader } from '../types.ts';
@@ -29,6 +30,8 @@ export interface EngineResult {
    * TLS and tunnel overhead aren't included, so per-GB bills run a few percent higher.
    */
   transferBytes?: number;
+  /** Captchas found on the page and what solving them gave (browser renders with `browser.captcha`). */
+  captchas?: CaptchaOutcome[];
 }
 
 /**

@@ -31,6 +31,15 @@ export {
 } from './env.ts';
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
+export {
+  capsolver,
+  createTaskSolver,
+  twoCaptcha,
+  type CaptchaKind,
+  type CaptchaOutcome,
+  type CaptchaSolver,
+  type CaptchaTask,
+} from './captcha.ts';
 export { doctor, formatDoctor, type DoctorOptions, type DoctorResult } from './doctor.ts';
 export { Jobs, verifyWebhook, type Job, type JobsOptions } from './jobs.ts';
 export { StatsQueryError, StatsRecorder, type StatsOptions, type StatsQuery, type StatsResponse } from './stats.ts';

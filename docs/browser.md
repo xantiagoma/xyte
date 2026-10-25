@@ -126,6 +126,34 @@ attempt), so hooks can match locale and timezone to the exit country.
 - `ignoreHTTPSErrors` only for proxies marked `insecure` (scraping APIs that re-sign TLS)
 - `javaScriptEnabled` from the request's `javascript`
 
+## Captchas
+
+```ts
+import { capsolver, twoCaptcha, Xyte } from 'xyte';
+
+new Xyte({ browser: { captcha: capsolver({ apiKey: process.env.CAPSOLVER_API_KEY! }) } });
+```
+
+After a browser render's page loads, and before its actions (which may submit the form), xyte looks
+for a reCAPTCHA (v2), hCaptcha or Cloudflare Turnstile widget (an element with `data-sitekey`, or
+the widget's iframe), sends its sitekey to the service, puts the token in the field the form
+expects (`g-recaptcha-response`, `h-captcha-response`, `cf-turnstile-response`) and calls the
+widget's `data-callback`. Each attempt's report lists the captchas met (`captchas`: kind, solver,
+solved, ms, error).
+
+| Solver | Solves | Env |
+| --- | --- | --- |
+| `capsolver({ apiKey })` | reCAPTCHA v2 / v3, Turnstile | `XYTE_CAPTCHA=capsolver`, `CAPSOLVER_API_KEY` |
+| `twoCaptcha({ apiKey })` | reCAPTCHA v2 / v3, hCaptcha, Turnstile | `XYTE_CAPTCHA=2captcha`, `TWOCAPTCHA_API_KEY` |
+| `createTaskSolver({ name, endpoint, apiKey, types })` | any service with the same `createTask` / `getTaskResult` API | |
+| your own `{ name, solve(task, signal) }` | anything | |
+
+Both presets follow their services' documentation and are tested against a stand-in service, not
+against real accounts yet. Not covered: Cloudflare's full-page "Just a moment…" challenge, which
+depends on the browser's cookies and fingerprint rather than a widget token (see
+[routing](routing.md#browserfallback-retry-a-banned-page-in-a-browser) and patchright above), and
+image or audio captchas. Solving services bill per captcha.
+
 ## Zyte's own actions: `searchKeyword`, `setLocation`, `interaction`
 
 These three are Zyte services (its per-site knowledge, its hosted scripts), not browser operations.

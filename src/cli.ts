@@ -49,6 +49,7 @@ Browser (environment):
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
   XYTE_BROWSER_FALLBACK=true                     retry a banned plain GET in the browser
+  XYTE_CAPTCHA=capsolver|2captcha                solve reCAPTCHA / hCaptcha / Turnstile in renders (CAPSOLVER_API_KEY, TWOCAPTCHA_API_KEY)
   XYTE_LOG_REQUESTS=true                         one JSON line per request (attempts, providers, bytes)
   XYTE_CACHE_TTL=3600 | wolt.com=600,*=3600      answer repeats from a cache (Redis with XYTE_REDIS_URL)
   XYTE_RATE_LIMITS=yelp.co.uk=2/s,*=10/s         per-site pacing

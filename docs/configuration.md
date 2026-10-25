@@ -13,7 +13,7 @@ your own code), the server handler options, and the CLI.
 | `timeout` | `60` | Seconds per attempt (not per request). Raise it for `zyteApi()` on slow, hard sites. |
 | `concurrency` | unlimited | Requests in flight; extra `extract()` calls queue. Match it to your provider's concurrency limit. |
 | `isBan` | `isLikelyBan` | `(page: { url, statusCode, headers, html }) => boolean`: whether a page is a ban (retried, then a 520). `false` returns every page as is. |
-| `browser` | Playwright Chromium | `browserType` (patchright…), `launchOptions`, `connect` (remote browser), `contextOptions`, `onPage`, `blockResources`, `timeLimit` (60 s), `settleTime` (3 s). See [browser](browser.md). |
+| `browser` | Playwright Chromium | `browserType` (patchright…), `launchOptions`, `connect` (remote browser), `contextOptions`, `onPage`, `blockResources`, `timeLimit` (60 s), `settleTime` (3 s), `captcha` (a solver). See [browser](browser.md). |
 | `extractors` | `markdown` only | Implementations of Zyte's extraction fields; `llmExtractors()` covers them all with any LLM. See [extraction](extraction.md). |
 | `sessions` | `{ size: 8, maxAge: 14400, maxBans: 3 }` | The `sessionContext` pool: sessions per context, seconds before retiring one, bans before retiring one; `store` (Redis) shares it across instances ([shared state](routing.md#shared-state-across-instances-redis)). |
 | `transport` | `fetch` (Bun) / undici (Node) | Low-level HTTP sender, for logging or tests. |
@@ -86,6 +86,7 @@ are shared.
 | `XYTE_BLOCK_RESOURCES` | none | Resource types to abort, e.g. `image,media,font` (saves per-GB proxy traffic). |
 | `XYTE_BROWSER_TIME_LIMIT` | `60` | Browser seconds per request. |
 | `XYTE_BROWSER_SETTLE` | `3` | Seconds to wait for the network to go quiet after load and actions; `0` to skip. |
+| `XYTE_CAPTCHA` | none | `capsolver` (with `CAPSOLVER_API_KEY`) or `2captcha` (`TWOCAPTCHA_API_KEY`): solve captcha widgets in renders ([browser](browser.md#captchas)). |
 | `XYTE_BROWSER_FALLBACK` | `false` | `true`: retry a banned plain GET in the browser (`browserFallback`). |
 
 ### AI extraction

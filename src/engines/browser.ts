@@ -15,6 +15,7 @@ import type { ZyteSchemas } from '../types.ts';
 type InteractionLogEntry = ZyteSchemas['InteractionLogEntry'];
 import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
 import { handlerFor, isZyteOnlyAction, type ZyteOnlyAction } from '../actions.ts';
+import { findCaptchas, injectToken, type CaptchaOutcome, type CaptchaSolver } from '../captcha.ts';
 import { isRedirect, type EngineAttempt, type EngineResult } from './http.ts';
 
 /**
@@ -84,6 +85,11 @@ export interface BrowserOptions {
   blockResources?: readonly string[];
   /** Total browser time per request, seconds. Zyte's limit is 60. */
   timeLimit?: number;
+  /**
+   * Solves reCAPTCHA, hCaptcha and Turnstile widgets found after the page loads, before the
+   * actions: `capsolver({ apiKey })`, `twoCaptcha({ apiKey })`, or your own `CaptchaSolver`.
+   */
+  captcha?: CaptchaSolver;
   /**
    * After load and the actions, wait up to this many seconds for the network to go quiet, so
    * data the page fetches after `load` lands in `browserHtml` and `networkCapture`, as on Zyte.
@@ -214,6 +220,23 @@ export class BrowserEngine {
       }
 
       let stopped = results.some((r) => r.status === 'returned');
+
+      // A captcha widget on the loaded page: solved before the actions, which may submit its form.
+      const captchas: CaptchaOutcome[] = [];
+      const solver = this.options.captcha;
+      if (solver && !stopped) {
+        for (const widget of await findCaptchas(page).catch(() => [])) {
+          const started = Date.now();
+          try {
+            const task = { kind: widget.kind, siteKey: widget.siteKey, url: page.url(), ...(widget.action && { action: widget.action }) };
+            const token = await withTimeout(solver.solve(task, attempt.signal), remaining());
+            await injectToken(page, widget, token);
+            captchas.push({ kind: widget.kind, solver: solver.name, solved: true, ms: Date.now() - started });
+          } catch (error) {
+            captchas.push({ kind: widget.kind, solver: solver.name, solved: false, ms: Date.now() - started, error: error instanceof Error ? error.message : String(error) });
+          }
+        }
+      }
       for (const action of actions) {
         if (stopped || remaining() === 0) {
           results.push({ action: action.action, elapsedTime: 0, status: 'notExecuted' });
@@ -273,7 +296,7 @@ export class BrowserEngine {
       if (request.httpResponseHeaders) response.httpResponseHeaders = headers;
 
       const transferBytes = (await Promise.all(sizes)).reduce((sum, size) => sum + size, 0);
-      return { response, statusCode: response.statusCode ?? 200, headers, html, transferBytes };
+      return { response, statusCode: response.statusCode ?? 200, headers, html, transferBytes, ...(captchas.length > 0 && { captchas }) };
     } finally {
       attempt.signal.removeEventListener('abort', abort);
       if (context) {

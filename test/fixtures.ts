@@ -117,6 +117,15 @@ export function startTarget() {
         case '/ipinfo':
           // Like ipinfo.io/json, for `xyte doctor`.
           return Response.json({ ip: '203.0.113.7', country: 'AR', city: 'Rosario', org: 'AS0 Test Net' });
+        case '/captcha': {
+          // A captcha-protected form: the widget's callback marks the page when it gets a token.
+          const kind = url.searchParams.get('kind') === 'turnstile' ? 'cf-turnstile' : 'g-recaptcha';
+          return new Response(
+            `<html><body><form action="/landing"><div class="${kind}" data-sitekey="site-key-123" data-callback="onSolved"></div></form>
+             <script>function onSolved(token) { document.body.dataset.token = token; }</script></body></html>`,
+            { headers: { 'content-type': 'text/html' } },
+          );
+        }
         case '/gzip':
           // 200 KB of HTML that compresses to a few KB.
           return new Response(Bun.gzipSync(`<html><body>${'<p>same paragraph again</p>'.repeat(8000)}</body></html>`), {
