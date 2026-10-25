@@ -1,6 +1,7 @@
 import { assertSupportedActions, BrowserEngine, type BrowserOptions } from './engines/browser.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
+  type XyteProblem,
   domainUnreachable,
   invalidRequest,
   serverError,
@@ -38,6 +39,8 @@ export interface ExtractOptions {
   signal?: AbortSignal;
   /** This request's warnings, in addition to the client's `onWarning`. */
   onWarning?: (message: string) => void;
+  /** This request's report once it's done, in addition to the client's `onRequest`. */
+  onReport?: (report: RequestReport) => void;
 }
 
 export interface XyteOptions {
@@ -77,6 +80,12 @@ export interface XyteOptions {
    */
   onAttempt?: (info: AttemptInfo) => void;
   /**
+   * Called once per `extract()`, success or failure, with what it took: every attempt (provider,
+   * route, result, latency, bytes), totals per provider, and the outcome. For logs, metrics and
+   * analytics; the response itself stays Zyte's.
+   */
+  onRequest?: (report: RequestReport) => void;
+  /**
    * When a plain HTTP request (GET, no body) is banned, retry it in a browser, which gets past
    * JavaScript challenges, and return the page's raw HTTP response as `httpResponseBody`, as
    * Zyte does when it picks a browser itself. Needs Playwright (or `browser.connect`). Default false.
@@ -90,13 +99,77 @@ export interface XyteOptions {
 }
 
 export interface AttemptInfo extends AttemptOutcome {
+  /** The `extract()` call it belongs to (same id as its `RequestReport`). */
+  requestId: string;
   url: string;
   /** 0 for the first try. */
   attempt: number;
+  /** The combinators' choices down to `provider`, outermost first, e.g. `['rotate(oxylabs-residential,zyte-api)', 'zyte-api']`. */
+  path: string[];
   /** The provider that served the attempt: the leaf a combinator chose, e.g. `oxylabs-residential`. */
   provider: string;
   /** Rendered in a browser (requested, or `browserFallback`). */
   browser: boolean;
+}
+
+/** Attempts and bytes of one provider within a request (or across reports, summed). */
+export interface ProviderUsage {
+  attempts: number;
+  ok: number;
+  ban: number;
+  error: number;
+  aborted: number;
+  /** Bytes on the wire (`transferBytes`), summed. */
+  transferBytes: number;
+  /** Time spent in its attempts, summed. */
+  ms: number;
+}
+
+/** What one `extract()` took and how it ended: `onRequest` / `onReport`. */
+export interface RequestReport {
+  requestId: string;
+  url: string;
+  host: string;
+  /** `ok`: a response came back (the target's own 4xx/5xx included); `error`: an `XyteError`; `aborted`: cancelled. */
+  outcome: 'ok' | 'error' | 'aborted';
+  /** The target's status, when a response came back. */
+  statusCode?: number;
+  /** The problem it failed with. */
+  error?: XyteProblem;
+  /** The provider that served the response (the last attempt's). */
+  provider?: string;
+  /** The last attempt rendered in a browser. */
+  browser: boolean;
+  /** `browserFallback` moved it from HTTP to a browser. */
+  escalated: boolean;
+  /** Milliseconds waiting for a `concurrency` slot, then working. */
+  queuedMs: number;
+  ms: number;
+  attempts: AttemptInfo[];
+  /** Totals over the attempts. */
+  transferBytes: number;
+  byProvider: Record<string, ProviderUsage>;
+  warnings: string[];
+}
+
+/** Per-request bookkeeping that ends up in the `RequestReport`. */
+interface Trace {
+  requestId: string;
+  attempts: AttemptInfo[];
+  warnings: string[];
+}
+
+/** Sums attempts per provider. */
+export function usageByProvider(attempts: readonly AttemptInfo[]): Record<string, ProviderUsage> {
+  const usage: Record<string, ProviderUsage> = {};
+  for (const a of attempts) {
+    const u = (usage[a.provider] ??= { attempts: 0, ok: 0, ban: 0, error: 0, aborted: 0, transferBytes: 0, ms: 0 });
+    u.attempts++;
+    u[a.result]++;
+    u.transferBytes += a.transferBytes ?? 0;
+    u.ms += a.ms;
+  }
+  return usage;
 }
 
 const warned = new Set<string>();
@@ -145,9 +218,27 @@ export class Xyte {
    * with an `XyteError` carrying Zyte's status and problem type.
    */
   extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
+    const queued = Date.now();
+    const trace: Trace = { requestId: randomSessionId(), attempts: [], warnings: [] };
+    const reporting = this.options.onRequest != null || options.onReport != null;
     return this.limit(async () => {
-      options.signal?.throwIfAborted();
-      return this.run(lenient(request), options);
+      const started = Date.now();
+      let response: ExtractResponse | undefined;
+      let failure: unknown;
+      try {
+        options.signal?.throwIfAborted();
+        response = await this.run(lenient(request), options, trace);
+        return response;
+      } catch (error) {
+        failure = error;
+        throw error;
+      } finally {
+        if (reporting) {
+          const report = buildReport(request, trace, { queued, started, response, failure, aborted: options.signal?.aborted === true });
+          this.options.onRequest?.(report);
+          options.onReport?.(report);
+        }
+      }
     });
   }
 
@@ -160,13 +251,14 @@ export class Xyte {
     await this.close();
   }
 
-  private async run(request: ExtractRequest, options: ExtractOptions): Promise<ExtractResponse> {
+  private async run(request: ExtractRequest, options: ExtractOptions, trace: Trace): Promise<ExtractResponse> {
     const cancel = options.signal;
     const plan = this.plan(request);
     const warnings = new Set<string>();
     const warn = (message: string) => {
       if (warnings.has(message)) return;
       warnings.add(message);
+      trace.warnings.push(message);
       if (this.options.onWarning) this.options.onWarning(message, { url: request.url });
       else warnOnce(message);
       options.onWarning?.(message);
@@ -179,7 +271,7 @@ export class Xyte {
     let lastReason = 'unknown error';
     let lastCause: unknown;
     let lastWasBan = false;
-    const requestId = randomSessionId();
+    const { requestId } = trace;
     // browserFallback: after a ban, a plain GET goes on in a browser.
     let inBrowser = plan.browser;
     const canEscalate =
@@ -279,7 +371,11 @@ export class Xyte {
           continue;
         }
 
-        const page = { statusCode: result.statusCode, bytes: result.html ? new TextEncoder().encode(result.html).byteLength : undefined };
+        const page = {
+          statusCode: result.statusCode,
+          bytes: result.html ? new TextEncoder().encode(result.html).byteLength : undefined,
+          transferBytes: result.transferBytes,
+        };
 
         if (!trusted && this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
           lastReason = `ban detected (HTTP ${result.statusCode})${escalated ? ' in the browser' : ''}`;
@@ -304,13 +400,17 @@ export class Xyte {
         if (resolved) {
           const report: AttemptOutcome = { ...verdict, ms: Date.now() - started };
           this.proxy.report?.(context, report);
-          this.options.onAttempt?.({
+          const info: AttemptInfo = {
             ...report,
+            requestId,
             url: request.url,
             attempt,
             provider: context.path?.at(-1) ?? this.proxy.name,
+            path: context.path ?? [],
             browser: context.browser,
-          });
+          };
+          trace.attempts.push(info);
+          this.options.onAttempt?.(info);
         }
       }
     }
@@ -500,6 +600,44 @@ const CHALLENGE_MARKERS = [
  * Default ban heuristic: 403/429/503 statuses, or a known anti-bot challenge page. Other 4xx/5xx
  * are real answers and are returned in `statusCode`, as Zyte does.
  */
+function buildReport(
+  request: ExtractRequest,
+  trace: Trace,
+  end: { queued: number; started: number; response?: ExtractResponse; failure?: unknown; aborted: boolean },
+): RequestReport {
+  const last = trace.attempts.at(-1);
+  const host = (() => {
+    try {
+      return new URL(request.url).hostname;
+    } catch {
+      return '';
+    }
+  })();
+  const error =
+    end.failure instanceof XyteError
+      ? end.failure.toJSON()
+      : end.failure !== undefined
+        ? { status: 500, type: '/server/internal', title: 'Internal Server Error', detail: describe(end.failure) }
+        : undefined;
+  return {
+    requestId: trace.requestId,
+    url: request.url,
+    host,
+    outcome: end.response ? 'ok' : end.aborted ? 'aborted' : 'error',
+    statusCode: end.response?.statusCode,
+    error: end.aborted ? undefined : error,
+    provider: end.response ? last?.provider : undefined,
+    browser: last?.browser ?? false,
+    escalated: trace.attempts.some((a) => a.browser) && trace.attempts.some((a) => !a.browser),
+    queuedMs: end.started - end.queued,
+    ms: Date.now() - end.started,
+    attempts: trace.attempts,
+    transferBytes: trace.attempts.reduce((sum, a) => sum + (a.transferBytes ?? 0), 0),
+    byProvider: usageByProvider(trace.attempts),
+    warnings: trace.warnings,
+  };
+}
+
 /**
  * What Zyte quietly ignores instead of rejecting (checked against api.zyte.com): a Cookie header
  * in `customHttpRequestHeaders` (cookies go in `requestCookies`), `sessionContext` next to

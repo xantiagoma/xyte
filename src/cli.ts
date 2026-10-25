@@ -33,6 +33,9 @@ Browser (environment):
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
   XYTE_BROWSER_FALLBACK=true                     retry a banned plain GET in the browser
+  XYTE_LOG_REQUESTS=true                         one JSON line per request (attempts, providers, bytes)
+  XYTE_WATCH=true                                check providers' usage APIs / status pages
+  XYTE_REDIS_URL=redis://…                       share budgets, circuits and checks across instances
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
 
 AI extraction (product, article, customAttributes…) via any OpenAI-compatible API:
@@ -63,6 +66,8 @@ const xyte = new Xyte({
   timeout: num(env.XYTE_TIMEOUT),
   concurrency: num(env.XYTE_CONCURRENCY),
   browserFallback: env.XYTE_BROWSER_FALLBACK === 'true',
+  // One JSON line per request, for log pipelines (Cloud Logging → BigQuery, Datadog…).
+  onRequest: env.XYTE_LOG_REQUESTS === 'true' ? (report) => console.log(JSON.stringify({ xyte: 'request', ...report })) : undefined,
   onRetry: ({ attempt, url, reason }) => console.error(`[xyte] retry ${attempt} ${url}: ${reason}`),
 });
 

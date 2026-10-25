@@ -80,6 +80,29 @@ export function startTarget() {
             `<html><head><title>Just a moment...</title></head><body><script>document.cookie = 'passed=1; path=/'; location.reload();</script></body></html>`,
             { status: 403, headers: { 'content-type': 'text/html' } },
           );
+        case '/noise':
+          // A realistically sized page (~200 KB, uncompressed) whose script fetches more data.
+          return new Response(
+            `<html><body><pre>${NOISE}</pre><script>fetch('/api/data')</script></body></html>`,
+            { headers: { 'content-type': 'text/html' } },
+          );
+        case '/gzip-chunked': {
+          // Compressed and streamed: no Content-Length, as most dynamic pages are served.
+          const gz = Bun.gzipSync(`<html><body>${NOISE.slice(0, 50_000)}${'<p>same paragraph again</p>'.repeat(4000)}</body></html>`);
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(gz.subarray(0, gz.length >> 1));
+              controller.enqueue(gz.subarray(gz.length >> 1));
+              controller.close();
+            },
+          });
+          return new Response(stream, { headers: { 'content-type': 'text/html', 'content-encoding': 'gzip' } });
+        }
+        case '/gzip':
+          // 200 KB of HTML that compresses to a few KB.
+          return new Response(Bun.gzipSync(`<html><body>${'<p>same paragraph again</p>'.repeat(8000)}</body></html>`), {
+            headers: { 'content-type': 'text/html', 'content-encoding': 'gzip' },
+          });
         case '/api/data':
           return Response.json({ secret: 42 });
         case '/api/slow':
@@ -118,6 +141,38 @@ export function startTarget() {
  * A forward HTTP proxy (absolute-form requests, which is what HTTP clients send for http:// URLs
  * through a proxy) with basic auth. Records the username of every request.
  */
+/**
+ * A TCP relay in front of a port that counts every byte both ways: the reference for what a
+ * per-GB proxy would bill.
+ */
+const NOISE = Array.from({ length: 25_000 }, (_, i) => ((i * 2654435761) >>> 0).toString(16).padStart(8, '0')).join('');
+
+export async function startByteCounter(port: number) {
+  const net = await import('node:net');
+  let bytes = 0;
+  const server = net.createServer((client) => {
+    const upstream = net.connect(port, '127.0.0.1');
+    client.on('data', (chunk) => {
+      bytes += chunk.length;
+      upstream.write(chunk);
+    });
+    upstream.on('data', (chunk) => {
+      bytes += chunk.length;
+      client.write(chunk);
+    });
+    client.on('close', () => upstream.destroy());
+    upstream.on('close', () => client.destroy());
+    client.on('error', () => upstream.destroy());
+    upstream.on('error', () => client.destroy());
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return {
+    port: (server.address() as { port: number }).port,
+    bytes: () => bytes,
+    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
 export async function startProxy(options: { password?: string } = {}) {
   const usernames: string[] = [];
   const server = http.createServer((req, res) => {

@@ -1,5 +1,7 @@
 // Runs the same Zyte requests through several providers and compares them: how often each one
-// gets the real page (not a challenge), how fast, and how many bytes (what per-GB proxies bill).
+// gets the real page (not a challenge), how fast, and what it uses per 1,000 real pages: attempts
+// (what per-request APIs bill, retries included) and MB on the wire (what per-GB proxies bill).
+// Multiply by your own rates: volume discounts and plans differ too much to bake prices in.
 //
 //   bun scripts/bench.ts cases.json [--providers zyte-api,direct,scrapingbee] [--repeat 3] [--out results.json] [--save dir]
 //
@@ -25,6 +27,9 @@ interface Run {
   ms: number;
   bytes: number;
   outcome: string;
+  /** Attempts the request took (retries included) and bytes they moved on the wire. */
+  attempts: number;
+  transferBytes: number;
 }
 
 const { values, positionals } = parseArgs({
@@ -43,11 +48,23 @@ const repeat = Number(values.repeat);
 const defaultProviders = values.providers!.split(',').map((p) => p.trim());
 
 const clients = new Map<string, Xyte>();
+const current = new Map<string, { attempts: number; transferBytes: number }>();
 const client = (provider: string): Xyte => {
   let xyte = clients.get(provider);
   if (!xyte) {
     const env = { ...process.env, XYTE_PROVIDER: provider === 'direct' ? '' : provider, XYTE_PROXY_URL: '', XYTE_PROXY_TEMPLATE: '' };
-    xyte = new Xyte({ proxy: proxyFromEnv(env), browser: browserFromEnv(env), onWarning: () => {} });
+    xyte = new Xyte({
+      proxy: proxyFromEnv(env),
+      browser: browserFromEnv(env),
+      onWarning: () => {},
+      // Runs per provider are sequential, so the attempts land in the current run.
+      onAttempt: (attempt) => {
+        const usage = current.get(provider);
+        if (!usage) return;
+        usage.attempts++;
+        usage.transferBytes += attempt.transferBytes ?? 0;
+      },
+    });
     clients.set(provider, xyte);
   }
   return xyte;
@@ -55,7 +72,8 @@ const client = (provider: string): Xyte => {
 
 async function runOnce(c: Case, provider: string): Promise<Run> {
   const started = performance.now();
-  const base = { case: c.name, provider };
+  const usage = { attempts: 0, transferBytes: 0 };
+  current.set(provider, usage);
   try {
     const res = await client(provider).extract(c.request);
     const ms = Math.round(performance.now() - started);
@@ -65,11 +83,11 @@ async function runOnce(c: Case, provider: string): Promise<Run> {
     if (!ok && values.save) {
       await Bun.write(`${values.save}/${c.name.replace(/\W+/g, '-')}.${provider}.${Date.now()}.html`, page);
     }
-    return { ...base, ok, ms, bytes, outcome: ok ? 'ok' : `${res.statusCode}, ${bytes} B, no match` };
+    return { case: c.name, provider, ...usage, ok, ms, bytes, outcome: ok ? 'ok' : `${res.statusCode}, ${bytes} B, no match` };
   } catch (error) {
     const ms = Math.round(performance.now() - started);
     const outcome = error instanceof XyteError ? `${error.status} ${error.type}` : String(error).slice(0, 80);
-    return { ...base, ok: false, ms, bytes: 0, outcome };
+    return { case: c.name, provider, ...usage, ok: false, ms, bytes: 0, outcome };
   }
 }
 
@@ -102,9 +120,28 @@ const rows = cases.flatMap((c) =>
     const mine = runs.filter((r) => r.case === c.name && r.provider === provider);
     const good = mine.filter((r) => r.ok);
     const failures = [...new Set(mine.filter((r) => !r.ok).map((r) => r.outcome))].join('; ');
-    return `| ${c.name} | ${provider} | ${good.length}/${mine.length} | ${median(good.map((r) => r.ms)) || '–'} | ${good.length ? Math.round(median(good.map((r) => r.bytes)) / 1024) : '–'} | ${failures} |`;
+    // Everything spent, failed runs included, per page that actually came back.
+    const perThousand = (total: number) => (good.length ? (total / good.length) * 1000 : undefined);
+    const attempts = perThousand(mine.reduce((sum, r) => sum + r.attempts, 0));
+    const megabytes = perThousand(mine.reduce((sum, r) => sum + r.transferBytes, 0) / 1e6);
+    const cells = [
+      c.name,
+      provider,
+      `${good.length}/${mine.length}`,
+      median(good.map((r) => r.ms)) || '–',
+      attempts === undefined ? '–' : Math.round(attempts),
+      megabytes === undefined ? '–' : megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes),
+      failures,
+    ];
+    return `| ${cells.join(' | ')} |`;
   }),
 );
-console.log(['| Case | Provider | Real page | Median ms | Median KB | Failures |', '| --- | --- | --- | --- | --- | --- |', ...rows].join('\n'));
+console.log(
+  [
+    '| Case | Provider | Real page | Median ms | Attempts / 1k pages | MB / 1k pages | Failures |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows,
+  ].join('\n'),
+);
 
 if (values.out) await Bun.write(values.out, JSON.stringify(runs, null, 2));

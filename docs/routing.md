@@ -21,10 +21,14 @@ And two wrappers that guard a provider wherever it's used:
 | --- | --- | --- |
 | [`healthy(p, { failures, cooldown })`](#healthy-a-circuit-breaker) | takes `p` out for a while after repeated proxy failures | an outage costs no attempts, not one per request |
 | [`budget(p, { max, per })`](#budget-cap-what-a-provider-can-spend) | caps the attempts `p` gets per time window | a Zyte fallback that can't run up the bill |
+| [`watch(p, { check })`](#watch-check-providers-ahead-of-requests) | asks `p`'s usage API or status page, in the background | skip a provider whose credits ran out, or that's down, before an attempt is spent on it |
+
+With a [shared store](#shared-state-across-instances-redis) (Redis), every instance of a
+deployment sees the same budgets, open circuits and checks.
 
 They all nest: a `route` can send a site to a `rotate` of a `healthy` proxy and a `budget`ed
 `zyteApi()`. [`onAttempt`](#watching-what-happens-onattempt) shows which provider served each
-attempt and how it went.
+attempt and how it went; [observability](observability.md) has the per-request reports.
 
 ## How attempts work
 
@@ -194,14 +198,83 @@ From env: `XYTE_CIRCUIT_BREAKER=5,60` wraps every provider named in `XYTE_PROVID
 rotate([residential, budget(zyteApi({ apiKey }), { max: 500, per: 'hour' })]);
 ```
 
-At most `max` attempts per window (`per`: seconds, or `'minute'`, `'hour'`, `'day'`), counted when
-an attempt goes out; attempts that failed at the network level are given back. Once spent,
-combinators skip it. Used alone (or when every provider of a `rotate` is spent), requests fail with
-**429** `/limits/over-user-limit`, which `error.retryable` marks for a later retry. The window is
-per process.
+At most `max` attempts per window (`per`: seconds, or `'minute'`, `'hour'`, `'day'`; windows are
+fixed, starting on the clock), counted when an attempt goes out; attempts that failed at the
+network level are given back. Once spent, combinators skip it. Used alone (or when every provider
+of a `rotate` is spent), requests fail with **429** `/limits/over-user-limit`, which
+`error.retryable` marks for a later retry. Per process, unless you pass a shared `store`.
 
 From env: `XYTE_BUDGET=zyte-api=500/hour,scrapingbee=1000/day`. A provider named in several env
 variables is one instance, so its budget is shared.
+
+## `watch()`: check providers ahead of requests
+
+```ts
+import { rotate, scrapingBee, scrapingBeeUsage, statusPage, watch, zyteApi } from 'xyte';
+
+const bee = watch(scrapingBee({ apiKey }), { check: scrapingBeeUsage({ apiKey, minRemaining: 500 }), every: 60 });
+const zyte = watch(zyteApi({ apiKey: zyteKey }), { check: statusPage('https://status.zyte.com') });
+await bee.refresh(); // optional: know before the first request
+bee.status(); // { available: true, remaining: 680, detail: 'scrapingbee 320/1000 credits used' }
+
+new Xyte({ proxy: rotate([bee, zyte]) });
+```
+
+`watch()` runs its checks every `every` seconds (default 60) in the background, never on the
+request path, and reports the provider unavailable while any check says so; `rotate()`, `route()`,
+`weighted()` and `adaptive()` then go straight to the others. Until the first check answers, the
+provider counts as available; a check that fails (the usage API itself is down) keeps the last
+answer and calls `onError`. `onChange(result)` hears about every switch.
+
+Built-in checks:
+
+| Check | Asks | Unavailable when | Checked live |
+| --- | --- | --- | --- |
+| `scrapingBeeUsage({ apiKey, minRemaining? })` | `app.scrapingbee.com/api/v1/usage` | credits left ≤ `minRemaining` | ✅ |
+| `zenrowsUsage({ apiKey, maxPercent? })` | `api.zenrows.com/v1/subscriptions/self/details` | subscription inactive, usage ≥ `maxPercent`, or the key's caps spent | docs |
+| `scraperApiUsage({ apiKey })` | `api.scraperapi.com/account` | `requestCount` reaches `requestLimit` | docs |
+| `oxylabsUsage({ username, password, limitGB, maxPercent? })` | `residential-api.oxylabs.io/v2` (login, then `client-stats`) | this month's GB reach `maxPercent` of `limitGB` (the API reports usage, not your limit) | docs; needs the account's *main* proxy user |
+| `statusPage(url, { downOn? })` | any Statuspage page (`/api/v2/status.json`): Zyte, IPRoyal, Webshare… | its indicator is `major` or `critical` | ✅ (Zyte) |
+
+A check is just `(signal) => Promise<{ available, detail?, remaining? }>`, so anything else (an
+internal quota service, a Redis key your billing job writes) fits too. Pass several in an array:
+all must pass.
+
+From env: `XYTE_WATCH=true` watches every named provider that has a built-in check (ScrapingBee,
+ZenRows, ScraperAPI, Zyte, IPRoyal, Webshare; Oxylabs with `OXYLABS_LIMIT_GB`, and
+`OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the main one), every
+`XYTE_WATCH_EVERY` seconds, logging switches to stderr.
+
+## Shared state across instances (Redis)
+
+`budget()`, `healthy()` and `watch()` keep their state in the process by default: with several
+instances (Cloud Run scales out), each has its own budget and its own circuits. Pass a shared
+`StateStore` and they share it:
+
+```ts
+import { budget, healthy, redisStore, redisStoreFromUrl, watch } from 'xyte';
+
+const store = redisStoreFromUrl(process.env.REDIS_URL!); // Bun's client, else ioredis or redis if installed
+// or with your own client: redisStore((cmd) => redis.call(cmd[0]!, ...cmd.slice(1)))
+
+budget(zyte, { max: 500, per: 'hour', store });          // one budget for the whole deployment
+healthy(oxylabs(…), { failures: 5, cooldown: 60, store }); // a circuit one instance opens is open for all
+watch(bee, { check, store });                              // one instance checks, the others reuse its answer
+```
+
+| Wrapper | Key | Shared |
+| --- | --- | --- |
+| `budget` | `xyte:budget:<name>:<window>` | the count per window (INCRBY, expiring with the window) |
+| `healthy` | `xyte:circuit:<name>` | an open circuit, for its cooldown (each instance still counts its own failures) |
+| `watch` | `xyte:watch:<name>` | the last check result, for `every` seconds |
+
+`<name>` is the provider's name unless you pass `key`. Nothing waits on Redis except a budget's
+increment when an attempt goes out (one round trip); circuits and checks are read in the
+background. If Redis is down, they fall back to process memory and say so once (`resilient()`),
+so requests never fail because of the store.
+
+From env: `XYTE_REDIS_URL=redis://…` shares the state of everything built from `XYTE_BUDGET`,
+`XYTE_CIRCUIT_BREAKER` and `XYTE_WATCH`.
 
 ## Watching what happens: `onAttempt`
 

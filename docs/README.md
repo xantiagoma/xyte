@@ -3,7 +3,8 @@
 | Page | What's in it |
 | --- | --- |
 | [coverage.md](coverage.md) | How much of the Zyte API is implemented, field by field (generated from the spec) |
-| [routing.md](routing.md) | Combining providers: `rotate`, `route`, `adaptive` (learns per site), `byKind`, `byCountry`, `weighted`; `healthy` (circuit breaker) and `budget`; `onAttempt`, `browserFallback`; how attempts, sessions and costs work |
+| [routing.md](routing.md) | Combining providers: `rotate`, `route`, `adaptive` (learns per site), `byKind`, `byCountry`, `weighted`; `healthy` (circuit breaker), `budget` and `watch` (usage APIs, status pages); shared state in Redis; `onAttempt`, `browserFallback`; how attempts, sessions and costs work |
+| [observability.md](observability.md) | Per-request reports (`onRequest`), attempt events, `X-Xyte-*` headers, JSON request logs, byte accounting, analytics queries |
 | [configuration.md](configuration.md) | Every `Xyte` option, environment variable, server option and CLI flag |
 | [providers.md](providers.md) | Proxy networks, scraping APIs in proxy mode, remote browsers, and `template()` for anything else |
 | [browser.md](browser.md) | Browser rendering: patchright and other forks, remote browsers, hooks, resource blocking |

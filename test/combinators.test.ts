@@ -16,7 +16,7 @@ import {
   type ProxyContext,
   type ProxyProvider,
 } from '../src/index.ts';
-import { startProxy, startTarget } from './fixtures.ts';
+import { startByteCounter, startProxy, startTarget } from './fixtures.ts';
 
 setDefaultTimeout(30_000);
 let target: ReturnType<typeof startTarget>;
@@ -261,12 +261,56 @@ describe('from env', () => {
   test('XYTE_BUDGET is shared by every place that names the provider', async () => {
     const provider = proxyFromEnv({ ...creds, XYTE_PROVIDER: 'oxylabs', XYTE_ROUTES: 'a.example=oxylabs', XYTE_BUDGET: 'oxylabs=1/hour' });
     await provider.resolve(ctx({ url: new URL('https://b.example/') }));
-    expect(() => provider.resolve(ctx({ url: new URL('https://a.example/'), requestId: 'other' }))).toThrow(/budget/);
+    expect(provider.resolve(ctx({ url: new URL('https://a.example/'), requestId: 'other' }))).rejects.toThrow(/budget/);
     expect(() => proxyFromEnv({ XYTE_BUDGET: 'oxylabs=lots' })).toThrow(/XYTE_BUDGET/);
   });
 
   test('XYTE_CIRCUIT_BREAKER wraps named providers', () => {
     const provider = proxyFromEnv({ ...creds, XYTE_PROVIDER: 'oxylabs,zenrows', XYTE_CIRCUIT_BREAKER: '5,60' });
     expect(provider.available?.(ctx())).toBe(true);
+  });
+});
+
+describe('transferBytes', () => {
+  /** One attempt through a byte-counting relay in front of the proxy; Chromium told not to bypass it for loopback. */
+  const measure = async (request: Parameters<Xyte['extract']>[0]) => {
+    const counter = await startByteCounter(proxy.port);
+    const attempts: AttemptInfo[] = [];
+    const xyte = new Xyte({
+      proxy: custom('counted', () => `http://bob:secret@127.0.0.1:${counter.port}`),
+      retries: 0,
+      onAttempt: (a) => attempts.push(a),
+      browser: { launchOptions: { args: ['--proxy-bypass-list=<-loopback>'] } },
+    });
+    try {
+      await xyte.extract(request);
+      await new Promise((r) => setTimeout(r, 50));
+      return { measured: attempts[0]!.transferBytes!, page: attempts[0]!.bytes!, wire: counter.bytes() };
+    } finally {
+      await xyte.close();
+      await counter.stop();
+    }
+  };
+
+  test('HTTP: compressed body plus headers, within a few percent of the wire', async () => {
+    const { measured, page, wire } = await measure({ url: `${target.base}/gzip`, httpResponseBody: true });
+    expect(page).toBeGreaterThan(200_000); // decoded
+    expect(wire).toBeLessThan(5_000); // as transferred
+    expect(Math.abs(measured - wire) / wire).toBeLessThan(0.05);
+  });
+
+  test('HTTP: a compressed body streamed without Content-Length is estimated by recompressing', async () => {
+    const { measured, page, wire } = await measure({ url: `${target.base}/gzip-chunked`, httpResponseBody: true });
+    expect(page).toBeGreaterThan(150_000);
+    expect(wire).toBeLessThan(page / 2);
+    expect(Math.abs(measured - wire) / wire).toBeLessThan(0.1);
+  });
+
+  // Chromium's proxy-auth handshake (a 407, then the request again) adds ~1 KB per connection
+  // that it doesn't report: noise on a real page, so the page here is a realistic 200 KB.
+  test('browser: every sub-request, within a few percent of the wire', async () => {
+    const { measured, wire } = await measure({ url: `${target.base}/noise`, browserHtml: true });
+    expect(wire).toBeGreaterThan(200_000);
+    expect(Math.abs(measured - wire) / wire).toBeLessThan(0.05);
   });
 });

@@ -1,5 +1,6 @@
 import { XyteError } from './errors.ts';
 import type { ApiEndpoint, AttemptOutcome, EndpointOf, ProxyContext, ProxyEndpoint, ProxyProvider } from './proxy.ts';
+import { memoryStore, resilient, type StateStore } from './state.ts';
 import { sessionNumber } from './util.ts';
 
 type Resolved<E extends ProxyEndpoint | ApiEndpoint> = ReturnType<ProxyProvider<E>['resolve']>;
@@ -167,7 +168,14 @@ export interface HealthyOptions {
   cooldown?: number;
   /** Called when the circuit opens (`true`) or closes again (`false`). */
   onChange?: (open: boolean, provider: string) => void;
+  /** Shared state: a circuit one instance opens is open for all of them. Default: this process only. */
+  store?: StateStore;
+  /** The circuit's key in the store. Default: the provider's name. */
+  key?: string;
 }
+
+/** How often a shared circuit's state is re-read (in the background, never on the request path). */
+const SHARED_REFRESH_MS = 2000;
 
 /**
  * A circuit breaker: after `failures` consecutive proxy/network errors (a 407 on every login, a
@@ -178,27 +186,44 @@ export interface HealthyOptions {
  */
 export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOptions = {}): ProxyProvider<EndpointOf<P>> {
   const failures = options.failures ?? 5;
-  const cooldownMs = (options.cooldown ?? 60) * 1000;
+  const cooldown = options.cooldown ?? 60;
+  const shared = options.store ? resilient(options.store) : undefined;
+  const sharedKey = `circuit:${options.key ?? provider.name}`;
   let errors = 0;
   let openUntil = 0;
   let tripped = false;
+  let sharedOpen = false;
+  let sharedReadAt = 0;
   return {
     name: provider.name,
     extracts: provider.extracts,
     resolve: (context) => provider.resolve(context) as Resolved<EndpointOf<P>>,
-    available: (context) => Date.now() >= openUntil && isAvailable(provider, context),
+    available(context) {
+      if (shared && Date.now() - sharedReadAt > SHARED_REFRESH_MS) {
+        sharedReadAt = Date.now();
+        void shared.get(sharedKey).then((value) => {
+          sharedOpen = value === 'open';
+        });
+      }
+      return Date.now() >= openUntil && !sharedOpen && isAvailable(provider, context);
+    },
     report(context, outcome) {
       if (outcome.result === 'error') {
         errors++;
         // Half-open after the cooldown: a single failure reopens the circuit.
         if (tripped || errors >= failures) {
           if (!tripped) options.onChange?.(true, provider.name);
-          openUntil = Date.now() + cooldownMs;
+          openUntil = Date.now() + cooldown * 1000;
           tripped = true;
           errors = 0;
+          void shared?.set(sharedKey, 'open', cooldown);
         }
       } else if (outcome.result === 'ok' || outcome.result === 'ban') {
-        if (tripped) options.onChange?.(false, provider.name);
+        if (tripped) {
+          options.onChange?.(false, provider.name);
+          sharedOpen = false;
+          void shared?.set(sharedKey, 'closed', 1);
+        }
         errors = 0;
         tripped = false;
       }
@@ -210,8 +235,12 @@ export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOp
 export interface BudgetOptions {
   /** Attempts allowed per window. */
   max: number;
-  /** The window: seconds, or `minute`, `hour`, `day`. */
+  /** The window: seconds, or `minute`, `hour`, `day`. Windows are fixed (they start on the clock). */
   per: number | 'minute' | 'hour' | 'day';
+  /** Shared state: every instance spends from one budget. Default: this process only. */
+  store?: StateStore;
+  /** The budget's key in the store. Default: the provider's name. */
+  key?: string;
 }
 
 const WINDOWS = { minute: 60, hour: 3600, day: 86_400 } as const;
@@ -224,34 +253,156 @@ const WINDOWS = { minute: 60, hour: 3600, day: 86_400 } as const;
  * option is spent), requests fail with a 429 `/limits/over-user-limit`, retryable later.
  */
 export function budget<P extends ProxyProvider>(provider: P, options: BudgetOptions): ProxyProvider<EndpointOf<P>> {
-  const windowMs = (typeof options.per === 'number' ? options.per : WINDOWS[options.per]) * 1000;
-  const spent: number[] = [];
-  const used = () => {
-    const since = Date.now() - windowMs;
-    while (spent.length > 0 && spent[0]! <= since) spent.shift();
-    return spent.length;
-  };
+  const windowSeconds = typeof options.per === 'number' ? options.per : WINDOWS[options.per];
+  const store = options.store ? resilient(options.store) : memoryStore();
+  const name = options.key ?? provider.name;
+  const windowKey = () => `budget:${name}:${Math.floor(Date.now() / (windowSeconds * 1000))}`;
+  // The last count this process saw, for the synchronous available().
+  let seen = { key: '', used: 0 };
+  const charged = new Map<string, string>();
   return {
     name: provider.name,
     extracts: provider.extracts,
-    resolve(context) {
-      if (used() >= options.max) {
+    async resolve(context) {
+      const key = windowKey();
+      const used = await store.incr(key, 1, windowSeconds);
+      seen = { key, used };
+      if (used > options.max) {
+        seen = { key, used: await store.incr(key, -1, windowSeconds) };
         throw new XyteError({
           status: 429,
           type: '/limits/over-user-limit',
           title: 'Budget Exceeded',
-          detail: `the ${options.max} attempts per ${options.per}${typeof options.per === 'number' ? ' s' : ''} budget for "${provider.name}" is spent`,
+          detail: `the ${options.max} attempts per ${options.per}${typeof options.per === 'number' ? ' s' : ''} budget for "${name}" is spent`,
         });
       }
-      spent.push(Date.now());
+      remember(charged, attemptKey(context), key);
       return provider.resolve(context) as Resolved<EndpointOf<P>>;
     },
-    available: (context) => used() < options.max && isAvailable(provider, context),
+    available: (context) => (seen.key === windowKey() ? seen.used : 0) < options.max && isAvailable(provider, context),
     report(context, outcome) {
+      const key = charged.get(attemptKey(context));
+      charged.delete(attemptKey(context));
       // Network failures and aborted attempts aren't billed: give them back.
-      if (outcome.result === 'error' || outcome.result === 'aborted') spent.pop();
+      if (key && (outcome.result === 'error' || outcome.result === 'aborted')) {
+        void store.incr(key, -1, windowSeconds).then((used) => {
+          if (seen.key === key) seen = { key, used };
+        });
+      }
       provider.report?.(context, outcome);
     },
+  };
+}
+
+/** What a provider check found: whether to use the provider, and why. */
+export interface CheckResult {
+  available: boolean;
+  /** Human-readable state, e.g. `820/1000 credits used`. */
+  detail?: string;
+  /** What's left, in the check's own unit (credits, requests, GB), when it knows. */
+  remaining?: number;
+}
+
+/** Asks a provider's API or status page how it is. Built-in ones are in `checks`. */
+export type ProviderCheck = (signal: AbortSignal) => Promise<CheckResult>;
+
+export interface WatchOptions {
+  /** One or more checks; the provider is available while all of them say so. */
+  check: ProviderCheck | readonly ProviderCheck[];
+  /** Seconds between checks. Default 60. */
+  every?: number;
+  /** Seconds a check may take. Default 10. */
+  timeout?: number;
+  /** Shared state: one instance checks, the others reuse its answer until it's `every` old. */
+  store?: StateStore;
+  /** The result's key in the store. Default: the provider's name. */
+  key?: string;
+  /** Called when availability changes (and on a first result that is unavailable). */
+  onChange?: (result: CheckResult, provider: string) => void;
+  /** Called when a check itself fails; the last result stays in place. */
+  onError?: (error: unknown, provider: string) => void;
+}
+
+export type WatchedProvider<E extends ProxyEndpoint | ApiEndpoint> = ProxyProvider<E> & {
+  /** The last check's result; undefined before the first one finished. */
+  status(): CheckResult | undefined;
+  /** Checks now (e.g. at startup, to know before the first request) and resolves with the result. */
+  refresh(): Promise<CheckResult | undefined>;
+};
+
+/**
+ * Asks a provider how it is, ahead of requests: its usage API (credits left) or status page. An
+ * exhausted or down provider is reported unavailable, so `rotate()`, `route()`, `weighted()` and
+ * `adaptive()` skip it before an attempt is wasted on it. Checks run in the background every
+ * `every` seconds, never on the request path; until the first one answers, the provider counts as
+ * available. Used alone, an unavailable provider is still used (there is nothing to fall back to).
+ */
+export function watch<P extends ProxyProvider>(provider: P, options: WatchOptions): WatchedProvider<EndpointOf<P>> {
+  const checks: readonly ProviderCheck[] = typeof options.check === 'function' ? [options.check] : options.check;
+  const every = options.every ?? 60;
+  const timeoutMs = (options.timeout ?? 10) * 1000;
+  const store = options.store ? resilient(options.store) : undefined;
+  const sharedKey = `watch:${options.key ?? provider.name}`;
+  let last: CheckResult | undefined;
+  let checkedAt = 0;
+  let inflight: Promise<CheckResult | undefined> | undefined;
+
+  const apply = (result: CheckResult) => {
+    const changed = last === undefined ? !result.available : last.available !== result.available;
+    last = result;
+    if (changed) options.onChange?.(result, provider.name);
+  };
+  const run = async (): Promise<CheckResult> => {
+    const cached = await store?.get(sharedKey);
+    if (cached) {
+      const result = JSON.parse(cached) as CheckResult;
+      apply(result);
+      return result;
+    }
+    const results = await Promise.all(checks.map((check) => check(AbortSignal.timeout(timeoutMs))));
+    const remaining = results.flatMap((r) => (r.remaining === undefined ? [] : [r.remaining]));
+    const result: CheckResult = {
+      available: results.every((r) => r.available),
+      detail: results.flatMap((r) => (r.detail ? [r.detail] : [])).join('; ') || undefined,
+      remaining: remaining.length > 0 ? Math.min(...remaining) : undefined,
+    };
+    apply(result);
+    await store?.set(sharedKey, JSON.stringify(result), every);
+    return result;
+  };
+  const start = (): Promise<CheckResult | undefined> =>
+    (inflight ??= run()
+      .catch((error: unknown) => {
+        options.onError?.(error, provider.name);
+        return last;
+      })
+      .finally(() => {
+        checkedAt = Date.now();
+        inflight = undefined;
+      }));
+  // An explicit refresh wants the state as of now: wait out a check already running, then check.
+  const refresh = async (): Promise<CheckResult | undefined> => {
+    await inflight;
+    return start();
+  };
+  const refreshIfStale = () => {
+    if (!inflight && Date.now() - checkedAt >= every * 1000) void start();
+  };
+
+  return {
+    name: provider.name,
+    extracts: provider.extracts,
+    resolve(context) {
+      refreshIfStale();
+      return provider.resolve(context) as Resolved<EndpointOf<P>>;
+    },
+    available(context) {
+      refreshIfStale();
+      return (last?.available ?? true) && isAvailable(provider, context);
+    },
+    report: (context, outcome) => provider.report?.(context, outcome),
+    status: () => last,
+    refresh,
   };
 }
 

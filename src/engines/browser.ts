@@ -161,6 +161,16 @@ export class BrowserEngine {
       const options = this.options.contextOptions ? await this.options.contextOptions(defaults, info) : defaults;
       context = await browser.newContext(options);
       attempt.signal.throwIfAborted();
+      // Every request the page makes, as transferred (bodies encoded), for transferBytes.
+      const sizes: Promise<number>[] = [];
+      context.on('requestfinished', (req) => {
+        sizes.push(
+          req.sizes().then(
+            (s) => s.requestHeadersSize + s.requestBodySize + s.responseHeadersSize + Math.max(0, s.responseBodySize),
+            () => 0,
+          ),
+        );
+      });
 
       // The attempt's jar: requestCookies, or the session's cookies (client- or server-managed).
       const cookies = attempt.jar.entries().map(({ cookie, hostOnly }) => toPlaywrightCookie(cookie, hostOnly));
@@ -251,7 +261,8 @@ export class BrowserEngine {
       const headers = final ? await final.headersArray() : [];
       if (request.httpResponseHeaders) response.httpResponseHeaders = headers;
 
-      return { response, statusCode: response.statusCode ?? 200, headers, html };
+      const transferBytes = (await Promise.all(sizes)).reduce((sum, size) => sum + size, 0);
+      return { response, statusCode: response.statusCode ?? 200, headers, html, transferBytes };
     } finally {
       attempt.signal.removeEventListener('abort', abort);
       if (context) {

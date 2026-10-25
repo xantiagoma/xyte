@@ -20,7 +20,7 @@ Three ways to use it:
   send the rest through cheaper exits, with one client.
 
 **Docs:** [coverage of the Zyte API](docs/coverage.md) · [providers](docs/providers.md) ·
-[combining providers](docs/routing.md) · [configuration](docs/configuration.md) ·
+[combining providers](docs/routing.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
 [browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) ·
 [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
 [migrating from Zyte](docs/migrating-from-zyte.md) · [examples](examples/)
@@ -161,9 +161,28 @@ const xyte = new Xyte({
   instead of costing an attempt per request), **`budget(p, { max: 500, per: 'hour' })`** caps what
   a provider (say, the Zyte fallback) can spend.
 
-`onAttempt` reports which provider served each attempt and how it went, for your metrics, and
-`browserFallback: true` retries a banned plain GET in a browser (JavaScript challenges), returning
-the raw response as Zyte does.
+- **`watch(p, { check })`** asks a provider's usage API or status page ahead of requests
+  (ScrapingBee, ZenRows, ScraperAPI, Oxylabs, any Statuspage), so one that ran out of credits or is
+  down is skipped before an attempt is spent on it. Env: `XYTE_WATCH=true`.
+
+With `XYTE_REDIS_URL` (or a `store`), budgets, open circuits and checks are shared by every
+instance. `browserFallback: true` retries a banned plain GET in a browser (JavaScript challenges),
+returning the raw response as Zyte does.
+
+### Seeing what it did
+
+Every request can tell you what it took, without changing the Zyte response:
+
+```ts
+new Xyte({ proxy, onRequest: (report) => analytics.insert('scrapes', report) });
+// report: outcome, provider that served it, every attempt (provider, route, result, ms,
+// bytes on the wire), totals per provider, whether it escalated to a browser.
+```
+
+`xyte serve` adds `X-Xyte-Attempts: oxylabs-residential:ban,zyte-api:ok` and
+`X-Xyte-Transfer-Bytes` to its responses, and `XYTE_LOG_REQUESTS=true` logs each report as a
+JSON line, ready for BigQuery or Datadog. Success rates and MB per provider and site, and what
+they cost at your rates: [observability](docs/observability.md).
 
 **Zyte as a provider.** `zyteApi({ apiKey })` forwards the request to Zyte unchanged, so every
 Zyte feature works, AI extraction included, and Zyte's answers (and errors) come back as Zyte

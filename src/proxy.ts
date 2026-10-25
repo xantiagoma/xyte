@@ -36,8 +36,13 @@ export interface AttemptOutcome {
   /** Milliseconds the attempt took. */
   ms: number;
   statusCode?: number;
-  /** Size of the page that came back (decoded body or browser HTML), not of the transfer. */
+  /** Size of the page that came back (decoded body or browser HTML). */
   bytes?: number;
+  /**
+   * Bytes that crossed the wire, both ways: headers, compressed bodies, redirects and, in a
+   * browser, every sub-request. What a per-GB proxy bills, minus TLS/tunnel overhead.
+   */
+  transferBytes?: number;
   reason?: string;
 }
 

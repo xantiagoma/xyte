@@ -12,7 +12,9 @@ import {
   type ProxyProvider,
 } from './proxy.ts';
 import type { Extractor } from './client.ts';
-import { adaptive, budget, byKind, healthy, rotate, route, type BudgetOptions } from './combinators.ts';
+import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOptions, type ProviderCheck } from './combinators.ts';
+import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
+import { redisStoreFromUrl, type StateStore } from './state.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
 import type { ExtractionField } from './types.ts';
@@ -129,6 +131,10 @@ const REMOTE_BROWSERS: Record<string, (env: Env) => NonNullable<BrowserOptions['
  * - `XYTE_BROWSER_PROVIDER`: provider names for browser renders (`byKind()`).
  * - `XYTE_CIRCUIT_BREAKER=5,60`: wraps every named provider in `healthy()` (failures, cooldown s).
  * - `XYTE_BUDGET=zyte-api=500/hour,scrapingbee=1000/day`: wraps those providers in `budget()`.
+ * - `XYTE_WATCH=true`: wraps providers that have a usage API or status page in `watch()`
+ *   (`XYTE_WATCH_EVERY` seconds, default 60). Oxylabs needs `OXYLABS_LIMIT_GB` (and, if the
+ *   proxy user isn't the account's main one, `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD`).
+ * - `XYTE_REDIS_URL=redis://…`: budgets, circuits and checks are shared by every instance.
  *
  * A provider named in several places is one instance, so its budget and circuit are shared.
  */
@@ -176,6 +182,9 @@ function namedProviders(env: Env): NamedProviders {
     budgets.set(match[1]!.toLowerCase(), { max: Number(match[2]), per });
   }
   const [failures, cooldown] = list(env.XYTE_CIRCUIT_BREAKER).map(Number);
+  const store: StateStore | undefined = env.XYTE_REDIS_URL ? redisStoreFromUrl(env.XYTE_REDIS_URL) : undefined;
+  const watching = env.XYTE_WATCH === 'true';
+  const every = env.XYTE_WATCH_EVERY ? Number(env.XYTE_WATCH_EVERY) : undefined;
   const cache = new Map<string, ProxyProvider>();
   const get = (raw: string): ProxyProvider => {
     const name = raw.trim().toLowerCase();
@@ -188,8 +197,10 @@ function namedProviders(env: Env): NamedProviders {
       provider = make(env);
     }
     const limit = budgets.get(name);
-    if (limit) provider = budget(provider, limit);
-    if (failures && name !== 'direct') provider = healthy(provider, { failures, cooldown });
+    if (limit) provider = budget(provider, { ...limit, store });
+    if (failures && name !== 'direct') provider = healthy(provider, { failures, cooldown, store });
+    const check = watching ? checkFor(name, env) : undefined;
+    if (check) provider = watch(provider, { check, every, store, onChange: (result, p) => console.warn(`[xyte] ${p} ${result.available ? 'available' : 'unavailable'}: ${result.detail ?? ''}`) });
     cache.set(name, provider);
     return provider;
   };
@@ -201,6 +212,26 @@ function namedProviders(env: Env): NamedProviders {
       return providers.length === 1 ? providers[0]! : rotate(providers);
     },
   };
+}
+
+/** The usage API or status page `XYTE_WATCH` uses for a provider name, if there is one. */
+function checkFor(name: string, env: Env): ProviderCheck | undefined {
+  switch (name) {
+    case 'scrapingbee':
+      return env.SCRAPINGBEE_API_KEY ? scrapingBeeUsage({ apiKey: env.SCRAPINGBEE_API_KEY }) : undefined;
+    case 'zenrows':
+      return env.ZENROWS_API_KEY ? zenrowsUsage({ apiKey: env.ZENROWS_API_KEY }) : undefined;
+    case 'scraperapi':
+      return env.SCRAPERAPI_API_KEY ? scraperApiUsage({ apiKey: env.SCRAPERAPI_API_KEY }) : undefined;
+    case 'oxylabs': {
+      const username = env.OXYLABS_API_USERNAME ?? env.OXYLABS_USERNAME;
+      const password = env.OXYLABS_API_PASSWORD ?? env.OXYLABS_PASSWORD;
+      if (!env.OXYLABS_LIMIT_GB || !username || !password) return undefined;
+      return oxylabsUsage({ username, password, limitGB: Number(env.OXYLABS_LIMIT_GB) });
+    }
+    default:
+      return STATUS_PAGES[name] ? statusPage(STATUS_PAGES[name]) : undefined;
+  }
 }
 
 const list = (value: string | undefined) => (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);

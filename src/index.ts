@@ -4,6 +4,9 @@ export {
   Xyte,
   type AttemptInfo,
   type BanCheck,
+  type ProviderUsage,
+  type RequestReport,
+  usageByProvider,
   type ExtractOptions,
   type Extractor,
   type XyteOptions,
@@ -20,12 +23,19 @@ export {
   healthy,
   rotate,
   route,
+  watch,
   weighted,
   type AdaptiveOptions,
   type AdaptiveProvider,
   type BudgetOptions,
+  type CheckResult,
   type HealthyOptions,
+  type ProviderCheck,
+  type WatchedProvider,
+  type WatchOptions,
 } from './combinators.ts';
+export { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
+export { memoryStore, redisStore, redisStoreFromUrl, resilient, type RedisSend, type StateStore } from './state.ts';
 export {
   brightData,
   custom,

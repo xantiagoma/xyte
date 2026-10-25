@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Xyte } from './client.ts';
+import type { RequestReport, Xyte } from './client.ts';
 import { XyteError } from './errors.ts';
 import type { ExtractRequest } from './types.ts';
 
@@ -72,22 +72,17 @@ export function createHandler(xyte: Xyte, options: HandlerOptions = {}): FetchHa
       return problem({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail: 'private and internal addresses are not allowed' });
     }
 
+    let report: RequestReport | undefined;
     try {
-      // A caller that hangs up cancels the scrape. Warnings go in a header: the body stays Zyte's.
-      const warnings: string[] = [];
-      const result = await xyte.extract(body, {
-        signal: request.signal,
-        onWarning: (message) => warnings.push(message.replace(/[^\x20-\x7e]/g, '?')),
-      });
-      return Response.json(result, warnings.length > 0 ? { headers: { 'x-xyte-warning': warnings.join('; ') } } : undefined);
+      // A caller that hangs up cancels the scrape. What it took travels in headers: the body stays Zyte's.
+      const result = await xyte.extract(body, { signal: request.signal, onReport: (r) => (report = r) });
+      return Response.json(result, { headers: reportHeaders(report) });
     } catch (error) {
-      if (error instanceof XyteError) return problem(error.toJSON());
-      return problem({
-        status: 500,
-        type: '/server/internal',
-        title: 'Internal Server Error',
-        detail: error instanceof Error ? error.message : String(error),
-      });
+      const body =
+        error instanceof XyteError
+          ? error.toJSON()
+          : { status: 500, type: '/server/internal', title: 'Internal Server Error', detail: error instanceof Error ? error.message : String(error) };
+      return problem(body, reportHeaders(report));
     }
   };
 }
@@ -137,8 +132,26 @@ export function isPrivateTarget(target: string): boolean {
   return false;
 }
 
-function problem(body: { status: number; type: string; title: string; detail?: string }): Response {
-  return Response.json(body, { status: body.status, headers: { 'content-type': 'application/problem+json' } });
+function problem(body: { status: number; type: string; title: string; detail?: string }, headers: Record<string, string> = {}): Response {
+  return Response.json(body, { status: body.status, headers: { ...headers, 'content-type': 'application/problem+json' } });
+}
+
+const ascii = (value: string) => value.replace(/[^\x20-\x7e]/g, '?');
+
+/**
+ * A request's report as response headers: `X-Xyte-Request-Id`, `X-Xyte-Attempts`
+ * (`provider:result` per attempt, e.g. `oxylabs-residential:ban,zyte-api:ok`),
+ * `X-Xyte-Transfer-Bytes`, and `X-Xyte-Warning`.
+ */
+function reportHeaders(report: RequestReport | undefined): Record<string, string> {
+  if (!report) return {};
+  const headers: Record<string, string> = {
+    'x-xyte-request-id': report.requestId,
+    'x-xyte-attempts': ascii(report.attempts.map((a) => `${a.provider}:${a.result}`).join(',')),
+    'x-xyte-transfer-bytes': String(report.transferBytes),
+  };
+  if (report.warnings.length > 0) headers['x-xyte-warning'] = ascii(report.warnings.join('; '));
+  return headers;
 }
 
 function apiKeyOf(request: Request): string | undefined {

@@ -19,11 +19,12 @@ your own code), the server handler options, and the CLI.
 | `transport` | `fetch` (Bun) / undici (Node) | Low-level HTTP sender, for logging or tests. |
 | `onRetry` | none | `({ attempt, url, reason }) => void`, called before each retry. |
 | `onAttempt` | none | `({ provider, result, ms, statusCode, bytes, url, attempt, browser }) => void` after every attempt; `provider` is the one a combinator picked. See [routing](routing.md#watching-what-happens-onattempt). |
+| `onRequest` | none | `(report: RequestReport) => void` once per `extract()`, success or failure: every attempt, totals per provider, outcome. See [observability](observability.md). |
 | `browserFallback` | `false` | Retry a banned plain GET in a browser and return its raw response as `httpResponseBody`. See [routing](routing.md#browserfallback-retry-a-banned-page-in-a-browser). |
 | `onWarning` | `console.warn`, once per message | `(message, { url }) => void`: requests that run, but not as asked (a `geolocation` the exit can't apply). |
 
-`extract(request, { signal, onWarning })` takes an `AbortSignal` that cancels every attempt, and a
-per-call warning callback. `close()` (or `await using xyte = new Xyte(…)`) closes the shared browser.
+`extract(request, { signal, onWarning, onReport })` takes an `AbortSignal` that cancels every
+attempt, and per-call warning and report callbacks. `close()` (or `await using xyte = new Xyte(…)`) closes the shared browser.
 
 ## Environment variables
 
@@ -40,6 +41,7 @@ default to `process.env`).
 | `XYTE_ALLOW_ANONYMOUS` | `false` | `true` to listen off-loopback without keys. |
 | `XYTE_ALLOW_PRIVATE_TARGETS` | `false` | `true` to let requests target localhost, private IPs, `*.internal`… |
 | `XYTE_RETRIES`, `XYTE_TIMEOUT`, `XYTE_CONCURRENCY` | `3`, `60`, unlimited | The `Xyte` options of the same name. |
+| `XYTE_LOG_REQUESTS` | `false` | `true`: each request's report as one JSON line on stdout ([observability](observability.md#request-logs)). |
 
 ### Where requests exit
 
@@ -56,6 +58,8 @@ Checked in this order; the first one set wins.
 | `XYTE_BROWSER_PROVIDER` | `oxylabs` | Browser renders go here, HTTP requests to the above ([`byKind()`](routing.md#bykind-http-or-browser)). |
 | `XYTE_CIRCUIT_BREAKER` | `5,60` | Every named provider gets a [circuit breaker](routing.md#healthy-a-circuit-breaker): failures, cooldown seconds. |
 | `XYTE_BUDGET` | `zyte-api=500/hour,scrapingbee=1000/day` | [Attempt caps](routing.md#budget-cap-what-a-provider-can-spend) per provider (`minute`, `hour`, `day` or seconds). |
+| `XYTE_WATCH` | `true` | [Check](routing.md#watch-check-providers-ahead-of-requests) every named provider that has a usage API or status page; `XYTE_WATCH_EVERY` seconds (60). Oxylabs needs `OXYLABS_LIMIT_GB` (and `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the account's main one). |
+| `XYTE_REDIS_URL` | `redis://…` | [Share](routing.md#shared-state-across-instances-redis) budgets, circuits and checks across instances. |
 
 None set: `direct()`. A provider named in several of these is one instance: its budget and circuit
 are shared.
@@ -96,7 +100,9 @@ The `/v1/extract` handler behind `xyte serve`, for mounting in your own app ([mo
 | `maxBodyBytes` | 10 MB | Largest accepted request body (413 above). |
 | `blockPrivateTargets` | `false` (`xyte serve`: `true`) | Reject targets on loopback, private, link-local and metadata addresses. |
 
-Responses are Zyte's. Warnings travel in an `X-Xyte-Warning` header so the body stays identical.
+Responses are Zyte's. What a request took travels in headers so the body stays identical:
+`X-Xyte-Request-Id`, `X-Xyte-Attempts` (`provider:result,…`), `X-Xyte-Transfer-Bytes`, and
+`X-Xyte-Warning` when there is one.
 
 ## CLI
 
