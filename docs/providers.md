@@ -26,7 +26,7 @@ To mix providers (a fallback on retries, a provider per site, datacenter vs resi
 against your dashboard on the first request. The unit tests check the exact credentials each
 preset produces.
 
-Checked live on 2026-10-24: `scrapingbee` (HTTP suite 16/16, `geolocation` exits on residential
+Checked live on 2026-10-24: `oxylabs` residential (full suite 20/20, browser included; `geolocation` exits on residential ISPs), `scrapingbee` (HTTP suite 16/16, `geolocation` exits on residential
 ISPs), `zyte-api` (AI extraction), `zyte` (proxy mode, `geolocation`). ScrapingBee notes: the
 preset sets `forward_headers_pure` so custom headers and cookies reach the site, reads its
 `Resolved-Url` header for the final URL after redirects, hides its `Spb-*` headers, and retries its
@@ -37,7 +37,7 @@ format from your dashboard, and please open an issue.
 
 | Preset | `XYTE_PROVIDER` · env | Gateway | Credentials produced | |
 | --- | --- | --- | --- | --- |
-| `oxylabs({ username, password, type? })` | `oxylabs` · `OXYLABS_USERNAME/PASSWORD` | `pr.oxylabs.io:7777`, `dc.oxylabs.io:8000` | `customer-U-cc-US-sessid-…-sesstime-10` | ✅ |
+| `oxylabs({ username, password, type? })` | `oxylabs` · `OXYLABS_USERNAME/PASSWORD` | `pr.oxylabs.io:7777`, `dc.oxylabs.io:8000` | `customer-U-cc-US-sessid-…-sesstime-10` |🟢 |
 | `brightData({ customerId, zone, password })` | `brightdata` · `BRIGHTDATA_CUSTOMER_ID/ZONE/PASSWORD` | `brd.superproxy.io:33335` | `brd-customer-…-zone-…-country-us-session-…` | ✅ |
 | `decodo({ username, password })` (`smartproxy`) | `decodo` | `gate.decodo.com:7000` | `user-U-country-us-session-…-sessionduration-10` | ✅ |
 | `iproyal({ username, password })` | `iproyal` | `geo.iproyal.com:12321` | password `P_country-us_session-…_lifetime-10m` | ✅ |
