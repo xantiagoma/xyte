@@ -70,11 +70,12 @@ export interface XyteOptions {
    */
   actions?: ActionHandlers;
   /**
-   * A Zyte-only action with no handler, on a provider that isn't Zyte: `warn` (default) skips it
-   * (`notExecuted` in the response's `actions`, plus a warning) and runs the rest; `error` rejects
-   * the request with a 400; `zyte` hands it to Zyte when a combinator includes `zyteApi()`
-   * (attempts landing elsewhere are passed over), else like `warn`. Actions you have a handler for
-   * always run locally.
+   * A Zyte-only action with no handler, on a provider that isn't Zyte (and actions on an
+   * HTML-only API): `warn` (default) skips it (`notExecuted` in the response's `actions`, plus a
+   * warning) and runs the rest; `error` passes over to `zyteApi()` when a combinator has it, else
+   * rejects with a 400; `zyte` passes over to `zyteApi()` when a combinator has it (the built-in
+   * search heuristic's actions too), else like `warn`. Actions you have a handler for always run
+   * locally. See docs/actions.md.
    */
   unsupportedActions?: 'warn' | 'error' | 'zyte';
   /**
@@ -195,7 +196,7 @@ const warnOnce = (message: string): void => {
 };
 
 const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
-/** Providers passed over in one request looking for Zyte (for its own actions), at most. */
+/** Providers passed over in one request (see docs/actions.md#pass-overs), at most. */
 const MAX_PASS_OVERS = 10;
 /** Client-managed sessions (`session.id`) remembered per process. */
 const MAX_CLIENT_SESSIONS = 10_000;
@@ -299,8 +300,9 @@ export class Xyte {
       request.httpRequestText == null &&
       request.followRedirect !== false;
 
-    // Pass-overs (a provider skipped so Zyte runs its own actions) make no request, so they don't
-    // use up retries: only real attempts count. A route that never leads to Zyte for this site
+    // Pass-overs (a provider skipped because it can't serve the request as configured: your action
+    // handlers, Zyte's own actions, what an HTML-only API can't do) make no request, so they don't
+    // use up retries: only real attempts count. A route that never leads to a suitable provider
     // would pass over forever, hence the caps.
     let passedOver = false;
     let passOvers = 0;
@@ -315,17 +317,18 @@ export class Xyte {
         }
       }
       if (real > this.retries) break;
-      if (attempt > 0) {
+      // A provider passed over (below) made no request: not a retry, nothing to back off from.
+      if (attempt > 0 && !passedOver) {
         this.options.onRetry?.({ attempt, url: request.url, reason: lastReason });
-        // A provider passed over (below) made no request: nothing to back off from.
-        if (!passedOver) await sleep(backoff(attempt));
+        await sleep(backoff(attempt));
         cancel?.throwIfAborted();
       }
       passedOver = false;
 
       // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
       const pooled = poolKey ? this.pool.acquire(poolKey, failedSessions) : undefined;
-      let outcome: 'ok' | 'ban' = 'ban';
+      // 'skip': passed over, no request, so no verdict on the pooled session either.
+      let outcome: 'ok' | 'ban' | 'skip' = 'ban';
       const started = Date.now();
       const escalated = inBrowser && !plan.browser;
       const context: ProxyContext = {
@@ -380,6 +383,7 @@ export class Xyte {
           const canPassOver = (context.path?.length ?? 0) > 0 && passOvers < MAX_PASS_OVERS && passOversInARow < 3;
           const passOver = (reason: string) => {
             passedOver = true;
+            outcome = 'skip';
             passOvers++;
             lastReason = reason;
             verdict = { result: 'aborted', reason };
@@ -461,7 +465,7 @@ export class Xyte {
         return this.finish(request, plan, result, jar);
       } finally {
         if (pooled) {
-          this.pool.release(pooled, outcome);
+          this.pool.release(pooled, outcome === 'ban' ? 'ban' : 'ok');
           if (outcome === 'ban') failedSessions.add(pooled.id);
         }
         if (resolved) {
@@ -553,8 +557,9 @@ export class Xyte {
         dropped.set(i, `script "${action.id}" runs only in a local browser (your handler): not sent to ${leaf}`);
         warn(`interaction "${action.id}" not run: your script needs a local browser and ${leaf} has none (zyteProxy() gives Zyte's IPs with xyte's browser)`);
       });
-      const handed = own.find((action) => action.action !== 'interaction');
-      if (handed) warn(`your "${handed.action}" handler isn't used: the request went to ${leaf}, which runs its own (no provider with a local browser to go to)`);
+      for (const handed of own.filter((action) => action.action !== 'interaction')) {
+        warn(`your "${handed.action}" handler isn't used: the request went to ${leaf}, which runs its own (no provider with a local browser to go to)`);
+      }
     }
     if (dropped.size === 0) return { request, dropped };
     return { request: { ...request, actions: actions.filter((_, i) => !dropped.has(i)) }, dropped };

@@ -4,9 +4,10 @@ import type { Action } from './types.ts';
 
 /**
  * Zyte's own actions, which rely on Zyte's per-site knowledge (`searchKeyword`, `setLocation`) or
- * on scripts stored in Zyte's cloud IDE (`interaction`). With `zyteApi()` they go to Zyte; anywhere
- * else they run through handlers you provide (a heuristic one ships for `searchKeyword`), and
- * without a handler they're skipped with a warning, or rejected with `unsupportedActions: 'error'`.
+ * on scripts stored in Zyte's cloud IDE (`interaction`). Zyte runs them on attempts that reach
+ * `zyteApi()`; elsewhere they run in xyte's browser through handlers: yours (which always run
+ * locally), or the built-in heuristic for `searchKeyword`. Without one, `unsupportedActions`
+ * decides (skip with a warning, pass over to Zyte, or a 400). See docs/actions.md.
  */
 export type SearchKeywordAction = Extract<Action, { action: 'searchKeyword' }>;
 export type SetLocationAction = Extract<Action, { action: 'setLocation' }>;
@@ -16,7 +17,7 @@ export type ZyteOnlyAction = SearchKeywordAction | SetLocationAction | Interacti
 export interface ActionHandlerContext {
   /** The page's current URL. */
   url: URL;
-  /** Milliseconds the action may take (its `timeout`, within the browser time left). */
+  /** Milliseconds the action may take: 30 s, within the browser time left (these actions have no `timeout` of their own). */
   timeout: number;
 }
 

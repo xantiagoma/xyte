@@ -128,71 +128,8 @@ attempt), so hooks can match locale and timezone to the exit country.
 
 ## Zyte's own actions: `searchKeyword`, `setLocation`, `interaction`
 
-Three of Zyte's actions aren't browser operations but Zyte services: `searchKeyword` and
-`setLocation` use Zyte's per-site knowledge of where a site keeps its search box and its
-location form, and `interaction` runs a script you saved in Zyte's cloud IDE, by id.
-
-On each attempt, every one of these actions is one of three kinds, and where it runs follows:
-
-| | Attempt on `zyteApi()` | Attempt on any other provider |
-| --- | --- | --- |
-| **Your handler** (`actions.…` you configured) | passed over for a provider with a local browser, since your code always runs locally. With `zyteApi()` the only option, Zyte runs its own version and you get a warning | your handler runs |
-| **Built-in** (`searchKeyword`'s heuristic, when you didn't configure one) | Zyte runs its own (the heuristic is a fallback, never a reason to skip Zyte) | the heuristic runs (`'zyte'`: passed over for Zyte if a combinator has it) |
-| **None** (`setLocation` / `interaction` with no handler, or `searchKeyword: false`) | Zyte runs it | depends on `unsupportedActions` ↓ |
-
-| `unsupportedActions` | **None**, on a provider that isn't Zyte |
-| --- | --- |
-| `'warn'` (default) | skipped: `notExecuted` in the response's `actions`, a warning (`onWarning`, `X-Xyte-Warning`), the other actions go on |
-| `'error'` | "run it or fail": passed over for Zyte if a combinator has it, else a 400 naming the action. The outcome doesn't depend on which provider an attempt lands on |
-| `'zyte'` | passed over for Zyte if a combinator has it (built-in actions too), else like `'warn'` |
-
-One exception for `zyteApi()` alone: an **`interaction` with your handler** isn't sent to Zyte at
-all, since the script exists only in your code and Zyte would answer "script not found" and stop
-every action after it. It's left out, reported `notExecuted` in its place with the reason, and the
-rest of the actions run on Zyte (with `unsupportedActions: 'error'`, a 400 instead). To run your
-own scripts behind Zyte's IPs, use `zyteProxy()`: Zyte's proxy mode with xyte's browser.
-
-A pass-over makes no request, waits no backoff and uses up no retry; it only happens inside a
-combinator (with a single provider there's nowhere to go), and after three in a row with no
-suitable provider the attempt runs anyway. When Zyte runs an action and bans every try, the answer
-is its 520, not a page without the action.
-
-Pass-overs show in [`onRequest`](observability.md) and `X-Xyte-Attempts` as `aborted` attempts with
-the reason.
-
-```ts
-import { Xyte } from 'xyte';
-
-new Xyte({
-  actions: {
-    // Default: searchBox, a heuristic (search inputs, role=searchbox, q/query/search fields, a
-    // "search" placeholder or label; it opens a search toggle when the box hides behind one).
-    // Override per site where it's wrong, or set false.
-    searchKeyword: { 'shop.example': async (page, { keyword }) => page.fill('#find', keyword) },
-
-    // No default: every site's location form is different. Per site (host, subdomains included;
-    // these selectors are illustrative, not DoorDash's current ones):
-    setLocation: {
-      'doordash.com': async (page, { address }) => {
-        await page.click('[data-anchor-id="AddressButton"]');
-        await page.fill('input[aria-label="Address"]', `${address?.streetAddress}, ${address?.postalCode}`);
-        await page.click('[data-testid="AddressAutocompleteSuggestion"]');
-      },
-    },
-
-    // Your ports of the Zyte IDE scripts, by the id the action names.
-    interaction: {
-      'accept-cookies': async (page) => page.click('#onetrust-accept-btn-handler'),
-      'load-all-reviews': async (page, { args }) => {
-        for (let i = 0; i < Number(args?.pages ?? 3); i++) await page.click('text=More reviews');
-      },
-    },
-  },
-  unsupportedActions: 'warn', // default; 'error' to reject requests whose actions have no handler
-});
-```
-
-A handler gets the Playwright page, the action as Zyte defines it (`keyword`, `address`, `id` and
-`args`), and `{ url, timeout }`. Throwing fails the action, and its `onError` applies (`return`
-by default: the remaining actions are `notExecuted`), as for any other action. Requests with
-these actions can then run through any provider, Zyte included, without changing.
+These three are Zyte services (its per-site knowledge, its hosted scripts), not browser operations.
+Outside Zyte they run in xyte's browser through handlers in `actions`: a built-in heuristic for
+`searchKeyword`, your own for `setLocation` (per site) and `interaction` (by script id). Where each
+runs depending on the provider, what `unsupportedActions` does without a handler, and how
+HTML-only APIs are handled: [actions](actions.md).

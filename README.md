@@ -20,7 +20,7 @@ Three ways to use it:
   send the rest through cheaper exits, with one client.
 
 **Docs:** [coverage of the Zyte API](docs/coverage.md) · [providers](docs/providers.md) ·
-[combining providers](docs/routing.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
+[combining providers](docs/routing.md) · [actions](docs/actions.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
 [browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) ·
 [deploying](docs/deploy.md) · [mounting in your app](docs/mounting.md) ·
 [migrating from Zyte](docs/migrating-from-zyte.md) · [examples](examples/)
@@ -267,11 +267,10 @@ Without either, those fields get a 400.
 
 **Zyte's own actions** (`searchKeyword`, `setLocation`, `interaction`) rely on Zyte's per-site
 knowledge and hosted scripts. With `zyteApi()` Zyte runs them; elsewhere they run through
-handlers: a built-in search-box heuristic for `searchKeyword`, and yours for the rest
-([browser](docs/browser.md#zytes-own-actions-searchkeyword-setlocation-interaction)). Without
-a handler they're skipped with a warning (`unsupportedActions: 'error'` rejects them, `'zyte'`
-hands them to `zyteApi()` when a combinator has it). An action you have a handler for always runs
-locally.
+handlers in `actions` (a built-in search-box heuristic for `searchKeyword`, yours for the rest),
+which always run locally. Without a handler, `unsupportedActions` decides: skip with a warning
+(default), `'error'`, or `'zyte'` to hand them to `zyteApi()` in a combinator. Where every action
+runs, provider by provider: [actions](docs/actions.md).
 **Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
 proxy-mode port or the Stats API (xyte can still *use* Zyte's proxy mode as a provider:
 `zyteProxy()`). Field-by-field status: [coverage](docs/coverage.md).

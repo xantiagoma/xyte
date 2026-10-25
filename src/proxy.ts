@@ -112,7 +112,8 @@ export interface ProxyProvider<E extends ProxyEndpoint | ApiEndpoint = ProxyEndp
   readonly extracts?: boolean;
   /**
    * The provider runs Zyte's own actions itself (`searchKeyword`, `setLocation`, `interaction`):
-   * requests using them are not rejected upfront.
+   * with `unsupportedActions: 'error'`, requests using them aren't rejected upfront, and attempts
+   * can be passed over to reach it (docs/actions.md).
    */
   readonly zyteActions?: boolean;
   /** The proxy (or API) for this attempt, or null to connect directly. */

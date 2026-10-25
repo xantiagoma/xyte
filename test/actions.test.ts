@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
-import { custom, rotate, route, Xyte, zyteApi, type ActionHandlers, type AttemptInfo } from '../src/index.ts';
+import { custom, rotate, route, Xyte, zyteApi, type ActionHandlers, type AttemptInfo, type ProxyProvider } from '../src/index.ts';
 import { startProxy, startTarget } from './fixtures.ts';
 
 setDefaultTimeout(30_000);
@@ -178,6 +178,34 @@ describe('with Zyte among the providers', () => {
       ['zyte-api', 'aborted'],
       ['local', 'ok'],
     ]);
+  });
+
+  test('a pass-over is no verdict: the pooled session stays, and onRetry does not fire', async () => {
+    const zyte = zyteStub();
+    const sessions: string[] = [];
+    const retries: number[] = [];
+    const recorded = (provider: ProxyProvider): ProxyProvider => ({
+      ...provider,
+      resolve: (context) => {
+        sessions.push(context.sessionId);
+        return provider.resolve(context);
+      },
+    });
+    const { xyte } = client({
+      proxy: rotate([recorded(zyte.provider), recorded(local())]),
+      actions: zipHandler,
+      onRetry: ({ attempt }) => retries.push(attempt),
+    });
+    const res = await xyte.extract({
+      url: `${target.base}/search-page`,
+      browserHtml: true,
+      actions: setLocation,
+      sessionContext: [{ name: 'shop', value: 'a' }],
+    });
+    expect(res.browserHtml).toContain('zip 10001');
+    expect(sessions).toHaveLength(2);
+    expect(sessions[1]).toBe(sessions[0]); // the passed-over attempt didn't burn the session
+    expect(retries).toEqual([]);
   });
 
   test('zyteApi() alone: nowhere to run your handler, so Zyte gets the action as is, and you hear about it', async () => {

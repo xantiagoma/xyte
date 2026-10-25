@@ -20,8 +20,8 @@ your own code), the server handler options, and the CLI.
 | `onRetry` | none | `({ attempt, url, reason }) => void`, called before each retry. |
 | `onAttempt` | none | `({ provider, result, ms, statusCode, bytes, url, attempt, browser }) => void` after every attempt; `provider` is the one a combinator picked. See [routing](routing.md#watching-what-happens-onattempt). |
 | `onRequest` | none | `(report: RequestReport) => void` once per `extract()`, success or failure: every attempt, totals per provider, outcome. See [observability](observability.md). |
-| `actions` | `searchKeyword`: built-in heuristic | Handlers for Zyte's own actions: `searchKeyword`, `setLocation` (per site), `interaction` (scripts by id). See [browser](browser.md#zytes-own-actions-searchkeyword-setlocation-interaction). |
-| `unsupportedActions` | `'warn'` | A Zyte-only action with no handler, on a provider that isn't Zyte: `warn` skips it (`notExecuted`) with a warning, `error` rejects with a 400, `zyte` passes over to `zyteApi()` when a combinator has it. Actions with a handler always run locally. See [browser](browser.md#zytes-own-actions-searchkeyword-setlocation-interaction). |
+| `actions` | `searchKeyword`: built-in heuristic | Handlers for Zyte's own actions: `searchKeyword`, `setLocation` (per site), `interaction` (scripts by id). They always run locally. See [actions](actions.md). |
+| `unsupportedActions` | `'warn'` | A Zyte-only action with no handler, on a provider that isn't Zyte: `warn` skips it (`notExecuted`) with a warning; `error` passes over to `zyteApi()` if a combinator has it, else a 400; `zyte` passes over to `zyteApi()` if a combinator has it (the built-in search too), else like `warn`. Also what HTML-only APIs do with actions. See [actions](actions.md#where-they-run). |
 | `browserFallback` | `false` | Retry a banned plain GET in a browser and return its raw response as `httpResponseBody`. See [routing](routing.md#browserfallback-retry-a-banned-page-in-a-browser). |
 | `onWarning` | `console.warn`, once per message | `(message, { url }) => void`: requests that run, but not as asked (a `geolocation` the exit can't apply). |
 

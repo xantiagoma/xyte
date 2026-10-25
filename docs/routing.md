@@ -49,6 +49,11 @@ Each attempt asks the provider for an exit with a context: the target URL, the c
 - **With `sessionContext`**, sessions come from a pool; a banned one is skipped for the rest of
   the request and retired after 3 bans.
 
+Some attempts are **passed over** instead: the provider a combinator picked can't serve the
+request (an HTML-only API asked for actions, your action handler on `zyteApi()`, an action headed
+for Zyte), so the next provider gets the turn without a request, a backoff or a used-up retry.
+[Actions](actions.md#pass-overs) has the rules.
+
 What isn't retried: a target's own 4xx/5xx other than the ban statuses (returned in `statusCode`,
 as on Zyte), invalid requests (400/422), and configuration errors (500).
 

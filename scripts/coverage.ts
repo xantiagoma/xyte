@@ -73,7 +73,7 @@ export const REQUEST: Record<string, Entry> = {
   },
   sessionContextParameters: {
     status: 'partial',
-    note: '`actions` run once per new session in a browser at the request URL; Zyte-only actions are rejected.',
+    note: '`actions` run once per new session in a browser at the request URL, through the provider resolved for it (an API provider keeps its own sessions: no local init). Zyte\'s own actions run through `actions` handlers; without one, skipped with a warning, or a 400 with `unsupportedActions: \'error\'` (no pass-overs during init).',
   },
   session: { status: 'supported', note: 'Sticky exit IP through the provider, plus a cookie jar kept in memory per process.' },
   networkCapture: { status: 'supported', note: '`url` and `resourceType` filters; max 10 captures / 5 MiB.' },

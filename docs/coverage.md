@@ -66,7 +66,7 @@ an entry not listed here.
 | `viewport` | ✅ supported |  |
 | `followRedirect` | ✅ supported | HTTP requests (browsers always follow, as on Zyte). |
 | `sessionContext` | ✅ supported | In-process pool per context (default 8 sessions; retired after 4 h or 3 bans, as on Zyte). Not shared across instances. |
-| `sessionContextParameters` | 🟡 partial | `actions` run once per new session in a browser at the request URL; Zyte-only actions are rejected. |
+| `sessionContextParameters` | 🟡 partial | `actions` run once per new session in a browser at the request URL, through the provider resolved for it (an API provider keeps its own sessions: no local init). Zyte's own actions run through `actions` handlers; without one, skipped with a warning, or a 400 with `unsupportedActions: 'error'` (no pass-overs during init). |
 | `session` | ✅ supported | Sticky exit IP through the provider, plus a cookie jar kept in memory per process. |
 | `networkCapture` | ✅ supported | `url` and `resourceType` filters; max 10 captures / 5 MiB. |
 | `device` | ✅ supported | Mobile user agent and client hints; mobile viewport in the browser. |

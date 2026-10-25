@@ -168,6 +168,7 @@ request that needs those passes them over for a provider that can (no request, n
 Alone, actions are skipped (`notExecuted` with the reason, plus a warning) or rejected with
 `unsupportedActions: 'error'`, and a `screenshot` or `networkCapture` is a 400. An `ApiEndpoint`
 you write can declare the same: `unsupported: (request) => request.screenshot ? ['screenshot'] : []`.
+Which provider runs which actions: [actions](actions.md#which-providers-run-them).
 
 `zyteApi()` vs `zyteProxy()`: the API adapter has full fidelity, AI extraction included. Proxy mode
 only carries HTTP and browser HTML, but goes through xyte's own engines and extractors.
