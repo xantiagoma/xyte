@@ -14,6 +14,7 @@ import {
 import type { Extractor, Rate, Rates } from './client.ts';
 import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOptions, type ProviderCheck } from './combinators.ts';
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
+import { createCertificateAuthority, type CertificateAuthority } from './ca.ts';
 import type { CacheOptions } from './cache.ts';
 import { capsolver, twoCaptcha } from './captcha.ts';
 import { STEALTH_BROWSERS } from './stealth.ts';
@@ -298,6 +299,31 @@ export function jobsFromEnv(env: Env = process.env): JobsOptions {
 /** The server's stats: kept in `XYTE_REDIS_URL` when set (every instance adds up), else in memory. */
 export function statsFromEnv(env: Env = process.env): StatsRecorder {
   return new StatsRecorder({ ...(env.XYTE_REDIS_URL && { store: sharedStore(env.XYTE_REDIS_URL) }) });
+}
+
+/**
+ * Proxy mode's CA: `XYTE_CA_CERT` / `XYTE_CA_KEY` (PEM, or paths to PEM files), else the one in
+ * `XYTE_CA_DIR` (default `~/.xyte`), created there on first use. It must stay the same across
+ * restarts and instances: clients trust this certificate.
+ */
+export async function caFromEnv(env: Env = process.env): Promise<{ ca: CertificateAuthority; source: string }> {
+  const { existsSync, mkdirSync, readFileSync, writeFileSync } = await import('node:fs');
+  const pem = (value: string) => (value.includes('-----BEGIN') ? value : readFileSync(value, 'utf8'));
+  if (env.XYTE_CA_CERT || env.XYTE_CA_KEY) {
+    if (!env.XYTE_CA_CERT || !env.XYTE_CA_KEY) throw new Error('xyte: XYTE_CA_CERT and XYTE_CA_KEY go together');
+    return { ca: { cert: pem(env.XYTE_CA_CERT), key: pem(env.XYTE_CA_KEY) }, source: 'XYTE_CA_CERT / XYTE_CA_KEY' };
+  }
+  const { homedir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = env.XYTE_CA_DIR ?? join(homedir(), '.xyte');
+  const certPath = join(dir, 'ca.crt');
+  const keyPath = join(dir, 'ca.key');
+  if (existsSync(certPath) && existsSync(keyPath)) return { ca: { cert: readFileSync(certPath, 'utf8'), key: readFileSync(keyPath, 'utf8') }, source: certPath };
+  const ca = createCertificateAuthority();
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(certPath, ca.cert);
+  writeFileSync(keyPath, ca.key, { mode: 0o600 });
+  return { ca, source: `${certPath} (new)` };
 }
 
 const stores = new Map<string, StateStore>();

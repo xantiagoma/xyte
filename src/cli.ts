@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
 import {
   browserFromEnv,
+  caFromEnv,
   cacheFromEnv,
   extractorsFromEnv,
   jobsFromEnv,
@@ -13,6 +14,7 @@ import {
   statsFromEnv,
 } from './env.ts';
 import { doctor, formatDoctor } from './doctor.ts';
+import { serveProxyMode } from './proxymode.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -20,7 +22,9 @@ import { decodeBody } from './util.ts';
 const HELP = `xyte: a Zyte API-compatible /v1/extract on any proxy
 
 Usage:
-  xyte serve [--port 8011] [--host 127.0.0.1]
+  xyte serve [--port 8011] [--host 127.0.0.1] [--proxy-port 8012]
+      --proxy-port (or XYTE_PROXY_MODE_PORT) also serves Zyte's proxy mode; HTTPS needs clients to trust \`xyte ca\`
+  xyte ca      prints proxy mode's CA certificate (XYTE_CA_CERT/XYTE_CA_KEY, or ~/.xyte, created on first use)
   xyte extract <url> [--browser] [--country US] [--raw]
   xyte extract --json '{"url": "…", "httpResponseBody": true}'
   xyte batch <requests.jsonl | urls.txt | -> [--concurrency 16] [--browser] [--country US]
@@ -73,6 +77,7 @@ const { values, positionals } = parseArgs({
     raw: { type: 'boolean' },
     providers: { type: 'string' },
     concurrency: { type: 'string' },
+    'proxy-port': { type: 'string' },
     url: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -123,8 +128,22 @@ if (command === 'serve') {
     { port: num(values.port ?? env.PORT), hostname },
   );
   console.error(`[xyte] listening on ${server.url}v1/extract`);
+  const proxyPort = values['proxy-port'] ?? env.XYTE_PROXY_MODE_PORT;
+  let proxyMode: Awaited<ReturnType<typeof serveProxyMode>> | undefined;
+  if (proxyPort) {
+    const { ca, source } = await caFromEnv(env);
+    proxyMode = await serveProxyMode(xyte, {
+      apiKeys,
+      ca,
+      port: Number(proxyPort),
+      hostname,
+      blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true',
+    });
+    console.error(`[xyte] proxy mode on ${hostname}:${proxyMode.port} (CA: ${source}; clients must trust it, see \`xyte ca\`)`);
+  }
   const shutdown = async () => {
     await server.stop();
+    await proxyMode?.stop();
     await xyte.close();
     process.exit(0);
   };
@@ -179,6 +198,11 @@ if (command === 'serve') {
     console.error(`[xyte] ${failed} request(s) failed`);
     process.exitCode = 1;
   }
+} else if (command === 'ca') {
+  // The certificate proxy-mode clients install (the key stays where it is).
+  const { ca, source } = await caFromEnv(env);
+  console.error(`[xyte] ${source}`);
+  process.stdout.write(ca.cert);
 } else if (command === 'doctor') {
   const results = await doctor({
     env,

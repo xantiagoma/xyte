@@ -83,6 +83,9 @@ XYTE_PROVIDER=oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… npx xyte serve -
   });
 ```
 
+As an HTTP proxy, like Zyte's `:8011`: `xyte serve --proxy-port 8012`, then `curl -x
+http://localhost:8012 -U key: --cacert <(xyte ca) https://site` ([proxy mode](docs/proxy-mode.md)).
+
 Long renders or queues: `POST /v1/jobs` (the same body, plus an optional `callbackUrl`) answers
 `202 { id }` at once; `GET /v1/jobs/{id}` has the result, which is also POSTed (signed) to
 `callbackUrl` ([jobs](docs/configuration.md#asynchronous-jobs)).
@@ -289,9 +292,9 @@ handlers in `actions` (a built-in search-box heuristic for `searchKeyword`, your
 which always run locally. Without a handler, `unsupportedActions` decides: skip with a warning
 (default), `'error'`, or `'zyte'` to hand them to `zyteApi()` in a combinator. Where every action
 runs, provider by provider: [actions](docs/actions.md).
-**Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
-proxy-mode port or the Stats API (xyte can still *use* Zyte's proxy mode as a provider:
-`zyteProxy()`). Field-by-field status: [coverage](docs/coverage.md).
+**Beyond `/v1/extract`:** xyte's server also answers Zyte's proxy mode (`--proxy-port`) and its
+Stats API (`/api/stats`, `/api/v1/stats`); Zyte's Search API isn't implemented. Field-by-field
+status: [coverage](docs/coverage.md).
 
 ## Development
 

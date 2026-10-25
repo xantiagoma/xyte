@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import http from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import { promisify } from 'node:util';
-import { createHandler, decodeBody, proxyUrl, serve, Xyte } from '../../dist/index.mjs';
+import { createHandler, decodeBody, proxyUrl, serve, serveProxyMode, Xyte } from '../../dist/index.mjs';
 
 const run = promisify(execFile);
 let target;
@@ -115,6 +115,32 @@ describe('xyte on Node.js', () => {
       assert.equal(res.actions[0].status, 'success');
     } finally {
       await xyte.close();
+    }
+  });
+
+  test('proxy mode on node:http: absolute-URL requests, auth, Zyte-Request-ID', async () => {
+    const proxyMode = await serveProxyMode(new Xyte({ retries: 0 }), { apiKeys: ['key'], port: 0 });
+    try {
+      const get = (key) =>
+        new Promise((resolve, reject) => {
+          const req = http.request(
+            { host: '127.0.0.1', port: proxyMode.port, path: `${target.base}/html`, headers: { 'proxy-authorization': `Basic ${Buffer.from(`${key}:`).toString('base64')}` } },
+            (res) => {
+              let body = '';
+              res.on('data', (c) => (body += c));
+              res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+            },
+          );
+          req.on('error', reject);
+          req.end();
+        });
+      const ok = await get('key');
+      assert.equal(ok.status, 200);
+      assert.match(ok.body, /hello node/);
+      assert.ok(ok.headers['zyte-request-id']);
+      assert.equal((await get('bad')).status, 407);
+    } finally {
+      await proxyMode.stop();
     }
   });
 

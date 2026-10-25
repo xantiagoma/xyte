@@ -165,7 +165,10 @@ export const ERRORS: Record<string, Entry> = {
 export const OTHER: Record<string, Entry> = {
   'HTTP API `POST /v1/extract`': { status: 'supported', note: '`xyte serve`, `createHandler`, `toNodeHandler`.' },
   'Zyte API as a provider': { status: 'supported', note: '`zyteApi()` (full fidelity, e.g. as a fallback) or `zyteProxy()` (proxy mode).' },
-  'Proxy mode (`api.zyte.com:8011`)': { status: 'unsupported', note: 'Planned.' },
+  'Proxy mode (`api.zyte.com:8011`)': {
+    status: 'supported',
+    note: '`xyte serve --proxy-port`: `Zyte-*` headers, HTTPS with its own CA (`xyte ca`), `Zyte-Request-ID` / `Zyte-Error-*` headers ([proxy mode](proxy-mode.md)). No HTTPS proxy interface (`:8014`).',
+  },
   'CDP headless browser': { status: 'unsupported' },
   'Stats API': {
     status: 'partial',

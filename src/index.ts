@@ -19,6 +19,7 @@ export {
 export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } from './engines/browser.ts';
 export {
   browserFromEnv,
+  caFromEnv,
   cacheFromEnv,
   extractorsFromEnv,
   jobsFromEnv,
@@ -31,6 +32,8 @@ export {
 } from './env.ts';
 export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
 export { requestKey, type CacheOptions } from './cache.ts';
+export { createCertificateAuthority, issueCertificate, type CertificateAuthority } from './ca.ts';
+export { attachProxyMode, proxiedRequest, serveProxyMode, type ProxyModeOptions } from './proxymode.ts';
 export { camoufox, cloakBrowser, patchright, rebrowser, STEALTH_BROWSERS } from './stealth.ts';
 export {
   capsolver,

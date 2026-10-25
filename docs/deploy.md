@@ -22,6 +22,7 @@ your scrapers ──POST /v1/extract──▶ xyte (Cloud Run, Fly, Render…) �
 | Tuning | `XYTE_CONCURRENCY`, `XYTE_RETRIES` (3), `XYTE_TIMEOUT` (60 s per attempt) |
 | Shutdown | `SIGTERM` closes the server and the browser |
 | Jobs | `POST /v1/jobs` runs in the background after answering 202: on Cloud Run, deploy with `--no-cpu-throttling` (CPU always allocated), or the job stalls until the next request. `XYTE_REDIS_URL` keeps jobs visible to every instance |
+| Proxy mode | `--proxy-port` / `XYTE_PROXY_MODE_PORT` needs a raw TCP port (not Cloud Run / App Platform front ends); `XYTE_CA_CERT` / `XYTE_CA_KEY` as secrets so every instance presents the same CA ([proxy mode](proxy-mode.md)) |
 | Pre-flight | `xyte doctor` (same image and env) checks every configured provider's credentials, exit and quota; exits 1 on a failure |
 
 In your scraper code:

@@ -156,7 +156,7 @@ A request is an HTTP request (`httpResponseBody`, `httpResponseHeaders`, or extr
 | --- | --- | --- |
 | HTTP API `POST /v1/extract` | ✅ supported | `xyte serve`, `createHandler`, `toNodeHandler`. |
 | Zyte API as a provider | ✅ supported | `zyteApi()` (full fidelity, e.g. as a fallback) or `zyteProxy()` (proxy mode). |
-| Proxy mode (`api.zyte.com:8011`) | ❌ unsupported | Planned. |
+| Proxy mode (`api.zyte.com:8011`) | ✅ supported | `xyte serve --proxy-port`: `Zyte-*` headers, HTTPS with its own CA (`xyte ca`), `Zyte-Request-ID` / `Zyte-Error-*` headers ([proxy mode](proxy-mode.md)). No HTTPS proxy interface (`:8014`). |
 | CDP headless browser | ❌ unsupported |  |
 | Stats API | 🟡 partial | `GET /api/stats` and `/api/v1/stats` (USD), with the same parameters and shape, from the requests the server handled; p80s are approximate (histograms); `domain_health` is null; `requested_features`, `extraction_type`, `apikey_labels` filters are accepted and ignored. |
 | Search API | ❌ unsupported |  |

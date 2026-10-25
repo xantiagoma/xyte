@@ -43,6 +43,8 @@ default to `process.env`).
 | `PORT` | `8011` (`8080` in the Docker images) | Listening port. |
 | `HOST` | `127.0.0.1` (`0.0.0.0` in the images) | Listening interface. |
 | `XYTE_WEBHOOK_SECRET`, `XYTE_JOBS_TTL` | none, `86400` | Job webhook signing secret, and how long jobs are kept. |
+| `XYTE_PROXY_MODE_PORT` | off | Also serve [proxy mode](proxy-mode.md) on this port (or `--proxy-port`). |
+| `XYTE_CA_CERT`, `XYTE_CA_KEY`, `XYTE_CA_DIR` | `~/.xyte` | Proxy mode's CA: PEM or paths; else the one in `XYTE_CA_DIR`, created on first use. |
 | `XYTE_API_KEYS` | none | Comma-separated keys clients must send (Basic auth username, as on Zyte). Required off-loopback. |
 | `XYTE_ALLOW_ANONYMOUS` | `false` | `true` to listen off-loopback without keys. |
 | `XYTE_ALLOW_PRIVATE_TARGETS` | `false` | `true` to let requests target localhost, private IPs, `*.internal`… |
@@ -140,7 +142,8 @@ Responses are Zyte's. What a request took travels in headers so the body stays i
 ## CLI
 
 ```sh
-xyte serve [--port 8011] [--host 127.0.0.1]
+xyte serve [--port 8011] [--host 127.0.0.1] [--proxy-port 8012]
+xyte ca
 xyte extract <url> [--browser] [--country US] [--raw]
 xyte extract --json '{"url": "…", "httpResponseBody": true}'
 xyte batch <requests.jsonl | urls.txt | -> [--concurrency 16] [--browser] [--country US]
