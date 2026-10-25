@@ -13,9 +13,12 @@ export class XyteError extends Error {
   readonly type: string;
   readonly title: string;
   readonly detail?: string;
+  readonly #retryable?: boolean;
 
-  constructor(problem: XyteProblem, options?: { cause?: unknown }) {
+  /** `retryable` overrides the status-based rule (a misconfiguration's 500 is not). */
+  constructor(problem: XyteProblem, options?: { cause?: unknown; retryable?: boolean }) {
     super(problem.detail ? `${problem.title}: ${problem.detail}` : problem.title, options);
+    this.#retryable = options?.retryable;
     this.name = 'XyteError';
     this.status = problem.status;
     this.type = problem.type;
@@ -25,7 +28,7 @@ export class XyteError extends Error {
 
   /** Worth retrying later, the same way Zyte's own clients retry. */
   get retryable(): boolean {
-    return this.status === 429 || this.status === 503 || this.status === 520 || this.status === 500;
+    return this.#retryable ?? (this.status === 429 || this.status === 503 || this.status === 520 || this.status === 500);
   }
 
   toJSON(): XyteProblem {
@@ -79,7 +82,7 @@ export const temporaryDownloadError = (
 
 /** Misconfiguration on this side (e.g. a missing optional dependency): retrying will not help. */
 export const serverError = (detail: string, cause?: unknown): XyteError =>
-  new XyteError({ status: 500, type: '/server/internal', title: 'Internal Server Error', detail }, { cause });
+  new XyteError({ status: 500, type: '/server/internal', title: 'Internal Server Error', detail }, { cause, retryable: false });
 
 export const domainUnreachable = (detail: string, cause?: unknown): XyteError =>
   new XyteError(

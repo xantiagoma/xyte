@@ -18,6 +18,7 @@ Proxy (environment):
   XYTE_PROXY_TEMPLATE='http://user[-country-{country:lower}]-session-{session}:pass@host:port'
   XYTE_PROVIDER=oxylabs|brightdata|decodo|iproyal|zenrows|scrapingbee|scraperapi[,…]
     with its credentials, e.g. OXYLABS_USERNAME / OXYLABS_PASSWORD, ZENROWS_API_KEY
+  XYTE_ROUTES=wolt.com=direct,doordash.com=zyte-api,…   a provider per site (+ rotates: oxylabs+zyte-api)
   XYTE_API_KEYS=key1,key2   accepted keys for "serve" (required off-loopback, unless XYTE_ALLOW_ANONYMOUS=true)
   XYTE_ALLOW_PRIVATE_TARGETS=true   let "serve" fetch localhost / private IPs (blocked by default)
   XYTE_RETRIES, XYTE_TIMEOUT (seconds), XYTE_CONCURRENCY

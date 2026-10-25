@@ -1,6 +1,7 @@
 // Regression tests for issues found in code review (one block per issue).
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
-import { createHandler, decodeBody, proxyUrl, template, toNodeHandler, Xyte, isPrivateTarget } from '../src/index.ts';
+import { createHandler, decodeBody, proxyUrl, template, toNodeHandler, Xyte, XyteError, isPrivateTarget } from '../src/index.ts';
+import { serverError, temporaryDownloadError } from '../src/errors.ts';
 import { SessionPool } from '../src/sessions.ts';
 import { CookieJar, parseSetCookie, sessionToken } from '../src/util.ts';
 import http from 'node:http';
@@ -158,6 +159,12 @@ describe('client input errors are 400s, config errors 500s, neither retried', ()
       .extract({ url: `${target.base}/html`, httpResponseBody: true, customHttpRequestHeaders: [{ name: 'X-A', value: 'a\r\nb' }] })
       .catch((e) => e);
     expect(error.status).toBe(400);
+  });
+
+  test('a misconfiguration 500 is not retryable; a 520 is', () => {
+    expect(serverError('playwright is not installed').retryable).toBe(false);
+    expect(new XyteError({ status: 500, type: '/server/timed-out', title: 'Timed out' }).retryable).toBe(true);
+    expect(temporaryDownloadError('banned', { ban: true }).retryable).toBe(true);
   });
 
   test('a provider that cannot build its endpoint', async () => {

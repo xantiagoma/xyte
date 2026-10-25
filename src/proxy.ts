@@ -82,6 +82,10 @@ export interface ProxyProvider<E extends ProxyEndpoint | ApiEndpoint = ProxyEndp
   resolve(context: ProxyContext): E | null | Promise<E | null>;
 }
 
+/** The endpoint type a provider resolves to. */
+export type EndpointOf<P> = P extends ProxyProvider<infer E> ? E : never;
+type Resolved<E extends ProxyEndpoint | ApiEndpoint> = ReturnType<ProxyProvider<E>['resolve']>;
+
 export const isApiEndpoint = (endpoint: ProxyEndpoint | ApiEndpoint | null): endpoint is ApiEndpoint =>
   endpoint != null && 'api' in endpoint;
 
@@ -217,12 +221,35 @@ export function byIpType<E extends ProxyEndpoint | ApiEndpoint>(providers: {
  * Tries providers in order across attempts: attempt 0 → first, attempt 1 → second… and wraps.
  * A provider outage (e.g. a 407 on every request) then costs one attempt, not the request.
  */
-export function rotate<E extends ProxyEndpoint | ApiEndpoint>(providers: readonly ProxyProvider<E>[]): ProxyProvider<E> {
+export function rotate<P extends ProxyProvider>(providers: readonly P[]): ProxyProvider<EndpointOf<P>> {
   if (providers.length === 0) throw new Error('rotate: at least one provider is required');
   return {
     name: `rotate(${providers.map((p) => p.name).join(',')})`,
     extracts: providers.some((p) => p.extracts),
-    resolve: (context) => providers[context.attempt % providers.length]!.resolve(context),
+    resolve: (context) => providers[context.attempt % providers.length]!.resolve(context) as Resolved<EndpointOf<P>>,
+  };
+}
+
+/**
+ * Picks the provider by the target's host, so each site gets the cheapest exit that works on it:
+ * `route({ 'doordash.com': zyteApi(…), 'wolt.com': direct() }, residential)`. A key matches the
+ * host and its subdomains (`doordash.com` matches `www.doordash.com`); the longest match wins.
+ * Every attempt of a request, retries included, stays on its route: nest `rotate()` inside a
+ * route for a fallback.
+ */
+export function route<R extends Readonly<Record<string, ProxyProvider>>, F extends ProxyProvider>(
+  routes: R,
+  fallback: F,
+): ProxyProvider<EndpointOf<R[keyof R] | F>> {
+  const entries = Object.entries(routes)
+    .map(([host, provider]) => [host.toLowerCase().replace(/^\*?\./, ''), provider] as const)
+    .sort(([a], [b]) => b.length - a.length);
+  const pick = (hostname: string): ProxyProvider =>
+    entries.find(([host]) => hostname === host || hostname.endsWith(`.${host}`))?.[1] ?? fallback;
+  return {
+    name: `route(${[...entries.map(([host, p]) => `${host}→${p.name}`), `*→${fallback.name}`].join(',')})`,
+    extracts: entries.some(([, p]) => p.extracts) || fallback.extracts,
+    resolve: (context) => pick(context.url.hostname.toLowerCase()).resolve(context) as Resolved<EndpointOf<R[keyof R] | F>>,
   };
 }
 

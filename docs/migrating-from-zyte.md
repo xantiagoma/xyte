@@ -56,9 +56,11 @@ are base64, as on Zyte (`decodeBody()` is exported for convenience).
 | AI extraction | Built in | Bring an extractor ([coverage](coverage.md)) |
 | Hard targets | Zyte picks HTTP vs browser per site | You choose (`httpResponseBody` vs `browserHtml`) |
 
-For the hardest sites (Yelp-style 520s), point `rotate()` at a scraping API (ZenRows,
-ScrapingBee, Bright Data Web Unlocker) as the fallback after a residential proxy. The full
-field-by-field status is in [coverage.md](coverage.md).
+You don't have to choose one or the other: keep Zyte for the sites only Zyte gets through, and
+send the rest through cheaper exits, with `route()` per site and `rotate()` for a fallback
+(`rotate([residential, zyteApi({ apiKey })])` pays Zyte only for what the proxy got banned on).
+See [combining providers](routing.md), and measure your own sites with `scripts/bench.ts`. The
+full field-by-field status is in [coverage.md](coverage.md).
 
 ## Gotchas
 

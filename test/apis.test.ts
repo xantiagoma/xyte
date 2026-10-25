@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { decodeBody, proxyUrl, rotate, scrapingBot, scrappey, Xyte, zyteApi, type ProxyEndpoint, type ProxyProvider, type ApiEndpoint } from '../src/index.ts';
+import { decodeBody, proxyUrl, rotate, scrapingBot, scrappey, Xyte, zyteApi } from '../src/index.ts';
 import { startTarget } from './fixtures.ts';
 
 type Call = { url: string; init: RequestInit; body: Record<string, unknown> };
@@ -76,11 +76,12 @@ describe('rotate across proxies and APIs', () => {
 
   test('a broken proxy, then an API', async () => {
     const api = stub(() => Response.json({ url: target.base, statusCode: 200, httpResponseBody: btoa('api') }));
-    const providers: ProxyProvider<ProxyEndpoint | ApiEndpoint>[] = [
+    // A proxy and an API in one rotate(), no type annotation needed.
+    const proxy = rotate([
       proxyUrl('http://u:p@127.0.0.1:1'), // nothing listens: connection refused
       zyteApi({ apiKey: 'K', fetch: api.fetch }),
-    ];
-    const res = await new Xyte({ retries: 1, proxy: rotate(providers) }).extract({ url: `${target.base}/html`, httpResponseBody: true });
+    ]);
+    const res = await new Xyte({ retries: 1, proxy }).extract({ url: `${target.base}/html`, httpResponseBody: true });
     expect(decodeBody(res.httpResponseBody!)).toBe('api');
   });
 });

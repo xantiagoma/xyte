@@ -18,6 +18,9 @@ new Xyte({
 });
 ```
 
+To mix providers (a fallback on retries, a provider per site, datacenter vs residential), see
+[combining providers](routing.md).
+
 **Confidence**: 🟢 run against a live account (`XYTE_LIVE_PROVIDER=<name> bun run test:live`).
 ✅ format taken from the provider's own docs. 🟡 from partial or third-party sources: check it
 against your dashboard on the first request. The unit tests check the exact credentials each

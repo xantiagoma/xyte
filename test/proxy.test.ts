@@ -10,6 +10,7 @@ import {
   proxyFromEnv,
   proxyUrl,
   rotate,
+  route,
   scraperApi,
   scrapingBee,
   template,
@@ -128,6 +129,45 @@ describe('through a real proxy', () => {
     const res = await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true });
     expect(decodeBody(res.httpResponseBody!)).toContain('hello');
     expect(proxy.usernames.slice(-2)).toEqual(['alice', 'bob']);
+  });
+});
+
+describe('route()', () => {
+  const a = proxyUrl('http://a:p@a.example:1');
+  const b = proxyUrl('http://b:p@b.example:1');
+  const c = proxyUrl('http://c:p@c.example:1');
+  const routed = route({ 'doordash.com': a, 'api.doordash.com': b }, c);
+  const exit = async (url: string, attempt = 0) => new URL(urlOf(await routed.resolve(ctx({ url: new URL(url), attempt })))).hostname;
+
+  test('matches the host and its subdomains, the longest key first, else the fallback', async () => {
+    expect(await exit('https://doordash.com/x')).toBe('a.example');
+    expect(await exit('https://www.doordash.com/x')).toBe('a.example');
+    expect(await exit('https://api.doordash.com/x')).toBe('b.example');
+    expect(await exit('https://notdoordash.com/x')).toBe('c.example');
+    expect(await exit('https://wolt.com/', 3)).toBe('c.example');
+  });
+
+  test('retries stay on the route; rotate() inside a route gives it a fallback', async () => {
+    const withFallback = route({ 'doordash.com': rotate([a, b]) }, c);
+    const at = async (attempt: number) =>
+      new URL(urlOf(await withFallback.resolve(ctx({ url: new URL('https://www.doordash.com/'), attempt })))).hostname;
+    expect([await at(0), await at(1), await at(2)]).toEqual(['a.example', 'b.example', 'a.example']);
+  });
+
+  test('XYTE_ROUTES, with XYTE_PROVIDER as the fallback and + for a chain', async () => {
+    const provider = proxyFromEnv({
+      XYTE_ROUTES: 'doordash.com=oxylabs+zenrows, wolt.com=direct',
+      XYTE_PROVIDER: 'zenrows',
+      OXYLABS_USERNAME: 'u',
+      OXYLABS_PASSWORD: 'p',
+      ZENROWS_API_KEY: 'k',
+    });
+    const resolveFor = (url: string, attempt = 0) => provider.resolve(ctx({ url: new URL(url), attempt }));
+    expect(await resolveFor('https://wolt.com/')).toBeNull();
+    expect(urlOf(await resolveFor('https://www.doordash.com/'))).toContain('oxylabs.io');
+    expect(urlOf(await resolveFor('https://www.doordash.com/', 1))).toContain('zenrows.com');
+    expect(urlOf(await resolveFor('https://example.com/'))).toContain('zenrows.com');
+    expect(() => proxyFromEnv({ XYTE_ROUTES: 'doordash.com' })).toThrow(/host=provider/);
   });
 });
 

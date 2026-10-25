@@ -6,6 +6,7 @@ import {
   oxylabs,
   proxyUrl,
   rotate,
+  route,
   scraperApi,
   scrapingBee,
   template,
@@ -124,6 +125,19 @@ const REMOTE_BROWSERS: Record<string, (env: Env) => NonNullable<BrowserOptions['
  * Neither set: no proxy.
  */
 export function proxyFromEnv(env: Env = process.env): ProxyProvider {
+  const fallback = baseProxyFromEnv(env);
+  if (!env.XYTE_ROUTES) return fallback;
+  // XYTE_ROUTES=doordash.com=zyte-api,wolt.com=direct,restaurantguru.com=oxylabs+zyte-api
+  const routes: Record<string, ProxyProvider> = {};
+  for (const entry of list(env.XYTE_ROUTES)) {
+    const [host, names] = entry.split('=').map((part) => part.trim());
+    if (!host || !names) throw new Error(`xyte: XYTE_ROUTES entry "${entry}" is not host=provider`);
+    routes[host] = providerChain(names.split('+'), env);
+  }
+  return route(routes, fallback);
+}
+
+function baseProxyFromEnv(env: Env): ProxyProvider {
   if (env.XYTE_PROXY_TEMPLATE) {
     return template(env.XYTE_PROXY_TEMPLATE, { insecure: env.XYTE_PROXY_INSECURE === 'true' });
   }
@@ -133,12 +147,17 @@ export function proxyFromEnv(env: Env = process.env): ProxyProvider {
       { insecure: env.XYTE_PROXY_INSECURE === 'true' },
     );
   }
-  const names = (env.XYTE_PROVIDER ?? '').split(',').map((name) => name.trim().toLowerCase()).filter(Boolean);
-  if (names.length === 0) return direct();
+  return providerChain(list(env.XYTE_PROVIDER), env);
+}
 
-  const providers = names.map((name) => {
+/** Provider names (`XYTE_PROVIDER` names, or `direct`), rotated across attempts when several. */
+function providerChain(names: readonly string[], env: Env): ProxyProvider {
+  if (names.length === 0) return direct();
+  const providers = names.map((raw) => {
+    const name = raw.trim().toLowerCase();
+    if (name === 'direct') return direct();
     const make = PROVIDERS[name];
-    if (!make) throw new Error(`xyte: unknown XYTE_PROVIDER "${name}" (one of ${Object.keys(PROVIDERS).join(', ')})`);
+    if (!make) throw new Error(`xyte: unknown provider "${name}" (one of direct, ${Object.keys(PROVIDERS).join(', ')})`);
     return make(env);
   });
   return providers.length === 1 ? providers[0]! : rotate(providers);
