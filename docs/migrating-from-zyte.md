@@ -93,7 +93,7 @@ instance, or at Zyte itself, to compare the answers:
 
 ```sh
 XYTE_LIVE_URL=https://xyte.example.com/v1/extract XYTE_LIVE_KEY=… bun scripts/live.ts
-XYTE_LIVE_URL=https://api.zyte.com/v1/extract XYTE_LIVE_KEY=$ZYTE_API_KEY bun scripts/live.ts
+XYTE_LIVE_URL=https://api.zyte.com/v1/extract bun scripts/live.ts   # key from ZYTE_API_KEY in .env
 ```
 
 Last run (2026-10-24, `direct()`, dist on Node): 18/18 passed, including snappr's

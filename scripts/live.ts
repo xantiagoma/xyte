@@ -2,7 +2,7 @@
 //
 //   bun run test:live                                    # builds, serves dist/ on Node with direct(), checks it
 //   XYTE_LIVE_URL=https://xyte.example/v1/extract XYTE_LIVE_KEY=… bun scripts/live.ts   # a deployed xyte
-//   XYTE_LIVE_URL=https://api.zyte.com/v1/extract XYTE_LIVE_KEY=$ZYTE_API_KEY bun scripts/live.ts  # Zyte itself
+//   XYTE_LIVE_URL=https://api.zyte.com/v1/extract bun scripts/live.ts  # Zyte itself, key from ZYTE_API_KEY (.env)
 //
 // The same requests against xyte and Zyte, so the answers can be compared. Checks of xyte-only
 // behaviour (SSRF guard, AI fields without an extractor) are skipped against Zyte.
@@ -10,8 +10,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 
 const PORT = 8099;
 let base = process.env.XYTE_LIVE_URL;
-const key = process.env.XYTE_LIVE_KEY ?? 'live-test-key';
 const againstZyte = base?.includes('api.zyte.com') ?? false;
+const key = process.env.XYTE_LIVE_KEY ?? (againstZyte ? process.env.ZYTE_API_KEY : undefined) ?? 'live-test-key';
 let server: ChildProcess | undefined;
 
 if (!base) {
