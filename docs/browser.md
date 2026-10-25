@@ -125,3 +125,59 @@ attempt), so hooks can match locale and timezone to the exit country.
 - `bypassCSP: true`, so `evaluate` scripts run on pages with strict CSP
 - `ignoreHTTPSErrors` only for proxies marked `insecure` (scraping APIs that re-sign TLS)
 - `javaScriptEnabled` from the request's `javascript`
+
+## Zyte's own actions: `searchKeyword`, `setLocation`, `interaction`
+
+Three of Zyte's actions aren't browser operations but Zyte services: `searchKeyword` and
+`setLocation` use Zyte's per-site knowledge of where a site keeps its search box and its
+location form, and `interaction` runs a script you saved in Zyte's cloud IDE, by id.
+
+Each attempt goes by the provider it lands on:
+
+| The attempt lands on | What happens |
+| --- | --- |
+| `zyteApi()` | forwarded: Zyte runs its own version (your local handler isn't used) |
+| another provider, with a local handler for the action | the handler runs in xyte's browser |
+| another provider, no local handler, **Zyte among the providers** (`rotate`, `adaptive`…) | the provider is passed over (no request, no backoff, no retry used up) so a later attempt reaches Zyte |
+| another provider, no local handler, no way to Zyte (3 pass-overs in a row) | `unsupportedActions`: skipped (`notExecuted` in the response's `actions`, a warning via `onWarning` / `X-Xyte-Warning`, the other actions go on), or a 400 with `'error'` |
+
+So a request never quietly loses an action Zyte could have run: with `rotate([oxylabs(…),
+zyteApi(…)])` and no local `setLocation`, it goes to Zyte, and if Zyte bans every try the answer is
+Zyte's 520, not a page for the wrong location.
+
+```ts
+import { Xyte } from 'xyte';
+
+new Xyte({
+  actions: {
+    // Default: searchBox, a heuristic (search inputs, role=searchbox, q/query/search fields, a
+    // "search" placeholder or label; it opens a search toggle when the box hides behind one).
+    // Override per site where it's wrong, or set false.
+    searchKeyword: { 'shop.example': async (page, { keyword }) => page.fill('#find', keyword) },
+
+    // No default: every site's location form is different. Per site (host, subdomains included;
+    // these selectors are illustrative, not DoorDash's current ones):
+    setLocation: {
+      'doordash.com': async (page, { address }) => {
+        await page.click('[data-anchor-id="AddressButton"]');
+        await page.fill('input[aria-label="Address"]', `${address?.streetAddress}, ${address?.postalCode}`);
+        await page.click('[data-testid="AddressAutocompleteSuggestion"]');
+      },
+    },
+
+    // Your ports of the Zyte IDE scripts, by the id the action names.
+    interaction: {
+      'accept-cookies': async (page) => page.click('#onetrust-accept-btn-handler'),
+      'load-all-reviews': async (page, { args }) => {
+        for (let i = 0; i < Number(args?.pages ?? 3); i++) await page.click('text=More reviews');
+      },
+    },
+  },
+  unsupportedActions: 'warn', // default; 'error' to reject requests whose actions have no handler
+});
+```
+
+A handler gets the Playwright page, the action as Zyte defines it (`keyword`, `address`, `id` and
+`args`), and `{ url, timeout }`. Throwing fails the action, and its `onError` applies (`return`
+by default: the remaining actions are `notExecuted`), as for any other action. Requests with
+these actions can then run through any provider, Zyte included, without changing.

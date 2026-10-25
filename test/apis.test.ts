@@ -59,13 +59,16 @@ describe('zyteApi', () => {
     expect(calls[0]!.body.actions).toEqual(actions);
   });
 
-  test('mixed with a proxy: an attempt that lands on the proxy is a 400 naming the action', async () => {
-    const { fetch } = stub(() => Response.json({ url: 'https://shop.example/', statusCode: 200, browserHtml: 'x' }));
-    const error = await new Xyte({ proxy: rotate([proxyUrl('http://u:p@127.0.0.1:1'), zyteApi({ apiKey: 'K', fetch })]) })
-      .extract({ url: 'https://shop.example/', browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'pizza' }] })
-      .catch((e) => e);
-    expect(error).toMatchObject({ status: 400 });
-    expect(error.detail).toContain('searchKeyword');
+  test("mixed with a proxy, even with unsupportedActions: 'error': the proxy is passed over and Zyte runs it", async () => {
+    const { fetch, calls } = stub(() => Response.json({ url: 'https://shop.example/', statusCode: 200, browserHtml: 'x' }));
+    const proxy = rotate([proxyUrl('http://u:p@127.0.0.1:1'), zyteApi({ apiKey: 'K', fetch })]);
+    const res = await new Xyte({ proxy, retries: 0, unsupportedActions: 'error', actions: { searchKeyword: false } }).extract({
+      url: 'https://shop.example/',
+      browserHtml: true,
+      actions: [{ action: 'searchKeyword', keyword: 'pizza' }],
+    });
+    expect(res.browserHtml).toBe('x');
+    expect(calls).toHaveLength(1);
   });
 
   test('a 400 problem passes through untouched', async () => {

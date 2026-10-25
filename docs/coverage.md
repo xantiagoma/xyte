@@ -12,7 +12,7 @@ an entry not listed here.
 | --- | --- |
 | Request fields | 30/56 (+25 pluggable) |
 | Response fields | 13/25 (+12 pluggable) |
-| Browser actions | 17/20 |
+| Browser actions | 18/20 |
 
 ## Request fields
 
@@ -60,7 +60,7 @@ an entry not listed here.
 | `serpOptions` | 🔌 pluggable | Passed to your extractor as `options`; `extractFrom` picks HTTP or browser. |
 | `geolocation` | ✅ supported | Encoded into the provider credentials. With `direct()`, plain `proxyUrl()` or a `template()` without `{country}` it can't be applied: the request runs with an `X-Xyte-Warning` header / `onWarning`. |
 | `javascript` | ✅ supported |  |
-| `actions` | 🟡 partial | All but `interaction`, `searchKeyword`, `setLocation`, which run with `zyteApi()` only (see Actions). |
+| `actions` | ✅ supported | All of them; `searchKeyword`, `setLocation` and `interaction` through handlers or `zyteApi()` (see Actions). |
 | `jobId` | ✅ supported | Echoed back. |
 | `echoData` | ✅ supported |  |
 | `viewport` | ✅ supported |  |
@@ -115,14 +115,14 @@ an entry not listed here.
 | `goto` | ✅ supported |  |
 | `hide` | ✅ supported |  |
 | `hover` | ✅ supported |  |
-| `interaction` | ❌ unsupported | Runs a script stored in Zyte's cloud IDE, by id. Forwarded with `zyteApi()`; a 400 elsewhere. |
+| `interaction` | 🔌 pluggable | Zyte runs scripts from its cloud IDE by id: with `zyteApi()` it does; elsewhere `actions.interaction` maps ids to your own scripts. Without one: skipped with a warning (or a 400 with `unsupportedActions: 'error'`). |
 | `keyPress` | ✅ supported |  |
 | `reload` | ✅ supported |  |
 | `scrollBottom` | ✅ supported | `timeout`, `maxScrollDelay`, `maxPageHeight`, `maxScrollCount`; `scrollStep` ignored. |
 | `scrollTo` | ✅ supported |  |
-| `searchKeyword` | ❌ unsupported | Zyte's per-site knowledge of where the search box is. Forwarded with `zyteApi()`; a 400 elsewhere. |
+| `searchKeyword` | 🟡 partial | Built-in heuristic (`searchBox`: finds the search box, types, presses Enter); per-site handlers in `actions.searchKeyword`; Zyte's own with `zyteApi()`. |
 | `select` | ✅ supported |  |
-| `setLocation` | ❌ unsupported | Zyte's per-site knowledge of location forms. Forwarded with `zyteApi()`; a 400 elsewhere. |
+| `setLocation` | 🔌 pluggable | Location forms differ per site: per-site handlers in `actions.setLocation`, Zyte's own with `zyteApi()`. Without one: skipped with a warning (or a 400 with `unsupportedActions: 'error'`). |
 | `type` | ✅ supported |  |
 | `waitForNavigation` | ✅ supported | As the first action, configures the initial navigation. |
 | `waitForRequest` | ✅ supported |  |

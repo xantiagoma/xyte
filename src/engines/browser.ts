@@ -11,6 +11,7 @@ import { serverError, unsupported, XyteError } from '../errors.ts';
 import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Action, ActionResult, ActionSelector, CapturedResponse, Cookie, NetworkCaptureFilter } from '../types.ts';
 import { MAX_BODY_BYTES, matchUrl, sleep, toBase64, userAgent, type MatchType } from '../util.ts';
+import { handlerFor, isZyteOnlyAction, type ZyteOnlyAction } from '../actions.ts';
 import { isRedirect, type EngineAttempt, type EngineResult } from './http.ts';
 
 /**
@@ -88,18 +89,9 @@ export interface BrowserOptions {
   settleTime?: number;
 }
 
-/** Zyte actions that need Zyte's site-specific knowledge or hosted scripts. */
-const UNSUPPORTED_ACTIONS = new Set(['interaction', 'searchKeyword', 'setLocation']);
-
 /** Zyte returns at most 10 captured responses, 5 MiB of bodies in total. */
 const MAX_CAPTURES = 10;
 const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
-
-export function assertSupportedActions(actions: readonly Action[] | undefined): void {
-  for (const action of actions ?? []) {
-    if (UNSUPPORTED_ACTIONS.has(action.action)) throw unsupported(`the "${action.action}" action`);
-  }
-}
 
 export class BrowserEngine {
   private browser: Promise<Browser> | undefined;
@@ -225,8 +217,18 @@ export class BrowserEngine {
           continue;
         }
         const start = Date.now();
+        // Zyte's own actions run through the handlers configured for them; without one, skipped.
+        const handler = isZyteOnlyAction(action) ? handlerFor(action, attempt.actions?.handlers ?? {}, new URL(page.url())) : undefined;
+        if (isZyteOnlyAction(action) && !handler) {
+          attempt.actions?.onMissing(action);
+          results.push({ action: action.action, elapsedTime: 0, status: 'notExecuted', error: 'no handler for this action outside Zyte: skipped' });
+          continue;
+        }
         try {
-          await withTimeout(runAction(page, action, remaining), remaining());
+          const run = handler
+            ? handler(page, action as ZyteOnlyAction, { url: new URL(page.url()), timeout: Math.min(remaining(), 30_000) })
+            : runAction(page, action, remaining);
+          await withTimeout(run, remaining());
           results.push(result(action, start, 'success'));
         } catch (error) {
           const onError = action.onError ?? 'return';

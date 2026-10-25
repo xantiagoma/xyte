@@ -156,8 +156,14 @@ describe('validation (Zyte 400s and 422s)', () => {
   test('HTTP-only field on a browser request', () =>
     rejects({ url: `${target.base}/html`, browserHtml: true, httpRequestMethod: 'POST' }, 422, /only be used with httpResponseBody/));
   test('AI extraction without an extractor', () => rejects({ url: `${target.base}/html`, product: true }, 400, /extractor/));
-  test('Zyte-only actions', () =>
-    rejects({ url: `${target.base}/html`, browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'x' }] }, 400, /searchKeyword/));
+  test("Zyte-only actions without a handler, with unsupportedActions: 'error'", async () => {
+    const strict = new Xyte({ retries: 0, unsupportedActions: 'error', actions: { searchKeyword: false } });
+    const error = await strict
+      .extract({ url: `${target.base}/html`, browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'x' }] })
+      .catch((e) => e);
+    expect(error).toMatchObject({ status: 400, type: '/request/invalid' });
+    expect(error.message).toMatch(/searchKeyword/);
+  });
   test('a Cookie header is dropped, as Zyte does', async () => {
     const res = await xyte.extract({
       url: `${target.base}/echo`,

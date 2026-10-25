@@ -265,9 +265,12 @@ Without either, those fields get a 400.
 **Sessions**: `session.id` (client-managed: sticky exit + cookie jar) and `sessionContext` +
 `sessionContextParameters` (server-managed pool).
 
-**Zyte-only:** the actions `searchKeyword`, `setLocation` and `interaction` rely on Zyte's
-per-site knowledge and its hosted scripts: they run when the provider is `zyteApi()` (route those
-sites there), and are a 400 elsewhere. **Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
+**Zyte's own actions** (`searchKeyword`, `setLocation`, `interaction`) rely on Zyte's per-site
+knowledge and hosted scripts. With `zyteApi()` Zyte runs them; elsewhere they run through
+handlers: a built-in search-box heuristic for `searchKeyword`, and yours for the rest
+([browser](docs/browser.md#zytes-own-actions-searchkeyword-setlocation-interaction)). Without
+a handler they're skipped with a warning (`unsupportedActions: 'error'` rejects them instead).
+**Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
 proxy-mode port or the Stats API (xyte can still *use* Zyte's proxy mode as a provider:
 `zyteProxy()`). Field-by-field status: [coverage](docs/coverage.md).
 

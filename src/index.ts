@@ -34,6 +34,17 @@ export {
   type WatchedProvider,
   type WatchOptions,
 } from './combinators.ts';
+export {
+  isZyteOnlyAction,
+  searchBox,
+  type ActionHandler,
+  type ActionHandlerContext,
+  type ActionHandlers,
+  type InteractionAction,
+  type SearchKeywordAction,
+  type SetLocationAction,
+  type ZyteOnlyAction,
+} from './actions.ts';
 export { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
 export { memoryStore, redisStore, redisStoreFromUrl, resilient, type RedisSend, type StateStore } from './state.ts';
 export {

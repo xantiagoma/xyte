@@ -1,4 +1,5 @@
 import { brotliCompressSync, constants as zlibConstants, deflateSync, gzipSync } from 'node:zlib';
+import type { ActionHandlers, ZyteOnlyAction } from '../actions.ts';
 import type { ProxyContext, ProxyEndpoint } from '../proxy.ts';
 import type { Transport } from '../transport.ts';
 import type { ExtractRequest, ExtractResponse, HttpHeader } from '../types.ts';
@@ -11,6 +12,8 @@ export interface EngineAttempt {
   proxy: ProxyEndpoint | null;
   jar: CookieJar;
   signal: AbortSignal;
+  /** Handlers for Zyte's own actions in a browser, and what to do when one has none. */
+  actions?: { handlers: ActionHandlers; onMissing: (action: ZyteOnlyAction) => void };
 }
 
 /** What an engine hands back: the Zyte response plus what ban detection and extractors read. */

@@ -1,4 +1,5 @@
-import { assertSupportedActions, BrowserEngine, type BrowserOptions } from './engines/browser.ts';
+import { assertActionHandlers, withoutHandler, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
+import { BrowserEngine, type BrowserOptions } from './engines/browser.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
   type XyteProblem,
@@ -62,6 +63,17 @@ export interface XyteOptions {
   isBan?: ((page: BanCheck) => boolean) | false;
   /** Browser rendering for `browserHtml`, `screenshot`, `actions`, `networkCapture`. */
   browser?: BrowserOptions;
+  /**
+   * Handlers for Zyte's own actions outside Zyte: `searchKeyword` (default: a heuristic that
+   * finds the search box), `setLocation` (per site), `interaction` (scripts by id). With
+   * `zyteApi()` as the provider, Zyte runs them instead.
+   */
+  actions?: ActionHandlers;
+  /**
+   * A Zyte-only action with no handler: `warn` (default) skips it (`notExecuted` in the response's
+   * `actions`, plus a warning) and runs the rest; `error` rejects the request with a 400.
+   */
+  unsupportedActions?: 'warn' | 'error';
   /**
    * Implementations for Zyte's extraction outputs (`product`, `article`, `markdown`, …), keyed by
    * field. Requests for a field without an extractor are rejected with a 400, except `markdown`,
@@ -180,6 +192,8 @@ const warnOnce = (message: string): void => {
 };
 
 const BROWSER_OUTPUTS = ['browserHtml', 'screenshot'] as const;
+/** Providers passed over in one request looking for Zyte (for its own actions), at most. */
+const MAX_PASS_OVERS = 10;
 /** Client-managed sessions (`session.id`) remembered per process. */
 const MAX_CLIENT_SESSIONS = 10_000;
 const BROWSER_ONLY = ['actions', 'networkCapture', 'javascript', 'viewport', 'screenshotOptions', 'includeIframes'] as const;
@@ -282,12 +296,29 @@ export class Xyte {
       request.httpRequestText == null &&
       request.followRedirect !== false;
 
-    for (let attempt = 0; attempt <= this.retries; attempt++) {
+    // Pass-overs (a provider skipped so Zyte runs its own actions) make no request, so they don't
+    // use up retries: only real attempts count. A route that never leads to Zyte for this site
+    // would pass over forever, hence the caps.
+    let passedOver = false;
+    let passOvers = 0;
+    let passOversInARow = 0;
+    let real = 0;
+    for (let attempt = 0; ; attempt++) {
+      if (attempt > 0) {
+        if (passedOver) passOversInARow++;
+        else {
+          real++;
+          passOversInARow = 0;
+        }
+      }
+      if (real > this.retries) break;
       if (attempt > 0) {
         this.options.onRetry?.({ attempt, url: request.url, reason: lastReason });
-        await sleep(backoff(attempt));
+        // A provider passed over (below) made no request: nothing to back off from.
+        if (!passedOver) await sleep(backoff(attempt));
         cancel?.throwIfAborted();
       }
+      passedOver = false;
 
       // A server-managed session (sessionContext) comes from the pool; a ban counts against it.
       const pooled = poolKey ? this.pool.acquire(poolKey, failedSessions) : undefined;
@@ -346,9 +377,18 @@ export class Xyte {
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
             trusted = answer.trusted === true;
           } else {
-            // A combinator that includes Zyte landed on a provider that can't run Zyte's own actions.
-            if (inBrowser) assertSupportedActions(request.actions);
-            const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal };
+            // Zyte's own actions here run through local handlers. One without a handler, while Zyte is
+            // among the providers: pass this one over, so a later attempt reaches Zyte to run it.
+            const missing = inBrowser ? withoutHandler(request.actions, this.actionHandlers, context.url) : [];
+            if (missing.length > 0 && this.proxy.zyteActions && passOvers < MAX_PASS_OVERS && passOversInARow < 3) {
+              passedOver = true;
+              passOvers++;
+              lastReason = `"${missing[0]!.action}" has no local handler: passed over ${context.path?.at(-1) ?? this.proxy.name} for Zyte`;
+              verdict = { result: 'aborted', reason: lastReason };
+              continue;
+            }
+            if (missing.length > 0 && this.strictActions) assertActionHandlers(request.actions, this.actionHandlers, context.url);
+            const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal, actions: this.actionsFor(warn) };
             result = inBrowser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
           }
         } catch (error) {
@@ -445,7 +485,7 @@ export class Xyte {
       const proxy = await this.proxy.resolve(initContext);
       // A scraping API keeps its own sessions; there is no local browser to initialize.
       if (isApiEndpoint(proxy)) return;
-      assertSupportedActions(actions);
+      if (this.strictActions) assertActionHandlers(actions, this.actionHandlers, initContext.url);
       result = 'error';
       await this.browser.run({
         request: { url: request.url, browserHtml: true, actions, device: request.device },
@@ -453,11 +493,31 @@ export class Xyte {
         proxy,
         jar: session.jar,
         signal,
+        actions: this.actionsFor((message) => (this.options.onWarning ? this.options.onWarning(message, { url: request.url }) : warnOnce(message))),
       });
       result = 'ok';
     } finally {
       this.proxy.report?.(initContext, { result, ms: Date.now() - started });
     }
+  }
+
+  private get actionHandlers(): ActionHandlers {
+    return this.options.actions ?? {};
+  }
+
+  private get strictActions(): boolean {
+    return this.options.unsupportedActions === 'error';
+  }
+
+  /** What the browser does with Zyte's own actions: run their handler, or warn and skip. */
+  private actionsFor(warn: (message: string) => void): EngineAttempt['actions'] {
+    return {
+      handlers: this.actionHandlers,
+      onMissing: (action: ZyteOnlyAction) =>
+        warn(
+          `"${action.action}"${action.action === 'interaction' ? ` (script "${action.id}")` : ''} skipped: no handler outside Zyte (set actions.${action.action}, route the site to zyteApi(), or unsupportedActions: 'error' to reject)`,
+        ),
+    };
   }
 
   /** Mirrors Zyte's request validation, and decides HTTP vs browser. */
@@ -472,7 +532,9 @@ export class Xyte {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw invalidRequest('"url" must be http or https');
 
     // Zyte's own actions run only where Zyte runs them (zyteApi()); checked per attempt then.
-    if (request.sessionContext && !this.proxy.zyteActions) assertSupportedActions(request.sessionContextParameters?.actions);
+    if (request.sessionContext && this.strictActions && !this.proxy.zyteActions) {
+      assertActionHandlers(request.sessionContextParameters?.actions, this.actionHandlers, url);
+    }
 
     const extractions = EXTRACTION_FIELDS.filter((field) => request[field] != null && request[field] !== false);
     if (request.markdown && (request.serp || request.customAttributes)) {
@@ -518,7 +580,7 @@ export class Xyte {
       for (const field of HTTP_ONLY) {
         if (request[field] != null) throw unprocessable(`"${field}" can only be used with httpResponseBody`);
       }
-      if (!this.proxy.zyteActions) assertSupportedActions(request.actions);
+      if (this.strictActions && !this.proxy.zyteActions) assertActionHandlers(request.actions, this.actionHandlers, url);
     } else {
       for (const field of BROWSER_ONLY) {
         if (request[field] != null) throw unprocessable(`"${field}" requires browserHtml or screenshot`);

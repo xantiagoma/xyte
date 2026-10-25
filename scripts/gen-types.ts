@@ -8,6 +8,8 @@
  * openapi-typescript needs the TypeScript 5 JS API (TS 7 has none), so it runs from a throwaway
  * install next to typescript@5.
  * `--default-non-nullable false` keeps fields with a default optional, as they are on the wire.
+ * `--empty-objects-unknown` types free-form objects (an interaction's `args`) as such, not as
+ * `Record<string, never>`.
  */
 import { $ } from 'bun';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -26,7 +28,7 @@ if (Array.isArray(nav.properties?.required)) {
 const dir = await mkdtemp(join(tmpdir(), 'xyte-gen-'));
 try {
   await $`bun add openapi-typescript@7 typescript@5`.cwd(dir).quiet();
-  await $`${join(dir, 'node_modules/.bin/openapi-typescript')} ${resolve(specPath)} --default-non-nullable false -o ${resolve('src/zyte.gen.ts')}`;
+  await $`${join(dir, 'node_modules/.bin/openapi-typescript')} ${resolve(specPath)} --default-non-nullable false --empty-objects-unknown -o ${resolve('src/zyte.gen.ts')}`;
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

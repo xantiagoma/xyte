@@ -98,6 +98,22 @@ export function startTarget() {
           });
           return new Response(stream, { headers: { 'content-type': 'text/html', 'content-encoding': 'gzip' } });
         }
+        case '/search-page':
+          return new Response(
+            `<html><body><header><form action="/results"><input type="search" name="q" placeholder="Search"></form></header><p id="loc"></p></body></html>`,
+            { headers: { 'content-type': 'text/html' } },
+          );
+        case '/search-toggle':
+          // The box only appears once the search icon is clicked.
+          return new Response(
+            `<html><body><button aria-label="Open search" onclick="document.getElementById('f').style.display='block'">🔍</button>
+             <form id="f" action="/results" style="display:none"><input name="query" placeholder="What are you looking for?"></form></body></html>`,
+            { headers: { 'content-type': 'text/html' } },
+          );
+        case '/results': {
+          const q = url.searchParams.get('q') ?? url.searchParams.get('query') ?? '';
+          return new Response(`<html><body><h1>Results for ${q.replace(/[<>&]/g, '')}</h1></body></html>`, { headers: { 'content-type': 'text/html' } });
+        }
         case '/gzip':
           // 200 KB of HTML that compresses to a few KB.
           return new Response(Bun.gzipSync(`<html><body>${'<p>same paragraph again</p>'.repeat(8000)}</body></html>`), {

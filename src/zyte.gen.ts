@@ -1133,7 +1133,7 @@ export interface components {
              *
              *     [See an example](features.html#zapi-metadata).
              */
-            echoData?: Record<string, never>;
+            echoData?: Record<string, unknown>;
             /**
              * @description [Scrapy Cloud](../../scrapy-cloud/get-started.html)
              *     job ID set on the
@@ -1691,14 +1691,14 @@ export interface components {
              */
             url?: string;
             /** @description Captured response headers. */
-            headers?: Record<string, never>;
+            headers?: Record<string, unknown>;
             filter?: components["schemas"]["NetworkCaptureFilter"];
             /** @description Captured request that got the captured response. */
             request?: {
                 /** @description URL of the captured request. */
                 url?: string;
                 /** @description Headers of the captured request. */
-                headers?: Record<string, never>;
+                headers?: Record<string, unknown>;
                 /** @description HTTP method of the captured request. */
                 method?: string;
                 /** @description Body of the captured request, if any. */
@@ -1936,7 +1936,7 @@ export interface components {
             /** @description Script identifier */
             id: string;
             /** @description Input arguments */
-            args?: Record<string, never>;
+            args?: Record<string, unknown>;
         } & components["schemas"]["Action"];
         keyPress: {
             /**
