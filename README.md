@@ -269,7 +269,9 @@ Without either, those fields get a 400.
 knowledge and hosted scripts. With `zyteApi()` Zyte runs them; elsewhere they run through
 handlers: a built-in search-box heuristic for `searchKeyword`, and yours for the rest
 ([browser](docs/browser.md#zytes-own-actions-searchkeyword-setlocation-interaction)). Without
-a handler they're skipped with a warning (`unsupportedActions: 'error'` rejects them instead).
+a handler they're skipped with a warning (`unsupportedActions: 'error'` rejects them, `'zyte'`
+hands them to `zyteApi()` when a combinator has it). An action you have a handler for always runs
+locally.
 **Not supported:** serving Zyte's other APIs: xyte's server answers `POST /v1/extract` only, not Zyte's
 proxy-mode port or the Stats API (xyte can still *use* Zyte's proxy mode as a provider:
 `zyteProxy()`). Field-by-field status: [coverage](docs/coverage.md).

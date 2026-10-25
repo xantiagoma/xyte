@@ -138,10 +138,19 @@ describe('with Zyte among the providers', () => {
   const local = () => custom('local', () => `http://bob:secret@127.0.0.1:${proxy.port}`);
   const setLocation = [{ action: 'setLocation' as const, address: { postalCode: '10001' } }];
 
-  test('no local handler: the other providers are passed over (no request, no wait) so Zyte runs it', async () => {
+  test('default: no local handler and the attempt lands on a proxy → skipped with a warning; Zyte is not called', async () => {
+    const zyte = zyteStub();
+    const { xyte, warnings } = client({ proxy: rotate([local(), zyte.provider]) });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
+    expect(res.actions![0]!.status).toBe('notExecuted');
+    expect(zyte.received).toEqual([]);
+    expect(warnings).toEqual([expect.stringContaining('"setLocation" skipped')]);
+  });
+
+  test("unsupportedActions: 'zyte' → providers without a handler are passed over (no request, no wait) so Zyte runs it", async () => {
     const zyte = zyteStub();
     const attempts: AttemptInfo[] = [];
-    const { xyte, warnings } = client({ proxy: rotate([local(), zyte.provider]), onAttempt: (a) => attempts.push(a) });
+    const { xyte, warnings } = client({ proxy: rotate([local(), zyte.provider]), unsupportedActions: 'zyte', onAttempt: (a) => attempts.push(a) });
     const started = Date.now();
     const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
     expect(res.browserHtml).toBe('<p>zyte ran it</p>');
@@ -154,31 +163,49 @@ describe('with Zyte among the providers', () => {
     expect(warnings).toEqual([]);
   });
 
-  test('a local handler wins on the providers it runs on; Zyte is not needed', async () => {
+  const zipHandler: ActionHandlers = {
+    setLocation: async (page, { address }) => void (await page.evaluate((zip) => (document.getElementById('loc')!.textContent = `zip ${zip}`), address?.postalCode)),
+  };
+
+  test('a local handler always wins: an attempt landing on Zyte is passed over for a provider that runs it', async () => {
     const zyte = zyteStub();
-    const { xyte } = client({
-      proxy: rotate([local(), zyte.provider]),
-      actions: { setLocation: async (page, { address }) => void (await page.evaluate((zip) => (document.getElementById('loc')!.textContent = `zip ${zip}`), address?.postalCode)) },
-    });
+    const attempts: AttemptInfo[] = [];
+    const { xyte } = client({ proxy: rotate([zyte.provider, local()]), actions: zipHandler, onAttempt: (a) => attempts.push(a) });
     const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
     expect(res.browserHtml).toContain('zip 10001');
     expect(zyte.received).toEqual([]);
+    expect(attempts.map((a) => [a.provider, a.result])).toEqual([
+      ['zyte-api', 'aborted'],
+      ['local', 'ok'],
+    ]);
   });
 
-  test('a route that never reaches Zyte for this site: a few pass-overs, then unsupportedActions applies', async () => {
+  test('zyteApi() alone: nowhere to run the local handler, so Zyte gets the action as is', async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: zyte.provider, actions: zipHandler });
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
+    expect(res.browserHtml).toBe('<p>zyte ran it</p>');
+    expect(zyte.received).toEqual([setLocation]);
+  });
+
+  test("'zyte' with a route that never reaches Zyte for this site: a few pass-overs, then like 'warn'", async () => {
     const zyte = zyteStub();
     const attempts: AttemptInfo[] = [];
-    const { xyte, warnings } = client({ proxy: route({ 'zyte-only.example': zyte.provider }, local()), onAttempt: (a) => attempts.push(a) });
+    const { xyte, warnings } = client({
+      proxy: route({ 'zyte-only.example': zyte.provider }, local()),
+      unsupportedActions: 'zyte',
+      onAttempt: (a) => attempts.push(a),
+    });
     const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation });
     expect(attempts.map((a) => a.result)).toEqual(['aborted', 'aborted', 'aborted', 'ok']);
     expect(res.actions![0]!.status).toBe('notExecuted');
     expect(warnings).toHaveLength(1);
   });
 
-  test('Zyte banned on every try: its 520, not a page without the location', async () => {
+  test("'zyte', Zyte banned on every try: its 520, not a page without the location", async () => {
     const zyte = zyteStub('ban');
     const attempts: AttemptInfo[] = [];
-    const { xyte } = client({ retries: 1, proxy: rotate([zyte.provider, local()]), onAttempt: (a) => attempts.push(a) });
+    const { xyte } = client({ retries: 1, proxy: rotate([zyte.provider, local()]), unsupportedActions: 'zyte', onAttempt: (a) => attempts.push(a) });
     const error = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions: setLocation }).catch((e) => e);
     expect(error).toMatchObject({ status: 520, type: '/download/website-ban' });
     expect(attempts.map((a) => [a.provider, a.result])).toEqual([

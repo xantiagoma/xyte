@@ -62,6 +62,11 @@ export function handlerFor(action: ZyteOnlyAction, handlers: ActionHandlers, url
   }
 }
 
+/** The Zyte-only actions in `actions` that a handler covers on `url`: they run in xyte's browser. */
+export function withHandler(actions: readonly Action[] | undefined, handlers: ActionHandlers, url: URL): ZyteOnlyAction[] {
+  return (actions ?? []).filter((action): action is ZyteOnlyAction => isZyteOnlyAction(action) && handlerFor(action, handlers, url) !== undefined);
+}
+
 /** The Zyte-only actions in `actions` that no handler covers on `url`. */
 export function withoutHandler(actions: readonly Action[] | undefined, handlers: ActionHandlers, url: URL): ZyteOnlyAction[] {
   return (actions ?? []).filter((action): action is ZyteOnlyAction => isZyteOnlyAction(action) && !handlerFor(action, handlers, url));

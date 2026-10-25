@@ -59,10 +59,10 @@ describe('zyteApi', () => {
     expect(calls[0]!.body.actions).toEqual(actions);
   });
 
-  test("mixed with a proxy, even with unsupportedActions: 'error': the proxy is passed over and Zyte runs it", async () => {
+  test("mixed with a proxy and unsupportedActions: 'zyte': the proxy is passed over and Zyte runs it", async () => {
     const { fetch, calls } = stub(() => Response.json({ url: 'https://shop.example/', statusCode: 200, browserHtml: 'x' }));
     const proxy = rotate([proxyUrl('http://u:p@127.0.0.1:1'), zyteApi({ apiKey: 'K', fetch })]);
-    const res = await new Xyte({ proxy, retries: 0, unsupportedActions: 'error', actions: { searchKeyword: false } }).extract({
+    const res = await new Xyte({ proxy, retries: 0, unsupportedActions: 'zyte', actions: { searchKeyword: false } }).extract({
       url: 'https://shop.example/',
       browserHtml: true,
       actions: [{ action: 'searchKeyword', keyword: 'pizza' }],

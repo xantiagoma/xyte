@@ -1,4 +1,4 @@
-import { assertActionHandlers, withoutHandler, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
+import { assertActionHandlers, withHandler, withoutHandler, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
 import { BrowserEngine, type BrowserOptions } from './engines/browser.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
@@ -70,10 +70,13 @@ export interface XyteOptions {
    */
   actions?: ActionHandlers;
   /**
-   * A Zyte-only action with no handler: `warn` (default) skips it (`notExecuted` in the response's
-   * `actions`, plus a warning) and runs the rest; `error` rejects the request with a 400.
+   * A Zyte-only action with no handler, on a provider that isn't Zyte: `warn` (default) skips it
+   * (`notExecuted` in the response's `actions`, plus a warning) and runs the rest; `error` rejects
+   * the request with a 400; `zyte` hands it to Zyte when a combinator includes `zyteApi()`
+   * (attempts landing elsewhere are passed over), else like `warn`. Actions you have a handler for
+   * always run locally.
    */
-  unsupportedActions?: 'warn' | 'error';
+  unsupportedActions?: 'warn' | 'error' | 'zyte';
   /**
    * Implementations for Zyte's extraction outputs (`product`, `article`, `markdown`, …), keyed by
    * field. Requests for a field without an extractor are rejected with a 400, except `markdown`,
@@ -371,20 +374,35 @@ export class Xyte {
               `geolocation "${country}" not applied: ${endpoint == null ? 'requests exit directly from this machine' : 'the proxy URL has no country parameter'} (provider "${this.proxy.name}")`,
             );
           }
+          // Inside a combinator, an attempt that can't run the request's actions the way they're
+          // configured can be passed over for the next provider: no request, no retry spent.
+          const leaf = context.path?.at(-1) ?? this.proxy.name;
+          const canPassOver = (context.path?.length ?? 0) > 0 && passOvers < MAX_PASS_OVERS && passOversInARow < 3;
+          const passOver = (reason: string) => {
+            passedOver = true;
+            passOvers++;
+            lastReason = reason;
+            verdict = { result: 'aborted', reason };
+          };
           if (isApiEndpoint(endpoint)) {
+            // Your handlers run in xyte's browser, which an API (Zyte's included) doesn't use: look
+            // for a provider that runs them. With nothing else to go to, the API gets the request
+            // as is (Zyte then runs its own version).
+            const local = inBrowser ? withHandler(request.actions, this.actionHandlers, context.url) : [];
+            if (local.length > 0 && canPassOver) {
+              passOver(`"${local[0]!.action}" has a local handler: passed over ${leaf}`);
+              continue;
+            }
             // A scraping API takes the whole request (it renders, solves and proxies itself).
             const answer = await endpoint.api(request, { context, signal });
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
             trusted = answer.trusted === true;
           } else {
-            // Zyte's own actions here run through local handlers. One without a handler, while Zyte is
-            // among the providers: pass this one over, so a later attempt reaches Zyte to run it.
+            // Zyte's own actions here run through local handlers. Without one, unsupportedActions:
+            // 'zyte' looks for zyteApi() among the providers.
             const missing = inBrowser ? withoutHandler(request.actions, this.actionHandlers, context.url) : [];
-            if (missing.length > 0 && this.proxy.zyteActions && passOvers < MAX_PASS_OVERS && passOversInARow < 3) {
-              passedOver = true;
-              passOvers++;
-              lastReason = `"${missing[0]!.action}" has no local handler: passed over ${context.path?.at(-1) ?? this.proxy.name} for Zyte`;
-              verdict = { result: 'aborted', reason: lastReason };
+            if (missing.length > 0 && this.options.unsupportedActions === 'zyte' && this.proxy.zyteActions && canPassOver) {
+              passOver(`"${missing[0]!.action}" has no local handler: passed over ${leaf} for Zyte`);
               continue;
             }
             if (missing.length > 0 && this.strictActions) assertActionHandlers(request.actions, this.actionHandlers, context.url);

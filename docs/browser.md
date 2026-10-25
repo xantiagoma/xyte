@@ -132,18 +132,24 @@ Three of Zyte's actions aren't browser operations but Zyte services: `searchKeyw
 `setLocation` use Zyte's per-site knowledge of where a site keeps its search box and its
 location form, and `interaction` runs a script you saved in Zyte's cloud IDE, by id.
 
-Each attempt goes by the provider it lands on:
+Two rules decide where they run:
 
-| The attempt lands on | What happens |
+1. **An action you have a handler for runs locally, always.** It's your code, in xyte's browser.
+   Inside a combinator, an attempt that lands on an API provider (`zyteApi()` included, whose
+   browser is Zyte's) is passed over for one that can run it: no request, no backoff, no retry
+   used up. With `zyteApi()` as the only provider there's nowhere else to run it, so Zyte gets the
+   action as is and runs its own version.
+2. **An action with no handler** runs wherever Zyte runs it: on `zyteApi()` attempts, Zyte does.
+   On any other provider, `unsupportedActions` decides:
+
+| `unsupportedActions` | No handler, attempt on a provider that isn't Zyte |
 | --- | --- |
-| `zyteApi()` | forwarded: Zyte runs its own version (your local handler isn't used) |
-| another provider, with a local handler for the action | the handler runs in xyte's browser |
-| another provider, no local handler, **Zyte among the providers** (`rotate`, `adaptive`…) | the provider is passed over (no request, no backoff, no retry used up) so a later attempt reaches Zyte |
-| another provider, no local handler, no way to Zyte (3 pass-overs in a row) | `unsupportedActions`: skipped (`notExecuted` in the response's `actions`, a warning via `onWarning` / `X-Xyte-Warning`, the other actions go on), or a 400 with `'error'` |
+| `'warn'` (default) | skipped: `notExecuted` in the response's `actions`, a warning (`onWarning`, `X-Xyte-Warning`), the other actions go on |
+| `'error'` | a 400 naming the action |
+| `'zyte'` | if a combinator includes `zyteApi()`, the attempt is passed over so a later one reaches Zyte (Zyte bills it; if Zyte bans every try, the answer is its 520, not a page without the action). With no way to Zyte for this site (three pass-overs in a row), like `'warn'` |
 
-So a request never quietly loses an action Zyte could have run: with `rotate([oxylabs(…),
-zyteApi(…)])` and no local `setLocation`, it goes to Zyte, and if Zyte bans every try the answer is
-Zyte's 520, not a page for the wrong location.
+Pass-overs show in [`onRequest`](observability.md) and `X-Xyte-Attempts` as `aborted` attempts with
+the reason.
 
 ```ts
 import { Xyte } from 'xyte';
