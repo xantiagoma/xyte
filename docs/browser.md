@@ -16,6 +16,7 @@ Everything about it can be swapped:
 | `onPage(page, info)` | Init scripts, routes, stealth patches before navigation |
 | `blockResources` | Abort `image`, `media`, `font`… to save proxy bandwidth |
 | `timeLimit` | Browser seconds per request (Zyte: 60) |
+| `settleTime` | After load and actions, wait up to this many seconds for the network to go quiet, so XHR data lands in `browserHtml` and `networkCapture` (default 3, `0` to skip; `XYTE_BROWSER_SETTLE`) |
 
 ## Patchright (undetected Playwright)
 

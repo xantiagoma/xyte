@@ -97,7 +97,7 @@ describe('xyte on Node.js', () => {
         body: JSON.stringify({ url: `${target.base}/forbidden`, httpResponseBody: true }),
       });
       assert.equal(banned.status, 520);
-      assert.equal((await banned.json()).type, '/download/temporary-error');
+      assert.equal((await banned.json()).type, '/download/website-ban');
     } finally {
       await server.stop();
     }

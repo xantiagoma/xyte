@@ -94,12 +94,12 @@ describe('HTTP requests', () => {
 });
 
 describe('bans and retries', () => {
-  test('a persistent 403 is retried, then fails as a 520 /download/temporary-error', async () => {
+  test('a persistent 403 is retried, then fails as a 520 /download/website-ban', async () => {
     const before = target.hits.get('/forbidden') ?? 0;
     const error = await xyte.extract({ url: `${target.base}/forbidden`, httpResponseBody: true }).catch((e) => e);
     expect(error).toBeInstanceOf(XyteError);
     expect(error.status).toBe(520);
-    expect(error.type).toBe('/download/temporary-error');
+    expect(error.type).toBe('/download/website-ban');
     expect((target.hits.get('/forbidden') ?? 0) - before).toBe(3);
   });
 
@@ -134,30 +134,40 @@ describe('bans and retries', () => {
   });
 });
 
-describe('validation (Zyte 400s)', () => {
-  const rejects = async (request: Parameters<Xyte['extract']>[0], message: RegExp) => {
+// Statuses as api.zyte.com answers them: 400 for a malformed request, 422 for parameters that
+// can't be combined or a request that asks for nothing.
+describe('validation (Zyte 400s and 422s)', () => {
+  const rejects = async (request: Parameters<Xyte['extract']>[0], status: number, message: RegExp) => {
     const error = await xyte.extract(request).catch((e) => e);
     expect(error).toBeInstanceOf(XyteError);
-    expect(error.status).toBe(400);
+    expect(error.status).toBe(status);
+    expect(error.type).toBe(status === 422 ? '/request/unprocessable' : '/request/invalid');
     expect(error.message).toMatch(message);
   };
 
   test('browserHtml with httpResponseBody', () =>
-    rejects({ url: `${target.base}/html`, browserHtml: true, httpResponseBody: true }, /cannot be combined/));
-  test('no output', () => rejects({ url: `${target.base}/html` }, /no output/));
-  test('relative url', () => rejects({ url: '/html', httpResponseBody: true }, /absolute URL/));
-  test('Cookie header', () =>
-    rejects(
-      { url: `${target.base}/html`, httpResponseBody: true, customHttpRequestHeaders: [{ name: 'Cookie', value: 'a=b' }] },
-      /requestCookies/,
-    ));
+    rejects({ url: `${target.base}/html`, browserHtml: true, httpResponseBody: true }, 422, /cannot be combined/));
+  test('httpRequestBody with httpRequestText', () =>
+    rejects({ url: `${target.base}/html`, httpResponseBody: true, httpRequestMethod: 'POST', httpRequestBody: 'YQ==', httpRequestText: 'a' }, 422, /cannot be combined/));
+  test('no output', () => rejects({ url: `${target.base}/html` }, 422, /no output/));
+  test('relative url', () => rejects({ url: '/html', httpResponseBody: true }, 400, /absolute URL/));
   test('browser-only field on an HTTP request', () =>
-    rejects({ url: `${target.base}/html`, httpResponseBody: true, actions: [{ action: 'scrollBottom' }] }, /requires browserHtml/));
+    rejects({ url: `${target.base}/html`, httpResponseBody: true, actions: [{ action: 'scrollBottom' }] }, 422, /requires browserHtml/));
   test('HTTP-only field on a browser request', () =>
-    rejects({ url: `${target.base}/html`, browserHtml: true, httpRequestMethod: 'POST' }, /only be used with httpResponseBody/));
-  test('AI extraction without an extractor', () => rejects({ url: `${target.base}/html`, product: true }, /extractor/));
+    rejects({ url: `${target.base}/html`, browserHtml: true, httpRequestMethod: 'POST' }, 422, /only be used with httpResponseBody/));
+  test('AI extraction without an extractor', () => rejects({ url: `${target.base}/html`, product: true }, 400, /extractor/));
   test('Zyte-only actions', () =>
-    rejects({ url: `${target.base}/html`, browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'x' }] }, /searchKeyword/));
+    rejects({ url: `${target.base}/html`, browserHtml: true, actions: [{ action: 'searchKeyword', keyword: 'x' }] }, 400, /searchKeyword/));
+  test('a Cookie header is dropped, as Zyte does', async () => {
+    const res = await xyte.extract({
+      url: `${target.base}/echo`,
+      httpResponseBody: true,
+      customHttpRequestHeaders: [{ name: 'Cookie', value: 'a=b' }, { name: 'X-Kept', value: '1' }],
+    });
+    const echoed = JSON.parse(decodeBody(res.httpResponseBody!)).headers;
+    expect(echoed.cookie).toBeUndefined();
+    expect(echoed['x-kept']).toBe('1');
+  });
 });
 
 describe('extractors', () => {

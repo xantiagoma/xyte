@@ -130,10 +130,10 @@ Use them with `httpResponseBody`.
 | `ipType` | `byIpType()` |
 | `session.id` | provider sticky session (same exit IP) plus a cookie jar kept across requests |
 | no `session` | fresh exit per attempt: redirects and browser sub-requests share it, retries change it |
-| ban handling | 403/429/503 or known challenge pages (Cloudflare, DataDome, PerimeterX, Imperva, Akamai) are retried with backoff on a new exit, then fail as **520** `/download/temporary-error`. Override with `isBan`. |
+| ban handling | 403/429/503 or known challenge pages (Cloudflare, DataDome, PerimeterX, Imperva, Akamai) are retried with backoff on a new exit, then fail as **520** `/download/website-ban` (proxy/network failures: `/download/temporary-error`). Override with `isBan`. |
 | target 4xx/5xx | **200** with `statusCode` set |
 | unknown domain | **421** `/website/domain-unreachable` |
-| invalid combos (`browserHtml` + `httpResponseBody`, `Cookie` in custom headers, browser-only fields on HTTP…) | **400** `/request/invalid` |
+| invalid combos (`browserHtml` + `httpResponseBody`, browser-only fields on HTTP, no output…) | **422** `/request/unprocessable`; a malformed request (bad `url`…) is **400** `/request/invalid`, as on Zyte. A `Cookie` custom header is dropped, as Zyte does (use `requestCookies`). |
 
 ## Supported fields
 

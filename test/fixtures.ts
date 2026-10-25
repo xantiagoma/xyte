@@ -65,6 +65,19 @@ export function startTarget() {
           return new Response('x'.repeat(12 * 1024 * 1024));
         case '/api/data':
           return Response.json({ secret: 42 });
+        case '/api/slow':
+          return new Promise<Response>((resolve) => setTimeout(() => resolve(Response.json({ secret: 7 })), 400));
+        case '/late-app':
+          // Fetches its data only after the load event, from a slow endpoint.
+          return new Response(
+            `<html><body><script>
+              addEventListener('load', () => setTimeout(() => fetch('/api/slow').then(r => r.json()).then(d => {
+                const el = document.createElement('p'); el.id = 'late'; el.textContent = 'late ' + d.secret;
+                document.body.appendChild(el);
+              }), 100));
+            </script></body></html>`,
+            { headers: { 'content-type': 'text/html' } },
+          );
         case '/app':
           return new Response(
             `<html><body><div id="root">loading</div><script>

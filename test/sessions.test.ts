@@ -50,15 +50,14 @@ describe('sessionContext (server-managed sessions)', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  test('validation', async () => {
-    const both = await xyte
-      .extract({ url: `${target.base}/html`, httpResponseBody: true, sessionContext: [{ name: 'a', value: 'b' }], session: { id: 'x' } })
-      .catch((e) => e);
-    expect(both.status).toBe(400);
-    const orphan = await xyte
-      .extract({ url: `${target.base}/html`, httpResponseBody: true, sessionContextParameters: { actions: [] } })
-      .catch((e) => e);
-    expect(orphan.status).toBe(400);
+  test('accepted the way Zyte accepts them', async () => {
+    // session wins over sessionContext; an orphan or empty context is ignored.
+    const both = await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true, sessionContext: [{ name: 'a', value: 'b' }], session: { id: 'x' } });
+    expect(both.session).toEqual({ id: 'x' });
+    const orphan = await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true, sessionContextParameters: { actions: [] } });
+    expect(orphan.statusCode).toBe(200);
+    const empty = await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true, sessionContext: [] });
+    expect(empty.statusCode).toBe(200);
   });
 });
 

@@ -80,8 +80,9 @@ await check('httpResponseHeaders', async () => {
 });
 
 await check('redirects are followed and the final url reported', async () => {
-  const r = await call({ url: 'https://httpbin.org/redirect-to?url=https%3A%2F%2Fexample.com%2F', httpResponseBody: true });
-  return [r.json.url === 'https://example.com/' && r.json.statusCode === 200, `url ${r.json.url}`];
+  // Not /redirect-to?url=…: Zyte answers a URL carrying another URL in its query with a 520.
+  const r = await call({ url: 'https://httpbin.org/redirect/1', httpResponseBody: true });
+  return [r.json.url === 'https://httpbin.org/get' && r.json.statusCode === 200, `url ${r.json.url}`];
 });
 
 await check('browserHtml renders JavaScript', async () => {
@@ -122,12 +123,24 @@ await check('screenshot: JPEG by default, PNG on request', async () => {
 
 await check('markdown', async () => {
   const r = await call({ url: 'https://en.wikipedia.org/wiki/Web_scraping', markdown: true });
-  return [r.status === 200 && r.json.markdown?.startsWith('# Web scraping'), `${r.json.markdown?.length} chars`];
+  // Zyte's and xyte's markdown differ in style (title heading, link titles); compare content.
+  return [r.status === 200 && /\[Data scraping\]\(https:\/\/en\.wikipedia\.org\/wiki\/Data_scraping/.test(r.json.markdown ?? ''), `${r.json.markdown?.length} chars`];
 });
 
-await check('browserHtml + httpResponseBody is 400 /request/invalid', async () => {
+await check('browserHtml + httpResponseBody is 422 /request/unprocessable', async () => {
   const r = await call({ url: 'https://example.com', browserHtml: true, httpResponseBody: true });
+  return [r.status === 422 && r.json.type === '/request/unprocessable', `${r.status} ${r.json?.type}`];
+});
+
+await check('a relative url is 400 /request/invalid', async () => {
+  const r = await call({ url: '/foo', httpResponseBody: true });
   return [r.status === 400 && r.json.type === '/request/invalid', `${r.status} ${r.json?.type}`];
+});
+
+await check('a Cookie header is dropped, other headers kept', async () => {
+  const r = await call({ url: 'https://httpbin.org/anything', httpResponseBody: true, customHttpRequestHeaders: [{ name: 'Cookie', value: 'a=b' }, { name: 'X-Kept', value: '1' }] });
+  const headers = JSON.parse(decode(r.json.httpResponseBody)).headers;
+  return [r.status === 200 && headers.Cookie === undefined && headers['X-Kept'] === '1', `Cookie=${headers.Cookie}, X-Kept=${headers['X-Kept']}`];
 });
 
 await check('a wrong key is 401 /auth/key-not-found', async () => {

@@ -82,7 +82,8 @@ Where xyte answers differently from Zyte, depending on how it's configured:
 
 These match Zyte, so they need no changes: `screenshot` defaults to JPEG (`screenshotOptions.format:
 "png"` for PNG); a target error is HTTP 200 with its `statusCode`; problem types (`/request/invalid`,
-`/auth/key-not-found`, `/website/domain-unreachable`, `/download/temporary-error`) and action
+`/request/unprocessable`, `/auth/key-not-found`, `/website/domain-unreachable`, `/download/website-ban`,
+`/download/temporary-error`) and action
 statuses (`success`, `continued`, `returned`) use Zyte's values.
 
 ## Checking a deployment
@@ -96,6 +97,15 @@ XYTE_LIVE_URL=https://xyte.example.com/v1/extract XYTE_LIVE_KEY=… bun scripts/
 XYTE_LIVE_URL=https://api.zyte.com/v1/extract bun scripts/live.ts   # key from ZYTE_API_KEY in .env
 ```
 
-Last run (2026-10-24, `direct()`, dist on Node): 18/18 passed, including snappr's
-`getHTMLFromZyte` unchanged except for the URL (render + actions, a JSON API, `networkCapture`,
-a POST). It has not yet been run against Zyte for a side-by-side comparison.
+Last run (2026-10-24): the same 20 checks pass against xyte (`direct()`, dist on Node) and
+against api.zyte.com (18; the 2 xyte-only checks are skipped). snappr's `getHTMLFromZyte` also
+works unchanged except for the URL (render + actions, a JSON API, `networkCapture`, a POST).
+
+Probing Zyte directly is what aligned these details with it: incompatible parameters are `422
+/request/unprocessable` (not 400), a ban is `520 /download/website-ban`, a `Cookie` custom header
+is dropped rather than rejected, `session` wins over `sessionContext`, and an empty or orphan
+`sessionContext` / `sessionContextParameters` is ignored. Zyte also waits for the network to
+settle after load, which xyte now does too (`settleTime`, [browser](browser.md)).
+
+Zyte answers a `url` that carries another URL in its query string (`?url=https://…`) with a
+`520 /download/website-ban`, whatever the site does. xyte fetches such URLs normally.

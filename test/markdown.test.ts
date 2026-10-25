@@ -100,6 +100,6 @@ describe('markdown output', () => {
 
   test('markdown with serp is rejected', async () => {
     const error = await new Xyte().extract({ url: `${target.base}/html`, markdown: true, serp: true }).catch((e) => e);
-    expect(error.status).toBe(400);
+    expect(error.status).toBe(422);
   });
 });

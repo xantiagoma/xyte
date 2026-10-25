@@ -80,6 +80,12 @@ export interface BrowserOptions {
   blockResources?: readonly string[];
   /** Total browser time per request, seconds. Zyte's limit is 60. */
   timeLimit?: number;
+  /**
+   * After load and the actions, wait up to this many seconds for the network to go quiet, so
+   * data the page fetches after `load` lands in `browserHtml` and `networkCapture`, as on Zyte.
+   * Default 3; 0 returns right after load.
+   */
+  settleTime?: number;
 }
 
 /** Zyte actions that need Zyte's site-specific knowledge or hosted scripts. */
@@ -208,6 +214,9 @@ export class BrowserEngine {
           if (onError === 'return') stopped = true;
         }
       }
+
+      const settleMs = Math.min(remaining(), (this.options.settleTime ?? 3) * 1000);
+      if (settleMs > 0) await page.waitForLoadState('networkidle', { timeout: settleMs }).catch(() => {});
 
       if (request.includeIframes) await embedIframes(page);
       const html = truncate(await page.content());

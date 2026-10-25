@@ -33,11 +33,11 @@ test('serves POST /v1/extract like api.zyte.com', async () => {
 test('errors are Zyte problem bodies with Zyte statuses', async () => {
   const banned = await zyteFetch({ url: `${target.base}/forbidden`, httpResponseBody: true });
   expect(banned.status).toBe(520);
-  expect(await banned.json()).toMatchObject({ status: 520, type: '/download/temporary-error' });
+  expect(await banned.json()).toMatchObject({ status: 520, type: '/download/website-ban', title: 'Website Ban' });
 
   const invalid = await zyteFetch({ url: `${target.base}/html`, browserHtml: true, httpResponseBody: true });
-  expect(invalid.status).toBe(400);
-  expect(await invalid.json()).toMatchObject({ type: '/request/invalid' });
+  expect(invalid.status).toBe(422);
+  expect(await invalid.json()).toMatchObject({ type: '/request/unprocessable' });
 });
 
 test('checks the API key when configured', async () => {

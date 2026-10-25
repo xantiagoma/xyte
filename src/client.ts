@@ -5,6 +5,7 @@ import {
   invalidRequest,
   serverError,
   temporaryDownloadError,
+  unprocessable,
   unsupported,
   XyteError,
 } from './errors.ts';
@@ -110,7 +111,7 @@ export class Xyte {
   extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
     return this.limit(async () => {
       options.signal?.throwIfAborted();
-      return this.run(request, options.signal);
+      return this.run(lenient(request), options.signal);
     });
   }
 
@@ -261,17 +262,11 @@ export class Xyte {
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw invalidRequest('"url" must be http or https');
 
-    if (request.sessionContext) {
-      if (request.session) throw invalidRequest('sessionContext cannot be combined with session');
-      if (request.sessionContext.length === 0) throw invalidRequest('sessionContext must not be empty');
-      assertSupportedActions(request.sessionContextParameters?.actions);
-    } else if (request.sessionContextParameters) {
-      throw invalidRequest('sessionContextParameters requires sessionContext');
-    }
+    if (request.sessionContext) assertSupportedActions(request.sessionContextParameters?.actions);
 
     const extractions = EXTRACTION_FIELDS.filter((field) => request[field] != null && request[field] !== false);
     if (request.markdown && (request.serp || request.customAttributes)) {
-      throw invalidRequest('markdown cannot be combined with serp or customAttributes');
+      throw unprocessable('markdown cannot be combined with serp or customAttributes');
     }
     for (const field of extractions) {
       // Zyte's markdown is non-AI: built in, unless an extractor overrides it.
@@ -283,13 +278,10 @@ export class Xyte {
 
     const wantsBrowser = BROWSER_OUTPUTS.some((field) => request[field] === true);
     if (wantsBrowser && request.httpResponseBody) {
-      throw invalidRequest('httpResponseBody cannot be combined with browserHtml or screenshot');
+      throw unprocessable('httpResponseBody cannot be combined with browserHtml or screenshot');
     }
     if (request.httpRequestBody != null && request.httpRequestText != null) {
-      throw invalidRequest('httpRequestBody and httpRequestText cannot be combined');
-    }
-    if (request.customHttpRequestHeaders?.some((h) => h.name?.toLowerCase() === 'cookie')) {
-      throw invalidRequest('use requestCookies, not a Cookie header in customHttpRequestHeaders');
+      throw unprocessable('httpRequestBody and httpRequestText cannot be combined');
     }
     const probe = new Headers();
     for (const { name, value } of [
@@ -314,17 +306,17 @@ export class Xyte {
     const browser = wantsBrowser || (!request.httpResponseBody && extractFromBrowser);
     if (browser) {
       for (const field of HTTP_ONLY) {
-        if (request[field] != null) throw invalidRequest(`"${field}" can only be used with httpResponseBody`);
+        if (request[field] != null) throw unprocessable(`"${field}" can only be used with httpResponseBody`);
       }
       assertSupportedActions(request.actions);
     } else {
       for (const field of BROWSER_ONLY) {
-        if (request[field] != null) throw invalidRequest(`"${field}" requires browserHtml or screenshot`);
+        if (request[field] != null) throw unprocessable(`"${field}" requires browserHtml or screenshot`);
       }
       const hasOutput =
         request.httpResponseBody || request.httpResponseHeaders || request.responseCookies || extractions.length > 0;
       if (!hasOutput) {
-        throw invalidRequest('no output requested: set httpResponseBody, browserHtml, screenshot or an extraction field');
+        throw unprocessable('no output requested: set httpResponseBody, browserHtml, screenshot or an extraction field');
       }
     }
     return { browser, extractions };
@@ -402,6 +394,23 @@ const CHALLENGE_MARKERS = [
  * Default ban heuristic: 403/429/503 statuses, or a known anti-bot challenge page. Other 4xx/5xx
  * are real answers and are returned in `statusCode`, as Zyte does.
  */
+/**
+ * What Zyte quietly ignores instead of rejecting (checked against api.zyte.com): a Cookie header
+ * in `customHttpRequestHeaders` (cookies go in `requestCookies`), `sessionContext` next to
+ * `session` (the client-managed session wins), an empty `sessionContext`, and
+ * `sessionContextParameters` without a context.
+ */
+function lenient(request: ExtractRequest): ExtractRequest {
+  const { sessionContext, sessionContextParameters, customHttpRequestHeaders, ...rest } = request;
+  return {
+    ...rest,
+    ...(customHttpRequestHeaders && {
+      customHttpRequestHeaders: customHttpRequestHeaders.filter((h) => String(h.name).toLowerCase() !== 'cookie'),
+    }),
+    ...(!request.session && sessionContext?.length ? { sessionContext, sessionContextParameters } : {}),
+  };
+}
+
 export function isLikelyBan(page: BanCheck): boolean {
   if (BAN_STATUSES.has(page.statusCode)) return true;
   const html = page.html;

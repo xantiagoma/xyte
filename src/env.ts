@@ -161,6 +161,7 @@ const list = (value: string | undefined) => (value ?? '').split(',').map((v) => 
  *   `XYTE_BROWSER_WS_PROTOCOL=playwright` for a Playwright server.
  * - `XYTE_BLOCK_RESOURCES`: resource types to abort, e.g. `image,media,font`.
  * - `XYTE_BROWSER_TIME_LIMIT`: seconds per request (default 60).
+ * - `XYTE_BROWSER_SETTLE`: seconds to wait for the network to go quiet after load (default 3, 0 to skip).
  */
 export function browserFromEnv(env: Env = process.env): BrowserOptions {
   const options: BrowserOptions = {};
@@ -192,6 +193,7 @@ export function browserFromEnv(env: Env = process.env): BrowserOptions {
   }
   if (env.XYTE_BLOCK_RESOURCES) options.blockResources = list(env.XYTE_BLOCK_RESOURCES);
   if (env.XYTE_BROWSER_TIME_LIMIT) options.timeLimit = Number(env.XYTE_BROWSER_TIME_LIMIT);
+  if (env.XYTE_BROWSER_SETTLE) options.settleTime = Number(env.XYTE_BROWSER_SETTLE);
   return options;
 }
 

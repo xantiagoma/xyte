@@ -134,17 +134,18 @@ an entry not listed here.
 
 | Name | Status | Notes |
 | --- | --- | --- |
-| `400 /request/invalid` | ✅ supported | Same field-combination rules, plus unsupported fields. |
+| `400 /request/invalid` | ✅ supported | Malformed requests (url format, header syntax), plus fields xyte doesn't support. |
 | `400 /request/invalid-json` | ✅ supported | Server only. |
 | `401 /auth/key-not-found` | ✅ supported | Server with `XYTE_API_KEYS`. |
 | `403 /auth/account-suspended` | ⚪ accepted | No accounts. |
 | `421 /website/domain-unreachable` | ✅ supported |  |
-| `422 /request/unprocessable` | ⚪ accepted | Never emitted. |
+| `422 /request/unprocessable` | ✅ supported | Incompatible parameters (`browserHtml` + `httpResponseBody`, browser-only fields on HTTP…) and requests asking for nothing, as on api.zyte.com. |
 | `429 /limits/*` | ⚪ accepted | No quotas; `concurrency` queues instead. |
 | `451 /download/domain-forbidden` | ⚪ accepted | Never emitted. |
 | `500 /server/timed-out` | 🟡 partial | Attempt timeouts are retried, then reported as 520. |
 | `503 /limits/over-global-limit` | ⚪ accepted | Never emitted. |
-| `520 /download/temporary-error` | ✅ supported | Bans, proxy failures and network errors after retries. |
+| `520 /download/temporary-error` | ✅ supported | Proxy failures and network errors after retries. |
+| `520 /download/website-ban` | ✅ supported | Bans (403/429/503, challenge pages) after retries. Checked against api.zyte.com. |
 | `521 /download/internal-error` | ⚪ accepted | Never emitted. |
 
 ## Beyond /v1/extract

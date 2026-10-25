@@ -36,6 +36,10 @@ export class XyteError extends Error {
 export const invalidRequest = (detail: string): XyteError =>
   new XyteError({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail });
 
+/** A well-formed request whose parameters can't be combined (or that asks for nothing): Zyte's 422. */
+export const unprocessable = (detail: string): XyteError =>
+  new XyteError({ status: 422, type: '/request/unprocessable', title: 'Unprocessable Request', detail });
+
 export const unsupported = (detail: string): XyteError =>
   new XyteError({
     status: 400,
@@ -44,7 +48,7 @@ export const unsupported = (detail: string): XyteError =>
     detail: `${detail} (not supported by xyte)`,
   });
 
-/** A ban, or a proxy/network failure, that retries could not get past. */
+/** A ban (Zyte's `/download/website-ban`), or a proxy/network failure, that retries could not get past. */
 export const temporaryDownloadError = (
   detail: string,
   options: { ban?: boolean; cause?: unknown } = {},
@@ -52,7 +56,7 @@ export const temporaryDownloadError = (
   new XyteError(
     {
       status: 520,
-      type: '/download/temporary-error',
+      type: options.ban ? '/download/website-ban' : '/download/temporary-error',
       title: options.ban ? 'Website Ban' : 'Temporary Download Error',
       detail,
     },

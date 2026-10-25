@@ -140,17 +140,18 @@ export const ACTIONS: Record<string, Entry> = {
 
 /** Zyte error responses (https://docs.zyte.com/zyte-api/usage/errors.html), not in the spec's schemas. */
 export const ERRORS: Record<string, Entry> = {
-  '400 /request/invalid': { status: 'supported', note: 'Same field-combination rules, plus unsupported fields.' },
+  '400 /request/invalid': { status: 'supported', note: 'Malformed requests (url format, header syntax), plus fields xyte doesn\'t support.' },
   '400 /request/invalid-json': { status: 'supported', note: 'Server only.' },
   '401 /auth/key-not-found': { status: 'supported', note: 'Server with `XYTE_API_KEYS`.' },
   '403 /auth/account-suspended': { status: 'accepted', note: 'No accounts.' },
   '421 /website/domain-unreachable': { status: 'supported' },
-  '422 /request/unprocessable': { status: 'accepted', note: 'Never emitted.' },
+  '422 /request/unprocessable': { status: 'supported', note: 'Incompatible parameters (`browserHtml` + `httpResponseBody`, browser-only fields on HTTP…) and requests asking for nothing, as on api.zyte.com.' },
   '429 /limits/*': { status: 'accepted', note: 'No quotas; `concurrency` queues instead.' },
   '451 /download/domain-forbidden': { status: 'accepted', note: 'Never emitted.' },
   '500 /server/timed-out': { status: 'partial', note: 'Attempt timeouts are retried, then reported as 520.' },
   '503 /limits/over-global-limit': { status: 'accepted', note: 'Never emitted.' },
-  '520 /download/temporary-error': { status: 'supported', note: 'Bans, proxy failures and network errors after retries.' },
+  '520 /download/temporary-error': { status: 'supported', note: 'Proxy failures and network errors after retries.' },
+  '520 /download/website-ban': { status: 'supported', note: 'Bans (403/429/503, challenge pages) after retries. Checked against api.zyte.com.' },
   '521 /download/internal-error': { status: 'accepted', note: 'Never emitted.' },
 };
 

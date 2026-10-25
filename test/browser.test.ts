@@ -49,6 +49,24 @@ describe('browser requests', () => {
     expect(res.actions?.map((a) => a.status)).toEqual(['success', 'success', 'success']);
   });
 
+  test('data fetched after load lands in browserHtml and networkCapture', async () => {
+    const request: Parameters<Xyte['extract']>[0] = {
+      url: `${target.base}/late-app`,
+      browserHtml: true,
+      networkCapture: [{ filterType: 'url', matchType: 'contains', value: '/api/slow', httpResponseBody: true }],
+    };
+    const res = await xyte.extract(request);
+    expect(res.browserHtml).toContain('<p id="late">late 7</p>');
+    expect(res.networkCapture).toHaveLength(1);
+
+    const hasty = new Xyte({ retries: 0, browser: { settleTime: 0 } });
+    try {
+      expect((await hasty.extract(request)).browserHtml).not.toContain('id="late"');
+    } finally {
+      await hasty.close();
+    }
+  });
+
   test('networkCapture returns matching responses, base64', async () => {
     const res = await xyte.extract({
       url: `${target.base}/app`,

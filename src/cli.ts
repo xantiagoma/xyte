@@ -26,6 +26,8 @@ Browser (environment):
   XYTE_BROWSER=playwright|patchright|<package>   XYTE_BROWSER_CHANNEL=chrome
   XYTE_BROWSER_WS=wss://…{country:lower}…       remote browser per request (CDP)
   XYTE_BLOCK_RESOURCES=image,media,font          XYTE_BROWSER_ARGS, XYTE_BROWSER_HEADLESS
+  XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
+  XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
 
 AI extraction (product, article, customAttributes…) via any OpenAI-compatible API:
   XYTE_LLM_MODEL=gpt-5-mini  XYTE_LLM_BASE_URL=https://openrouter.ai/api/v1  XYTE_LLM_API_KEY=…
