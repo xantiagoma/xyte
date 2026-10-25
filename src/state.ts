@@ -10,9 +10,14 @@ export interface StateStore {
   set(key: string, value: string, ttl: number): Promise<void>;
 }
 
-/** State in this process. */
-export function memoryStore(): StateStore {
+/** State in this process. `maxEntries` caps it, dropping the least recently written first. */
+export function memoryStore(options: { maxEntries?: number } = {}): StateStore {
   const entries = new Map<string, { value: string; expires: number }>();
+  const put = (key: string, entry: { value: string; expires: number }) => {
+    entries.delete(key);
+    entries.set(key, entry);
+    if (options.maxEntries !== undefined && entries.size > options.maxEntries) entries.delete(entries.keys().next().value!);
+  };
   const live = (key: string) => {
     const entry = entries.get(key);
     if (entry && entry.expires <= Date.now()) {
@@ -25,14 +30,14 @@ export function memoryStore(): StateStore {
     async incr(key, by, ttl) {
       const entry = live(key);
       const value = Number(entry?.value ?? 0) + by;
-      entries.set(key, { value: String(value), expires: entry?.expires ?? Date.now() + ttl * 1000 });
+      put(key, { value: String(value), expires: entry?.expires ?? Date.now() + ttl * 1000 });
       return value;
     },
     async get(key) {
       return live(key)?.value ?? null;
     },
     async set(key, value, ttl) {
-      entries.set(key, { value, expires: Date.now() + ttl * 1000 });
+      put(key, { value, expires: Date.now() + ttl * 1000 });
     },
   };
 }

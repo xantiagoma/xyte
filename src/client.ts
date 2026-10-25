@@ -1,5 +1,7 @@
 import { assertActionHandlers, classifyActions, type ActionHandlers, type ZyteOnlyAction } from './actions.ts';
 import { BrowserEngine, type BrowserOptions } from './engines/browser.ts';
+import { ResponseCache, type CacheOptions } from './cache.ts';
+import { Pacer, type RateLimits } from './pace.ts';
 import { BROWSER_ONLY, BROWSER_OUTPUTS, HTTP_ONLY } from './fields.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
@@ -105,6 +107,23 @@ export interface XyteOptions {
    */
   onRequest?: (report: RequestReport) => void;
   /**
+   * Keep responses for a while and answer repeats from them (and let identical requests in flight
+   * share one run): `{ ttl: 3600 }`, or per site `{ ttl: { 'wolt.com': 600, '*': 3600 } }`.
+   * Requests with a `session` or `sessionContext` are never cached. Off by default.
+   */
+  cache?: CacheOptions;
+  /**
+   * How fast, and how many at once, attempts go to each site: `{ 'yelp.co.uk': '2/s', '*': '10/s' }`
+   * (each site under `'*'` on its own), or `{ rate, per, concurrency }`. Per process. Off by default.
+   */
+  rateLimits?: RateLimits;
+  /**
+   * Your prices, per provider (its name, or a prefix: `oxylabs` covers `oxylabs-residential`):
+   * `{ oxylabs: { perGB: 6 }, 'zyte-api': { perRequest: 0.0013 } }`. Attempts and reports then
+   * carry `costUsd`. Plans and volume discounts differ, so there are no built-in prices.
+   */
+  rates?: Rates;
+  /**
    * When a plain HTTP request (GET, no body) is banned, retry it in a browser, which gets past
    * JavaScript challenges, and return the page's raw HTTP response as `httpResponseBody`, as
    * Zyte does when it picks a browser itself. Needs Playwright (or `browser.connect`). Default false.
@@ -131,6 +150,37 @@ export interface AttemptInfo extends AttemptOutcome {
   browser: boolean;
   /** The request's `tags` (as on Zyte, e.g. `{ spider: 'yelp' }`), to group attempts by in metrics. */
   tags?: ExtractRequest['tags'];
+  /** With `rates`: what this attempt cost, in USD. */
+  costUsd?: number;
+}
+
+/** What a provider costs you. All in USD; any combination. */
+export interface Rate {
+  /** Per GB on the wire (`transferBytes`): residential and datacenter proxies. */
+  perGB?: number;
+  /** Per attempt that got an answer (`ok` or `ban`): APIs that bill every request. */
+  perRequest?: number;
+  /** Per `ok` attempt only: APIs that bill successful requests. */
+  perSuccess?: number;
+}
+
+export type Rates = Readonly<Record<string, Rate>>;
+
+/** The rate for a provider: its exact name, else the longest key it starts with (`oxylabs` → `oxylabs-residential`). */
+export function rateFor(rates: Rates, provider: string): Rate | undefined {
+  if (rates[provider]) return rates[provider];
+  const key = Object.keys(rates)
+    .filter((k) => provider.startsWith(`${k}-`))
+    .sort((a, b) => b.length - a.length)[0];
+  return key ? rates[key] : undefined;
+}
+
+/** What one attempt cost at `rate`. Errors and pass-overs got no answer: nothing to bill. */
+export function attemptCost(rate: Rate | undefined, attempt: Pick<AttemptOutcome, 'result' | 'transferBytes'>): number {
+  if (!rate || (attempt.result !== 'ok' && attempt.result !== 'ban')) return 0;
+  return (
+    ((attempt.transferBytes ?? 0) / 1e9) * (rate.perGB ?? 0) + (rate.perRequest ?? 0) + (attempt.result === 'ok' ? (rate.perSuccess ?? 0) : 0)
+  );
 }
 
 /** Attempts and bytes of one provider within a request (or across reports, summed). */
@@ -144,6 +194,8 @@ export interface ProviderUsage {
   transferBytes: number;
   /** Time spent in its attempts, summed. */
   ms: number;
+  /** With `rates`: what its attempts cost, in USD. */
+  costUsd?: number;
 }
 
 /** What one `extract()` took and how it ended: `onRequest` / `onReport`. */
@@ -169,10 +221,17 @@ export interface RequestReport {
   escalated: boolean;
   /** Milliseconds waiting for a `concurrency` slot, then working. */
   queuedMs: number;
+  /**
+   * With `cache`: `hit` (answered from the cache: no attempts), `shared` (an identical request
+   * in flight answered it), or `miss` (fetched, and stored if cacheable).
+   */
+  cache?: 'hit' | 'shared' | 'miss';
   ms: number;
   attempts: AttemptInfo[];
   /** Totals over the attempts. */
   transferBytes: number;
+  /** With `rates`: what the request cost, in USD (0 for a cache hit). */
+  costUsd?: number;
   byProvider: Record<string, ProviderUsage>;
   warnings: string[];
 }
@@ -193,6 +252,7 @@ export function usageByProvider(attempts: readonly AttemptInfo[]): Record<string
     u[a.result]++;
     u.transferBytes += a.transferBytes ?? 0;
     u.ms += a.ms;
+    if (a.costUsd !== undefined) u.costUsd = (u.costUsd ?? 0) + a.costUsd;
   }
   return usage;
 }
@@ -218,6 +278,8 @@ export class Xyte {
   private readonly transport: Transport;
   private readonly sessions = new Map<string, CookieJar>();
   private readonly pool: SessionPool;
+  private readonly cache: ResponseCache | undefined;
+  private readonly pacer: Pacer | undefined;
   private readonly limit: <T>(task: () => Promise<T>) => Promise<T>;
 
   constructor(private readonly options: XyteOptions = {}) {
@@ -229,6 +291,8 @@ export class Xyte {
     this.transport = options.transport ?? defaultTransport;
     this.limit = limiter(options.concurrency ?? Number.POSITIVE_INFINITY);
     this.pool = new SessionPool(options.sessions);
+    this.cache = options.cache ? new ResponseCache(options.cache) : undefined;
+    this.pacer = options.rateLimits ? new Pacer(options.rateLimits) : undefined;
   }
 
   /**
@@ -236,9 +300,21 @@ export class Xyte {
    * with an `XyteError` carrying Zyte's status and problem type.
    */
   extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
+    const ttl = this.cache?.ttlFor(request) ?? 0;
+    if (!this.cache || ttl <= 0) return this.extractNow(request, options);
+    const queued = Date.now();
+    return this.cache
+      .through(request, ttl, () => this.extractNow(request, options))
+      .then(({ response, how }) => {
+        // A miss was reported by the run itself; a hit or a shared run gets its own report.
+        if (how !== 'miss') this.report(request, options, { requestId: randomSessionId(), attempts: [], warnings: [] }, { queued, started: queued, response, aborted: false, cache: how });
+        return response;
+      });
+  }
+
+  private extractNow(request: ExtractRequest, options: ExtractOptions): Promise<ExtractResponse> {
     const queued = Date.now();
     const trace: Trace = { requestId: randomSessionId(), attempts: [], warnings: [] };
-    const reporting = this.options.onRequest != null || options.onReport != null;
     return this.limit(async () => {
       const started = Date.now();
       let response: ExtractResponse | undefined;
@@ -251,13 +327,23 @@ export class Xyte {
         failure = error;
         throw error;
       } finally {
-        if (reporting) {
-          const report = buildReport(request, trace, { queued, started, response, failure, aborted: options.signal?.aborted === true });
-          this.options.onRequest?.(report);
-          options.onReport?.(report);
-        }
+        this.report(request, options, trace, {
+          queued,
+          started,
+          response,
+          failure,
+          aborted: options.signal?.aborted === true,
+          cache: this.cache && this.cache.ttlFor(request) > 0 ? 'miss' : undefined,
+        });
       }
     });
+  }
+
+  private report(request: ExtractRequest, options: ExtractOptions, trace: Trace, end: ReportEnd): void {
+    if (this.options.onRequest == null && options.onReport == null) return;
+    const report = buildReport(request, trace, { ...end, rated: this.options.rates != null });
+    this.options.onRequest?.(report);
+    options.onReport?.(report);
   }
 
   /** Closes the shared browser, if one was started. */
@@ -344,6 +430,8 @@ export class Xyte {
       // The attempt's verdict on the provider, reported in the finally below.
       let verdict: Omit<AttemptOutcome, 'ms'> = { result: 'aborted' };
       let resolved = false;
+      // The site's rateLimits slot, held for the attempt's network call.
+      let releaseSlot: (() => void) | undefined;
       try {
         const timeout = AbortSignal.timeout(this.timeoutMs);
         const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout;
@@ -403,6 +491,7 @@ export class Xyte {
             }
             const sent = this.apiRequest(request, { leaf, cannot, own: zyteOnly.own, mode, warn });
             // A scraping API takes the whole request (it renders, solves and proxies itself).
+            releaseSlot = await this.pacer?.acquire(request.url, signal);
             const answer = await endpoint.api(sent.request, { context, signal });
             if (sent.dropped.size > 0) answer.response.actions = mergeActionResults(request.actions ?? [], answer.response.actions, sent.dropped);
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
@@ -418,6 +507,7 @@ export class Xyte {
             }
             if (zyteOnly.none.length > 0 && mode === 'error') assertActionHandlers(request.actions, this.actionHandlers, context.url);
             const engineAttempt: EngineAttempt = { request, context, proxy: endpoint, jar, signal, actions: this.actionsFor(warn) };
+            releaseSlot = await this.pacer?.acquire(request.url, signal);
             result = inBrowser ? await this.browser.run(engineAttempt) : await runHttp(engineAttempt, this.transport);
           }
         } catch (error) {
@@ -464,6 +554,7 @@ export class Xyte {
         else if (pinnedSession) this.rememberSession(pinnedSession, jar);
         return this.finish(request, plan, result, jar);
       } finally {
+        releaseSlot?.();
         if (pooled) {
           this.pool.release(pooled, outcome === 'ban' ? 'ban' : 'ok');
           if (outcome === 'ban') failedSessions.add(pooled.id);
@@ -481,6 +572,7 @@ export class Xyte {
             browser: context.browser,
             ...(request.tags && { tags: request.tags }),
           };
+          if (this.options.rates) info.costUsd = attemptCost(rateFor(this.options.rates, info.provider), info);
           trace.attempts.push(info);
           this.options.onAttempt?.(info);
         }
@@ -745,11 +837,19 @@ function mergeActionResults(
   });
 }
 
-function buildReport(
-  request: ExtractRequest,
-  trace: Trace,
-  end: { queued: number; started: number; response?: ExtractResponse; failure?: unknown; aborted: boolean },
-): RequestReport {
+/** How a request ended, for its report. */
+interface ReportEnd {
+  queued: number;
+  started: number;
+  response?: ExtractResponse;
+  failure?: unknown;
+  aborted: boolean;
+  cache?: RequestReport['cache'];
+  /** `rates` are set: report costs. */
+  rated?: boolean;
+}
+
+function buildReport(request: ExtractRequest, trace: Trace, end: ReportEnd): RequestReport {
   const last = trace.attempts.at(-1);
   const host = (() => {
     try {
@@ -780,8 +880,10 @@ function buildReport(
     ms: Date.now() - end.started,
     attempts: trace.attempts,
     transferBytes: trace.attempts.reduce((sum, a) => sum + (a.transferBytes ?? 0), 0),
+    ...(end.rated && { costUsd: trace.attempts.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) }),
     byProvider: usageByProvider(trace.attempts),
     warnings: trace.warnings,
+    ...(end.cache && { cache: end.cache }),
   };
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { Xyte } from './client.ts';
-import { browserFromEnv, extractorsFromEnv, proxyFromEnv } from './env.ts';
+import { browserFromEnv, cacheFromEnv, extractorsFromEnv, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv } from './env.ts';
 import { XyteError } from './errors.ts';
 import { createHandler, serve } from './server.ts';
 import { decodeBody } from './util.ts';
@@ -34,6 +34,9 @@ Browser (environment):
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
   XYTE_BROWSER_FALLBACK=true                     retry a banned plain GET in the browser
   XYTE_LOG_REQUESTS=true                         one JSON line per request (attempts, providers, bytes)
+  XYTE_CACHE_TTL=3600 | wolt.com=600,*=3600      answer repeats from a cache (Redis with XYTE_REDIS_URL)
+  XYTE_RATE_LIMITS=yelp.co.uk=2/s,*=10/s         per-site pacing
+  XYTE_RATES=oxylabs=6/GB,zyte-api=0.0013/request   your prices: costUsd in reports and logs
   XYTE_WATCH=true                                check providers' usage APIs / status pages
   XYTE_REDIS_URL=redis://…                       share budgets, circuits and checks across instances
   XYTE_BROWSER_SETTLE=3                          seconds to wait for network idle after load
@@ -66,6 +69,9 @@ const xyte = new Xyte({
   timeout: num(env.XYTE_TIMEOUT),
   concurrency: num(env.XYTE_CONCURRENCY),
   browserFallback: env.XYTE_BROWSER_FALLBACK === 'true',
+  cache: cacheFromEnv(env),
+  rateLimits: rateLimitsFromEnv(env),
+  rates: ratesFromEnv(env),
   // One JSON line per request, for log pipelines (Cloud Logging → BigQuery, Datadog…).
   onRequest: env.XYTE_LOG_REQUESTS === 'true' ? (report) => console.log(JSON.stringify({ xyte: 'request', ...report })) : undefined,
   onRetry: ({ attempt, url, reason }) => console.error(`[xyte] retry ${attempt} ${url}: ${reason}`),

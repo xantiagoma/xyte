@@ -19,6 +19,9 @@ your own code), the server handler options, and the CLI.
 | `transport` | `fetch` (Bun) / undici (Node) | Low-level HTTP sender, for logging or tests. |
 | `onRetry` | none | `({ attempt, url, reason }) => void`, called before each retry. |
 | `onAttempt` | none | `({ provider, result, ms, statusCode, bytes, url, attempt, browser }) => void` after every attempt; `provider` is the one a combinator picked. See [routing](routing.md#watching-what-happens-onattempt). |
+| `cache` | off | `{ ttl, store?, cacheable?, key? }`: answer repeats from a cache. `ttl` in seconds, or per site (`{ 'wolt.com': 600, '*': 3600 }`, 0 = don't cache). Identical requests in flight share one run. Keeps answers below 400 plus 404/410; never caches requests with a `session` / `sessionContext`. `store`: Redis to share it. Reports and `X-Xyte-Cache` say `hit` / `shared` / `miss`. |
+| `rateLimits` | off | Per-site pacing: `{ 'yelp.co.uk': '2/s', 'doordash.com': { rate: 30, per: 60, concurrency: 2 }, '*': '10/s' }`. Under `'*'` each site has its own limit; a listed site shares one with its subdomains. Only real attempts wait (not cache hits or pass-overs). Per process. |
+| `rates` | none | Your prices per provider (name or prefix): `{ oxylabs: { perGB: 6 }, 'zyte-api': { perRequest: 0.0013 }, scrapingbee: { perSuccess: 0.0005 } }`. Attempts and reports carry `costUsd`; errors and pass-overs cost 0, a ban costs `perRequest` but not `perSuccess`. |
 | `onRequest` | none | `(report: RequestReport) => void` once per `extract()`, success or failure: every attempt, totals per provider, outcome. See [observability](observability.md). |
 | `actions` | `searchKeyword`: built-in heuristic | Handlers for Zyte's own actions: `searchKeyword` and `setLocation` by host, `interaction` by script id, `'*'` for everything else, `null` for explicitly none. They always run locally. See [actions](actions.md#zytes-own-searchkeyword-setlocation-interaction). |
 | `unsupportedActions` | `'warn'` | A Zyte-only action with no handler, on a local-browser provider (proxies, `direct()`, remote browsers): `warn` skips it (`notExecuted`) with a warning; `error` passes over to `zyteApi()` if a combinator has it, else a 400; `zyte` passes over to `zyteApi()` if a combinator has it (the built-in search too), else like `warn`. On an HTML-only API (Scrappey, ScrapingBot), which runs no actions at all: `error` is a 400, the others skip every action. See [actions](actions.md#where-they-run). |
@@ -43,6 +46,9 @@ default to `process.env`).
 | `XYTE_ALLOW_ANONYMOUS` | `false` | `true` to listen off-loopback without keys. |
 | `XYTE_ALLOW_PRIVATE_TARGETS` | `false` | `true` to let requests target localhost, private IPs, `*.internal`… |
 | `XYTE_RETRIES`, `XYTE_TIMEOUT`, `XYTE_CONCURRENCY` | `3`, `60`, unlimited | The `Xyte` options of the same name. |
+| `XYTE_CACHE_TTL` | off | `3600`, or `wolt.com=600,*=3600`: the `cache` option (in Redis with `XYTE_REDIS_URL`). |
+| `XYTE_RATE_LIMITS` | off | `yelp.co.uk=2/s,doordash.com=30/m,*=10/s`: the `rateLimits` option. |
+| `XYTE_RATES` | none | `oxylabs=6/GB,zyte-api=0.0013/request,scrapingbee=0.0005/success` (`+` combines units): the `rates` option. |
 | `XYTE_LOG_REQUESTS` | `false` | `true`: each request's report as one JSON line on stdout ([observability](observability.md#request-logs)). |
 
 ### Where requests exit

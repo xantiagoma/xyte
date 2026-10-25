@@ -11,9 +11,11 @@ import {
   zenrows,
   type ProxyProvider,
 } from './proxy.ts';
-import type { Extractor } from './client.ts';
+import type { Extractor, Rate, Rates } from './client.ts';
 import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOptions, type ProviderCheck } from './combinators.ts';
 import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
+import type { CacheOptions } from './cache.ts';
+import { parseLimit, type RateLimits } from './pace.ts';
 import { redisStoreFromUrl, type StateStore } from './state.ts';
 import type { BrowserOptions, BrowserTypeLike } from './engines/browser.ts';
 import { llmExtractors, openAICompatible } from './llm.ts';
@@ -182,7 +184,7 @@ function namedProviders(env: Env): NamedProviders {
     budgets.set(match[1]!.toLowerCase(), { max: Number(match[2]), per });
   }
   const [failures, cooldown] = list(env.XYTE_CIRCUIT_BREAKER).map(Number);
-  const store: StateStore | undefined = env.XYTE_REDIS_URL ? redisStoreFromUrl(env.XYTE_REDIS_URL) : undefined;
+  const store: StateStore | undefined = env.XYTE_REDIS_URL ? sharedStore(env.XYTE_REDIS_URL) : undefined;
   const watching = env.XYTE_WATCH === 'true';
   const every = env.XYTE_WATCH_EVERY ? Number(env.XYTE_WATCH_EVERY) : undefined;
   const cache = new Map<string, ProxyProvider>();
@@ -212,6 +214,71 @@ function namedProviders(env: Env): NamedProviders {
       return providers.length === 1 ? providers[0]! : rotate(providers);
     },
   };
+}
+
+/**
+ * The response cache from `XYTE_CACHE_TTL`: seconds for every site (`3600`), or per site
+ * (`wolt.com=600,*=3600`). Shared through `XYTE_REDIS_URL` when set. Unset: no cache.
+ */
+export function cacheFromEnv(env: Env = process.env): CacheOptions | undefined {
+  const value = env.XYTE_CACHE_TTL?.trim();
+  if (!value) return undefined;
+  let ttl: CacheOptions['ttl'];
+  if (/^\d+$/.test(value)) ttl = Number(value);
+  else {
+    const table: Record<string, number> = {};
+    for (const entry of list(value)) {
+      const [host, seconds] = entry.split('=').map((part) => part.trim());
+      if (!host || !seconds || !/^\d+$/.test(seconds)) throw new Error(`xyte: XYTE_CACHE_TTL entry "${entry}" is not host=seconds`);
+      table[host] = Number(seconds);
+    }
+    ttl = table;
+  }
+  return { ttl, ...(env.XYTE_REDIS_URL && { store: sharedStore(env.XYTE_REDIS_URL) }) };
+}
+
+/**
+ * Your prices from `XYTE_RATES`: `oxylabs=6/GB,zyte-api=0.0013/request,scrapingbee=0.0005/success`,
+ * `+` to combine units for one provider (`x=2/GB+0.001/request`).
+ */
+export function ratesFromEnv(env: Env = process.env): Rates | undefined {
+  if (!env.XYTE_RATES?.trim()) return undefined;
+  const rates: Record<string, Rate> = {};
+  const units = { gb: 'perGB', request: 'perRequest', success: 'perSuccess' } as const;
+  for (const entry of list(env.XYTE_RATES)) {
+    const at = entry.indexOf('=');
+    if (at <= 0) throw new Error(`xyte: XYTE_RATES entry "${entry}" is not provider=price/unit`);
+    const rate: Rate = {};
+    for (const part of entry.slice(at + 1).split('+')) {
+      const match = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(gb|request|success)\s*$/i.exec(part);
+      if (!match) throw new Error(`xyte: XYTE_RATES price "${part.trim()}" is not like 6/GB, 0.001/request or 0.001/success`);
+      rate[units[match[2]!.toLowerCase() as keyof typeof units]] = Number(match[1]);
+    }
+    rates[entry.slice(0, at).trim()] = rate;
+  }
+  return rates;
+}
+
+/** Per-site pacing from `XYTE_RATE_LIMITS`: `yelp.co.uk=2/s,doordash.com=30/m,*=10/s`. */
+export function rateLimitsFromEnv(env: Env = process.env): RateLimits | undefined {
+  if (!env.XYTE_RATE_LIMITS?.trim()) return undefined;
+  const limits: Record<string, string> = {};
+  for (const entry of list(env.XYTE_RATE_LIMITS)) {
+    const at = entry.indexOf('=');
+    if (at <= 0) throw new Error(`xyte: XYTE_RATE_LIMITS entry "${entry}" is not host=rate`);
+    const rate = entry.slice(at + 1).trim();
+    parseLimit(rate); // fail now on a bad value, not on the first request
+    limits[entry.slice(0, at).trim()] = rate;
+  }
+  return limits;
+}
+
+const stores = new Map<string, StateStore>();
+/** One Redis store per URL, shared by everything built from the environment. */
+function sharedStore(url: string): StateStore {
+  let store = stores.get(url);
+  if (!store) stores.set(url, (store = redisStoreFromUrl(url)));
+  return store;
 }
 
 /** The usage API or status page `XYTE_WATCH` uses for a provider name, if there is one. */

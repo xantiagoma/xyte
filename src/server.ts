@@ -141,7 +141,7 @@ const ascii = (value: string) => value.replace(/[^\x20-\x7e]/g, '?');
 /**
  * A request's report as response headers: `X-Xyte-Request-Id`, `X-Xyte-Attempts`
  * (`provider:result` per attempt, e.g. `oxylabs-residential:ban,zyte-api:ok`),
- * `X-Xyte-Transfer-Bytes`, and `X-Xyte-Warning`.
+ * `X-Xyte-Transfer-Bytes`, `X-Xyte-Cache` (`hit`, `shared`, `miss`), and `X-Xyte-Warning`.
  */
 function reportHeaders(report: RequestReport | undefined): Record<string, string> {
   if (!report) return {};
@@ -151,6 +151,7 @@ function reportHeaders(report: RequestReport | undefined): Record<string, string
     'x-xyte-transfer-bytes': String(report.transferBytes),
   };
   if (report.warnings.length > 0) headers['x-xyte-warning'] = ascii(report.warnings.join('; '));
+  if (report.cache) headers['x-xyte-cache'] = report.cache;
   return headers;
 }
 

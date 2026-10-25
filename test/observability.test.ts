@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
-import { createHandler, custom, rotate, route, Xyte, type RequestReport } from '../src/index.ts';
+import { createHandler, custom, rateFor, ratesFromEnv, rotate, route, Xyte, type RequestReport } from '../src/index.ts';
 import { startProxy, startTarget } from './fixtures.ts';
 
 setDefaultTimeout(30_000);
@@ -75,6 +75,41 @@ describe('RequestReport', () => {
       await xyte.close();
     }
     expect(reports[0]).toMatchObject({ outcome: 'ok', browser: true, escalated: true });
+  });
+});
+
+describe('costs (rates)', () => {
+  test('per attempt and per request: GB on the wire, per answer, per success; errors and failures cost nothing', async () => {
+    const reports: RequestReport[] = [];
+    const xyte = new Xyte({
+      retries: 1,
+      proxy: rotate([broken(), working()]),
+      rates: { working: { perGB: 1000, perRequest: 0.01, perSuccess: 0.1 }, broken: { perRequest: 5 } },
+      onRequest: (r) => reports.push(r),
+    });
+    await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true });
+    const [failed, ok] = reports[0]!.attempts;
+    expect(failed!.costUsd).toBe(0); // a network error got no answer
+    expect(ok!.costUsd).toBeCloseTo((ok!.transferBytes! / 1e9) * 1000 + 0.01 + 0.1, 10);
+    expect(reports[0]!.costUsd).toBeCloseTo(ok!.costUsd!, 10);
+    expect(reports[0]!.byProvider.working!.costUsd).toBeCloseTo(ok!.costUsd!, 10);
+
+    const banned = new Xyte({ retries: 0, proxy: working(), rates: { working: { perRequest: 0.01, perSuccess: 0.1 } }, onRequest: (r) => reports.push(r) });
+    await banned.extract({ url: `${target.base}/forbidden`, httpResponseBody: true }).catch(() => {});
+    expect(reports[1]!.costUsd).toBeCloseTo(0.01, 10); // a ban is an answer, not a success
+  });
+
+  test('a rate key matches the provider or its prefix; XYTE_RATES', () => {
+    const rates = { oxylabs: { perGB: 6 }, 'oxylabs-datacenter': { perGB: 0.6 } };
+    expect(rateFor(rates, 'oxylabs-residential')).toEqual({ perGB: 6 });
+    expect(rateFor(rates, 'oxylabs-datacenter')).toEqual({ perGB: 0.6 });
+    expect(rateFor(rates, 'zyte-api')).toBeUndefined();
+    expect(ratesFromEnv({ XYTE_RATES: 'oxylabs=6/GB, zyte-api=0.0013/request, x=2/GB+0.001/success' })).toEqual({
+      oxylabs: { perGB: 6 },
+      'zyte-api': { perRequest: 0.0013 },
+      x: { perGB: 2, perSuccess: 0.001 },
+    });
+    expect(() => ratesFromEnv({ XYTE_RATES: 'oxylabs=cheap' })).toThrow(/XYTE_RATES/);
   });
 });
 

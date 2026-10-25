@@ -62,6 +62,8 @@ A report for a DoorDash page the proxy got banned on, then Zyte served (illustra
 | `escalated` | `browserFallback` moved it from HTTP to a browser |
 | `queuedMs` / `ms` | waiting for a `concurrency` slot, then working |
 | `warnings` | e.g. a `geolocation` the exit couldn't apply |
+| `costUsd` | with [`rates`](configuration.md): what the request cost (also per attempt and in `byProvider`) |
+| `cache` | with [`cache`](configuration.md): `hit` (no attempts), `shared` (an identical request in flight answered it) or `miss` |
 
 `usageByProvider(attempts)` sums any list of attempts the same way, e.g. across a batch.
 
@@ -153,8 +155,9 @@ FROM xyte.requests, UNNEST(attempts) AS attempt
 GROUP BY attempt.provider;
 ```
 
-Prices differ by plan and volume, so xyte reports usage (attempts, bytes) and leaves the rates to
-you.
+Prices differ by plan and volume, so there are no built-in prices: pass yours as `rates`
+(`XYTE_RATES`) and every attempt and report carries `costUsd`, computed from its bytes, answers and
+successes. `scripts/bench.ts` then adds a `$ / 1k pages` column.
 
 ## Benchmarks
 

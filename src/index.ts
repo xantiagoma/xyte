@@ -4,7 +4,11 @@ export {
   Xyte,
   type AttemptInfo,
   type BanCheck,
+  attemptCost,
+  rateFor,
   type ProviderUsage,
+  type Rate,
+  type Rates,
   type RequestReport,
   usageByProvider,
   type ExtractOptions,
@@ -12,7 +16,9 @@ export {
   type XyteOptions,
 } from './client.ts';
 export type { BrowserHookInfo, BrowserOptions, BrowserTypeLike, RemoteBrowser } from './engines/browser.ts';
-export { browserFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv } from './env.ts';
+export { browserFromEnv, cacheFromEnv, extractorsFromEnv, PROVIDER_NAMES, proxyFromEnv, rateLimitsFromEnv, ratesFromEnv } from './env.ts';
+export { parseLimit, type RateLimits, type SiteLimit } from './pace.ts';
+export { requestKey, type CacheOptions } from './cache.ts';
 export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
 export {
   adaptive,

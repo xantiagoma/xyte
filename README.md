@@ -169,6 +169,15 @@ With `XYTE_REDIS_URL` (or a `store`), budgets, open circuits and checks are shar
 instance. `browserFallback: true` retries a banned plain GET in a browser (JavaScript challenges),
 returning the raw response as Zyte does.
 
+### Spending less
+
+- **`cache: { ttl: 3600 }`** answers repeats from a cache (per site TTLs, Redis to share it), and
+  identical requests in flight share one run.
+- **`rateLimits: { 'yelp.co.uk': '2/s', '*': '10/s' }`** paces attempts per site: hammering one
+  site is the fastest way to get banned.
+- **`rates: { oxylabs: { perGB: 6 }, 'zyte-api': { perRequest: 0.0013 } }`**, your prices, put
+  `costUsd` on every attempt and report.
+
 ### Seeing what it did
 
 Every request can tell you what it took, without changing the Zyte response:

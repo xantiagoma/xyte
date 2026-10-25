@@ -11,7 +11,7 @@
 //                "providers": ["…"] (optional, overrides --providers for this case) }]
 // Provider names are XYTE_PROVIDER names, credentials from the environment (.env); "direct" is no proxy.
 import { parseArgs } from 'node:util';
-import { browserFromEnv, decodeBody, proxyFromEnv, Xyte, XyteError, type ExtractRequest } from '../src/index.ts';
+import { browserFromEnv, decodeBody, proxyFromEnv, ratesFromEnv, Xyte, XyteError, type ExtractRequest } from '../src/index.ts';
 
 interface Case {
   name: string;
@@ -30,6 +30,7 @@ interface Run {
   /** Attempts the request took (retries included) and bytes they moved on the wire. */
   attempts: number;
   transferBytes: number;
+  costUsd: number;
 }
 
 const { values, positionals } = parseArgs({
@@ -48,7 +49,9 @@ const repeat = Number(values.repeat);
 const defaultProviders = values.providers!.split(',').map((p) => p.trim());
 
 const clients = new Map<string, Xyte>();
-const current = new Map<string, { attempts: number; transferBytes: number }>();
+const current = new Map<string, { attempts: number; transferBytes: number; costUsd: number }>();
+// XYTE_RATES (your prices) adds a $ / 1k pages column.
+const rates = ratesFromEnv(process.env);
 const client = (provider: string): Xyte => {
   let xyte = clients.get(provider);
   if (!xyte) {
@@ -57,12 +60,14 @@ const client = (provider: string): Xyte => {
       proxy: proxyFromEnv(env),
       browser: browserFromEnv(env),
       onWarning: () => {},
+      rates,
       // Runs per provider are sequential, so the attempts land in the current run.
       onAttempt: (attempt) => {
         const usage = current.get(provider);
         if (!usage) return;
         usage.attempts++;
         usage.transferBytes += attempt.transferBytes ?? 0;
+        usage.costUsd += attempt.costUsd ?? 0;
       },
     });
     clients.set(provider, xyte);
@@ -72,7 +77,7 @@ const client = (provider: string): Xyte => {
 
 async function runOnce(c: Case, provider: string): Promise<Run> {
   const started = performance.now();
-  const usage = { attempts: 0, transferBytes: 0 };
+  const usage = { attempts: 0, transferBytes: 0, costUsd: 0 };
   current.set(provider, usage);
   try {
     const res = await client(provider).extract(c.request);
@@ -132,6 +137,7 @@ const rows = cases.flatMap((c) =>
       attempts === undefined ? '–' : Math.round(attempts),
       // API providers (zyteApi) bill per request and move no bytes we can count.
       megabytes === undefined || megabytes === 0 ? '–' : megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes),
+      ...(rates ? [perThousand(mine.reduce((sum, r) => sum + r.costUsd, 0))?.toFixed(2) ?? '–'] : []),
       failures,
     ];
     return `| ${cells.join(' | ')} |`;
@@ -139,8 +145,8 @@ const rows = cases.flatMap((c) =>
 );
 console.log(
   [
-    '| Case | Provider | Real page | Median ms | Attempts / 1k pages | MB / 1k pages | Failures |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    `| Case | Provider | Real page | Median ms | Attempts / 1k pages | MB / 1k pages |${rates ? ' $ / 1k pages |' : ''} Failures |`,
+    `| --- | --- | --- | --- | --- | --- |${rates ? ' --- |' : ''} --- |`,
     ...rows,
   ].join('\n'),
 );
