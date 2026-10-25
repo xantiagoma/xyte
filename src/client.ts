@@ -198,6 +198,14 @@ export interface ProviderUsage {
   costUsd?: number;
 }
 
+/** One request of `extractMany()`: its position, and its response or the error it failed with. */
+export interface BatchResult {
+  index: number;
+  request: ExtractRequest;
+  response?: ExtractResponse;
+  error?: unknown;
+}
+
 /** What one `extract()` took and how it ended: `onRequest` / `onReport`. */
 export interface RequestReport {
   requestId: string;
@@ -344,6 +352,57 @@ export class Xyte {
     const report = buildReport(request, trace, { ...end, rated: this.options.rates != null });
     this.options.onRequest?.(report);
     options.onReport?.(report);
+  }
+
+  /**
+   * Many requests, as they finish: `for await (const r of xyte.extractMany(urls.map(…)))`. Takes
+   * any iterable or async iterable (a list, a file read line by line, a queue), keeps at most
+   * `concurrency` in flight (default: the client's, else 16), and yields `{ index, request,
+   * response }` or `{ index, request, error }`: one failure doesn't stop the batch. The client's
+   * `concurrency`, `rateLimits`, cache and reports apply to each request as usual.
+   */
+  async *extractMany(
+    requests: Iterable<ExtractRequest> | AsyncIterable<ExtractRequest>,
+    options: { concurrency?: number; signal?: AbortSignal } = {},
+  ): AsyncGenerator<BatchResult> {
+    const window = Math.max(1, options.concurrency ?? (Number.isFinite(this.options.concurrency ?? Number.NaN) ? this.options.concurrency! : 16));
+    const source = Symbol.asyncIterator in requests ? requests[Symbol.asyncIterator]() : (requests as Iterable<ExtractRequest>)[Symbol.iterator]();
+    const running = new Map<number, Promise<BatchResult>>();
+    let index = 0;
+    let exhausted = false;
+    const fill = async () => {
+      while (!exhausted && running.size < window) {
+        options.signal?.throwIfAborted();
+        const next = await source.next();
+        if (next.done) {
+          exhausted = true;
+          break;
+        }
+        const i = index++;
+        const request = next.value;
+        running.set(
+          i,
+          this.extract(request, { signal: options.signal }).then(
+            (response): BatchResult => ({ index: i, request, response }),
+            (error: unknown): BatchResult => ({ index: i, request, error }),
+          ),
+        );
+      }
+    };
+    await fill();
+    while (running.size > 0) {
+      const done = await Promise.race(running.values());
+      running.delete(done.index);
+      yield done;
+      await fill();
+    }
+  }
+
+  /** `extractMany()` collected, in the order of `requests`. */
+  async extractAll(requests: Iterable<ExtractRequest> | AsyncIterable<ExtractRequest>, options: { concurrency?: number; signal?: AbortSignal } = {}): Promise<BatchResult[]> {
+    const results: BatchResult[] = [];
+    for await (const result of this.extractMany(requests, options)) results[result.index] = result;
+    return results;
   }
 
   /** Closes the shared browser, if one was started. */

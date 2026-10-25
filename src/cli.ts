@@ -13,6 +13,8 @@ Usage:
   xyte serve [--port 8011] [--host 127.0.0.1]
   xyte extract <url> [--browser] [--country US] [--raw]
   xyte extract --json '{"url": "…", "httpResponseBody": true}'
+  xyte batch <requests.jsonl | urls.txt | -> [--concurrency 16] [--browser] [--country US]
+      one request per line (Zyte JSON or a URL), one JSON result per line as they finish
   xyte doctor [--providers oxylabs,zyte-api] [--country US] [--url https://ipinfo.io/json]
       checks each configured provider: credentials, a real request (exit IP and country), quota
 
@@ -58,6 +60,7 @@ const { values, positionals } = parseArgs({
     json: { type: 'string' },
     raw: { type: 'boolean' },
     providers: { type: 'string' },
+    concurrency: { type: 'string' },
     url: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -136,6 +139,33 @@ if (command === 'serve') {
     process.exitCode = 1;
   } finally {
     await xyte.close();
+  }
+} else if (command === 'batch') {
+  // One request per line (Zyte JSON, or just a URL); one JSON result per line, as they finish.
+  const xyte = makeXyte();
+  const { createReadStream } = await import('node:fs');
+  const { createInterface } = await import('node:readline');
+  const input = !target || target === '-' ? process.stdin : createReadStream(target);
+  const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
+  async function* requests() {
+    for await (const raw of lines) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      yield line.startsWith('{')
+        ? JSON.parse(line)
+        : { url: line, ...(values.browser ? { browserHtml: true } : { httpResponseBody: true }), ...(values.country ? { geolocation: values.country } : {}) };
+    }
+  }
+  let failed = 0;
+  for await (const result of xyte.extractMany(requests(), { concurrency: num(values.concurrency) })) {
+    const error = result.error instanceof XyteError ? result.error.toJSON() : result.error ? { title: String(result.error) } : undefined;
+    if (error) failed++;
+    console.log(JSON.stringify({ index: result.index, url: result.request.url, ...(error ? { error } : { response: result.response }) }));
+  }
+  await xyte.close();
+  if (failed > 0) {
+    console.error(`[xyte] ${failed} request(s) failed`);
+    process.exitCode = 1;
   }
 } else if (command === 'doctor') {
   const results = await doctor({

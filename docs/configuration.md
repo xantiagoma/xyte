@@ -118,8 +118,13 @@ Responses are Zyte's. What a request took travels in headers so the body stays i
 xyte serve [--port 8011] [--host 127.0.0.1]
 xyte extract <url> [--browser] [--country US] [--raw]
 xyte extract --json '{"url": "…", "httpResponseBody": true}'
+xyte batch <requests.jsonl | urls.txt | -> [--concurrency 16] [--browser] [--country US]
 xyte doctor [--providers oxylabs,zyte-api] [--country US] [--url https://ipinfo.io/json]
 ```
+
+`batch` reads one request per line (a Zyte request as JSON, or just a URL; `#` comments) and prints
+one JSON line per result as they finish: `{ index, url, response }` or `{ index, url, error }`.
+It exits with 1 if any failed.
 
 `doctor` checks `direct` and every provider the environment configures (or `--providers`): that
 its credentials are there, that a request through it works and where it exits (IP, country, ISP,

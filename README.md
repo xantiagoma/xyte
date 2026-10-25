@@ -61,6 +61,10 @@ const rendered = await xyte.extract({
 await xyte.close(); // closes the shared browser
 ```
 
+Many at once: `for await (const r of xyte.extractMany(requests)) …` yields results as they finish
+(`{ index, response }` or `{ index, error }`), at most `concurrency` in flight, from any list or
+async source; `extractAll()` collects them in order. From a shell: `xyte batch urls.txt > out.jsonl`.
+
 Requests and responses are typed from Zyte's OpenAPI spec. All options (`retries`, `timeout`,
 `concurrency`, `isBan`, `onRetry`…) are in [configuration](docs/configuration.md).
 

@@ -5,6 +5,7 @@ export {
   type AttemptInfo,
   type BanCheck,
   attemptCost,
+  type BatchResult,
   rateFor,
   type ProviderUsage,
   type Rate,
