@@ -22,11 +22,13 @@ export type Problem = ZyteSchemas['Problem'];
  */
 export type ExtractRequest = Omit<
   ZyteSchemas['ExtractRequest'],
-  'geolocation' | 'networkCapture' | 'echoData'
+  'geolocation' | 'networkCapture' | 'echoData' | 'tags'
 > & {
   geolocation?: CountryCode | Lowercase<CountryCode>;
   networkCapture?: NetworkCaptureFilter[];
   echoData?: unknown;
+  /** Labels for the request. "Values must be strings or `null`" (Zyte's docs; the schema says strings only). */
+  tags?: Record<string, string | null>;
 };
 
 /** The 200 body of `POST /v1/extract`. */

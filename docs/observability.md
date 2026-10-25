@@ -54,6 +54,7 @@ A report for a DoorDash page the proxy got banned on, then Zyte served (illustra
 
 | Field | |
 | --- | --- |
+| `tags`, `jobId` | the request's own, as sent: Zyte's `tags` (`{ "spider": "yelp" }`) label requests for its Stats API; here they label the report and every attempt, so analytics can group by them |
 | `outcome` | `ok` (a response came back, the target's own 4xx/5xx included), `error` (an `XyteError`: `error` has its status and type), `aborted` (cancelled) |
 | `provider` | the provider that served the response: the leaf a combinator picked, not `rotate(…)` |
 | `attempts[]` | every attempt in order: `provider`, `path` (each combinator's choice, outermost first), `result` (`ok`, `ban`, `error`, `aborted`: no verdict on the provider, e.g. a [pass-over](actions.md#pass-overs), whose `reason` says why), `reason`, `statusCode`, `ms`, `bytes` (the page), `transferBytes` (the wire), `browser` |
@@ -70,8 +71,8 @@ The same objects as `report.attempts`, delivered as each attempt ends: for count
 histograms that should move while a slow request is still retrying.
 
 ```ts
-onAttempt: ({ provider, result, ms, transferBytes, url }) => {
-  metrics.increment('xyte.attempt', { provider, result, host: new URL(url).hostname });
+onAttempt: ({ provider, result, ms, transferBytes, url, tags }) => {
+  metrics.increment('xyte.attempt', { provider, result, host: new URL(url).hostname, spider: tags?.spider ?? 'none' });
   metrics.histogram('xyte.attempt.ms', ms, { provider });
   metrics.increment('xyte.attempt.bytes', transferBytes ?? 0, { provider });
 },
@@ -129,6 +130,17 @@ FROM xyte.requests, UNNEST(attempts) AS attempt
 WHERE timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
 GROUP BY host, attempt.provider
 ORDER BY host, success_rate DESC;
+```
+
+```sql
+-- The same, per spider: label requests with Zyte's `tags` ({"spider": "yelp"}) when you send them.
+SELECT
+  JSON_VALUE(tags.spider) AS spider,
+  attempt.provider,
+  COUNTIF(attempt.result = 'ok') / COUNT(*) AS success_rate,
+  SUM(attempt.transferBytes) / 1e6 AS mb
+FROM xyte.requests, UNNEST(attempts) AS attempt
+GROUP BY spider, attempt.provider;
 ```
 
 ```sql

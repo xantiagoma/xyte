@@ -10,7 +10,7 @@ an entry not listed here.
 
 | Area | Supported or partial |
 | --- | --- |
-| Request fields | 30/56 (+25 pluggable) |
+| Request fields | 31/56 (+25 pluggable) |
 | Response fields | 13/25 (+12 pluggable) |
 | Browser actions | 18/20 |
 
@@ -20,7 +20,7 @@ an entry not listed here.
 | --- | --- | --- |
 | `url` | ✅ supported | IP-address hosts are accepted too (Zyte rejects them). |
 | `requestHeaders` | ✅ supported | `referer`, on HTTP and browser requests. |
-| `tags` | ⚪ accepted | Ignored: there is no Stats API. |
+| `tags` | ✅ supported | No Stats API to send them to: they label the `onRequest` / `onAttempt` reports and request logs instead, for your own analytics. |
 | `ipType` | 🟡 partial | Reaches the provider as `ctx.ipType`; `byIpType()` routes on it. Presets ignore it. |
 | `httpRequestMethod` | ✅ supported |  |
 | `httpRequestBody` | ✅ supported |  |

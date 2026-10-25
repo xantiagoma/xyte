@@ -49,6 +49,16 @@ describe('RequestReport', () => {
     expect(reports[1]).toMatchObject({ outcome: 'error', error: { status: 422 }, attempts: [] });
   });
 
+  test("the request's tags and jobId label the report and every attempt", async () => {
+    const reports: RequestReport[] = [];
+    const xyte = new Xyte({ proxy: working(), onRequest: (r) => reports.push(r) });
+    const tags = { spider: 'yelp', env: 'prod', shard: null };
+    const res = await xyte.extract({ url: `${target.base}/html`, httpResponseBody: true, tags, jobId: 'job-42' });
+    expect(reports[0]).toMatchObject({ tags, jobId: 'job-42' });
+    expect(reports[0]!.attempts.every((a) => a.tags === tags)).toBe(true);
+    expect(res).not.toHaveProperty('tags'); // the response stays Zyte's
+  });
+
   test('time in the concurrency queue is reported apart', async () => {
     const reports: RequestReport[] = [];
     const xyte = new Xyte({ concurrency: 1, proxy: working(), onRequest: (r) => reports.push(r) });

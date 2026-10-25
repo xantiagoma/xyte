@@ -128,6 +128,8 @@ export interface AttemptInfo extends AttemptOutcome {
   provider: string;
   /** Rendered in a browser (requested, or `browserFallback`). */
   browser: boolean;
+  /** The request's `tags` (as on Zyte, e.g. `{ spider: 'yelp' }`), to group attempts by in metrics. */
+  tags?: ExtractRequest['tags'];
 }
 
 /** Attempts and bytes of one provider within a request (or across reports, summed). */
@@ -148,6 +150,10 @@ export interface RequestReport {
   requestId: string;
   url: string;
   host: string;
+  /** The request's `tags` (Zyte's way to label requests for its stats), for grouping reports. */
+  tags?: ExtractRequest['tags'];
+  /** The request's `jobId`, if it had one. */
+  jobId?: string;
   /** `ok`: a response came back (the target's own 4xx/5xx included); `error`: an `XyteError`; `aborted`: cancelled. */
   outcome: 'ok' | 'error' | 'aborted';
   /** The target's status, when a response came back. */
@@ -481,6 +487,7 @@ export class Xyte {
             provider: context.path?.at(-1) ?? this.proxy.name,
             path: context.path ?? [],
             browser: context.browser,
+            ...(request.tags && { tags: request.tags }),
           };
           trace.attempts.push(info);
           this.options.onAttempt?.(info);
@@ -769,6 +776,8 @@ function buildReport(
     requestId: trace.requestId,
     url: request.url,
     host,
+    ...(request.tags && { tags: request.tags }),
+    ...(request.jobId != null && { jobId: request.jobId }),
     outcome: end.response ? 'ok' : end.aborted ? 'aborted' : 'error',
     statusCode: end.response?.statusCode,
     error: end.aborted ? undefined : error,

@@ -19,7 +19,7 @@ const EXTRACTOR_OPTIONS = 'Passed to your extractor as `options`; `extractFrom` 
 export const REQUEST: Record<string, Entry> = {
   url: { status: 'supported', note: 'IP-address hosts are accepted too (Zyte rejects them).' },
   requestHeaders: { status: 'supported', note: '`referer`, on HTTP and browser requests.' },
-  tags: { status: 'accepted', note: 'Ignored: there is no Stats API.' },
+  tags: { status: 'supported', note: 'No Stats API to send them to: they label the `onRequest` / `onAttempt` reports and request logs instead, for your own analytics.' },
   ipType: { status: 'partial', note: 'Reaches the provider as `ctx.ipType`; `byIpType()` routes on it. Presets ignore it.' },
   httpRequestMethod: { status: 'supported' },
   httpRequestBody: { status: 'supported' },
