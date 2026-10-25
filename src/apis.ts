@@ -15,6 +15,13 @@ class ApiError extends Error {
 
 const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
 
+/** What a page-HTML API can't do: run actions, take screenshots, capture network responses. */
+const htmlOnly = (request: ExtractRequest): string[] => [
+  ...(request.actions?.length ? ['actions'] : []),
+  ...(request.screenshot ? ['screenshot'] : []),
+  ...(request.networkCapture?.length ? ['networkCapture'] : []),
+];
+
 /** Fills the output fields the request asked for from a page's HTML. */
 function htmlResult(request: ExtractRequest, page: { url: string; statusCode: number; html: string; headers?: ApiResult['headers'] }): ApiResult {
   const response: ExtractResponse = { url: page.url, statusCode: page.statusCode };
@@ -89,6 +96,7 @@ export function scrappey(options: { apiKey: string; fetch?: typeof fetch; params
   return {
     name: 'scrappey',
     resolve: () => ({
+      unsupported: htmlOnly,
       async api(request, { context, signal }) {
         const method = request.httpRequestMethod ?? 'GET';
         const body: Record<string, unknown> = {
@@ -154,6 +162,7 @@ export function scrapingBot(options: {
   return {
     name: 'scrapingbot',
     resolve: () => ({
+      unsupported: htmlOnly,
       async api(request, { context, signal }) {
         const botOptions: Record<string, unknown> = { ...options.options };
         if (context.browser) botOptions.useChrome ??= true;

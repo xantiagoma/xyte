@@ -146,6 +146,12 @@ On each attempt, every one of these actions is one of three kinds, and where it 
 | `'error'` | "run it or fail": passed over for Zyte if a combinator has it, else a 400 naming the action. The outcome doesn't depend on which provider an attempt lands on |
 | `'zyte'` | passed over for Zyte if a combinator has it (built-in actions too), else like `'warn'` |
 
+One exception for `zyteApi()` alone: an **`interaction` with your handler** isn't sent to Zyte at
+all, since the script exists only in your code and Zyte would answer "script not found" and stop
+every action after it. It's left out, reported `notExecuted` in its place with the reason, and the
+rest of the actions run on Zyte (with `unsupportedActions: 'error'`, a 400 instead). To run your
+own scripts behind Zyte's IPs, use `zyteProxy()`: Zyte's proxy mode with xyte's browser.
+
 A pass-over makes no request, waits no backoff and uses up no retry; it only happens inside a
 combinator (with a single provider there's nowhere to go), and after three in a row with no
 suitable provider the attempt runs anyway. When Zyte runs an action and bans every try, the answer

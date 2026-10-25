@@ -162,6 +162,13 @@ detection, extractors and `rotate()` work as with proxies, so the two kinds can 
 | `scrappey({ apiKey })` | `scrappey` · `SCRAPPEY_API_KEY` | `requestType` browser/request from the request, `proxyCountry`, cookies, headers, POST bodies | 🟡 response fields |
 | `scrapingBot({ username, apiKey, options? })` | `scrapingbot` · `SCRAPINGBOT_USERNAME/API_KEY` | Raw HTML API; the target status isn't reported (assumed 200) | 🟡 option names |
 
+Scrappey and ScrapingBot return a page's HTML: they don't run actions, take screenshots or capture
+network responses, and their endpoints say so (`ApiEndpoint.unsupported`). Inside a combinator, a
+request that needs those passes them over for a provider that can (no request, no retry used up).
+Alone, actions are skipped (`notExecuted` with the reason, plus a warning) or rejected with
+`unsupportedActions: 'error'`, and a `screenshot` or `networkCapture` is a 400. An `ApiEndpoint`
+you write can declare the same: `unsupported: (request) => request.screenshot ? ['screenshot'] : []`.
+
 `zyteApi()` vs `zyteProxy()`: the API adapter has full fidelity, AI extraction included. Proxy mode
 only carries HTTP and browser HTML, but goes through xyte's own engines and extractors.
 

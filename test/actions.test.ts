@@ -191,6 +191,34 @@ describe('with Zyte among the providers', () => {
 
   const search = [{ action: 'searchKeyword' as const, keyword: 'pizza' }];
 
+  test('zyteApi() alone + your interaction script: not sent (Zyte would stop at "script not found"); the rest runs on Zyte', async () => {
+    const zyte = zyteStub();
+    const { xyte, warnings } = client({ proxy: zyte.provider, actions: { interaction: { 'my-script': async () => {} } } });
+    const actions = [
+      { action: 'interaction' as const, id: 'my-script' },
+      { action: 'scrollBottom' as const },
+    ];
+    const res = await xyte.extract({ url: `${target.base}/search-page`, browserHtml: true, actions });
+    expect(zyte.received).toEqual([[{ action: 'scrollBottom' }]]);
+    expect(res.actions!.map((a) => [a.action, a.status])).toEqual([
+      ['interaction', 'notExecuted'],
+      ['scrollBottom', 'success'],
+    ]);
+    expect(res.actions![0]!.error).toContain('runs only in a local browser');
+    expect(warnings).toEqual([expect.stringContaining('zyteProxy()')]);
+  });
+
+  test("…and with unsupportedActions: 'error', a 400 before calling Zyte", async () => {
+    const zyte = zyteStub();
+    const { xyte } = client({ proxy: zyte.provider, unsupportedActions: 'error', actions: { interaction: { 'my-script': async () => {} } } });
+    const error = await xyte
+      .extract({ url: `${target.base}/search-page`, browserHtml: true, actions: [{ action: 'interaction', id: 'my-script' }] })
+      .catch((e) => e);
+    expect(error).toMatchObject({ status: 400 });
+    expect(error.detail).toContain('zyteProxy()');
+    expect(zyte.received).toEqual([]);
+  });
+
   test('the built-in search heuristic is a fallback: it never passes Zyte over', async () => {
     const zyte = zyteStub();
     const { xyte } = client({ proxy: rotate([zyte.provider, local()]) });

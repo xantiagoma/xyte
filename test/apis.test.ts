@@ -143,6 +143,48 @@ describe('scrappey', () => {
   });
 });
 
+describe('what an HTML-only API (Scrappey, ScrapingBot) can\'t do', () => {
+  const ok = () => Response.json({ data: 'success', solution: { response: '<p>page</p>', statusCode: 200 } });
+  const click = [{ action: 'click' as const, selector: { type: 'css' as const, value: '#more' } }];
+
+  test('alone, actions: the page comes back with every action notExecuted and why, plus a warning', async () => {
+    const warnings: string[] = [];
+    const { fetch } = stub(ok);
+    const res = await new Xyte({ proxy: scrappey({ apiKey: 'K', fetch }), onWarning: (m) => warnings.push(m) }).extract({
+      url: 'https://x.example/',
+      browserHtml: true,
+      actions: click,
+    });
+    expect(res.browserHtml).toBe('<p>page</p>');
+    expect(res.actions).toEqual([{ action: 'click', elapsedTime: 0, status: 'notExecuted', error: "scrappey doesn't run actions: skipped" }]);
+    expect(warnings).toEqual([expect.stringContaining("scrappey doesn't run them")]);
+  });
+
+  test("alone, actions with unsupportedActions: 'error', or a screenshot: a 400 and no call", async () => {
+    const { fetch, calls } = stub(ok);
+    const strict = new Xyte({ proxy: scrappey({ apiKey: 'K', fetch }), unsupportedActions: 'error' });
+    expect(await strict.extract({ url: 'https://x.example/', browserHtml: true, actions: click }).catch((e) => e)).toMatchObject({ status: 400 });
+    const shot = await new Xyte({ proxy: scrapingBot({ username: 'u', apiKey: 'k', fetch }) })
+      .extract({ url: 'https://x.example/', screenshot: true })
+      .catch((e) => e);
+    expect(shot).toMatchObject({ status: 400 });
+    expect(shot.detail).toContain("scrapingbot can't return screenshot");
+    expect(calls).toHaveLength(0);
+  });
+
+  test('in a combinator: passed over for a provider that can', async () => {
+    const bee = stub(ok);
+    const zyte = stub(() => Response.json({ url: 'https://x.example/', statusCode: 200, browserHtml: 'clicked', actions: [{ action: 'click', status: 'success' }] }));
+    const res = await new Xyte({ proxy: rotate([scrappey({ apiKey: 'K', fetch: bee.fetch }), zyteApi({ apiKey: 'Z', fetch: zyte.fetch })]) }).extract({
+      url: 'https://x.example/',
+      browserHtml: true,
+      actions: click,
+    });
+    expect(res.browserHtml).toBe('clicked');
+    expect(bee.calls).toHaveLength(0);
+  });
+});
+
 describe('scrapingBot', () => {
   test('basic auth, url + options, raw HTML back', async () => {
     const { fetch, calls } = stub(() => new Response('<p>bot</p>'));

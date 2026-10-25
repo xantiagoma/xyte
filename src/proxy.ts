@@ -81,6 +81,13 @@ export interface ProxyEndpoint {
  */
 export interface ApiEndpoint {
   api: (request: ExtractRequest, info: { context: ProxyContext; signal: AbortSignal }) => Promise<ApiResult>;
+  /**
+   * What `request` asks for that this service can't do (e.g. `['actions', 'screenshot']` for an
+   * API that only returns a page's HTML). Inside a combinator the attempt is passed over for a
+   * provider that can; alone, actions follow `unsupportedActions` and missing outputs are a 400.
+   * Omitted: it can do everything.
+   */
+  unsupported?: (request: ExtractRequest) => readonly string[];
 }
 
 export interface ApiResult {

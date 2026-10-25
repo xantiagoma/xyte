@@ -16,7 +16,7 @@ import { htmlToMarkdown } from './markdown.ts';
 import { direct, isApiEndpoint, type AttemptOutcome, type ProxyContext, type ProxyProvider } from './proxy.ts';
 import { SessionPool, type PooledSession, type SessionPoolOptions } from './sessions.ts';
 import { defaultTransport, type Transport } from './transport.ts';
-import { EXTRACTION_FIELDS, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
+import { EXTRACTION_FIELDS, type Action, type ExtractionField, type ExtractRequest, type ExtractResponse } from './types.ts';
 import { CookieJar, randomSessionId, sleep } from './util.ts';
 
 /** Computes one AI-extraction output (e.g. `product`) from the downloaded page. */
@@ -390,14 +390,17 @@ export class Xyte {
             // Your handlers run in xyte's browser, which an API (Zyte's included) doesn't use: look
             // for a provider that runs them. With nothing else to go to, the API gets the request
             // as is (Zyte then runs its own version), and you hear about it.
+            // The same for what the API says it can't do (actions, screenshots… on an HTML-only API).
             const own = zyteOnly.own[0];
-            if (own && canPassOver) {
-              passOver(`"${own.action}" has your handler: passed over ${leaf}`);
+            const cannot = endpoint.unsupported?.(request) ?? [];
+            if ((own || cannot.length > 0) && canPassOver) {
+              passOver(own ? `"${own.action}" has your handler: passed over ${leaf}` : `${leaf} can't do ${cannot.join(', ')}: passed over`);
               continue;
             }
-            if (own) warn(`your "${own.action}" handler isn't used: the request went to ${leaf}, which runs its own (no provider with a local browser to go to)`);
+            const sent = this.apiRequest(request, { leaf, cannot, own: zyteOnly.own, mode, warn });
             // A scraping API takes the whole request (it renders, solves and proxies itself).
-            const answer = await endpoint.api(request, { context, signal });
+            const answer = await endpoint.api(sent.request, { context, signal });
+            if (sent.dropped.size > 0) answer.response.actions = mergeActionResults(request.actions ?? [], answer.response.actions, sent.dropped);
             result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
             trusted = answer.trusted === true;
           } else {
@@ -521,6 +524,40 @@ export class Xyte {
     } finally {
       this.proxy.report?.(initContext, { result, ms: Date.now() - started });
     }
+  }
+
+  /**
+   * What goes to an API provider when nothing better is left: outputs it can't produce are a
+   * 400; actions it can't run, and your `interaction` scripts (which exist only in your handlers,
+   * so Zyte would answer "script not found" and stop the actions after them), are left out and
+   * reported `notExecuted` in their place, or a 400 with `unsupportedActions: 'error'`.
+   */
+  private apiRequest(
+    request: ExtractRequest,
+    { leaf, cannot, own, mode, warn }: { leaf: string; cannot: readonly string[]; own: ZyteOnlyAction[]; mode: string; warn: (message: string) => void },
+  ): { request: ExtractRequest; dropped: Map<number, string> } {
+    const outputs = cannot.filter((what) => what !== 'actions');
+    if (outputs.length > 0) throw invalidRequest(`${leaf} can't return ${outputs.join(' or ')}: use a provider with a local browser, or zyteApi()`);
+    const dropped = new Map<number, string>();
+    const actions = request.actions ?? [];
+    if (cannot.includes('actions')) {
+      if (mode === 'error') throw invalidRequest(`${leaf} doesn't run actions: use a provider with a local browser, or zyteApi()`);
+      actions.forEach((_, i) => dropped.set(i, `${leaf} doesn't run actions: skipped`));
+      warn(`actions skipped: ${leaf} doesn't run them (use a provider with a local browser, or unsupportedActions: 'error' to reject)`);
+    } else {
+      actions.forEach((action, i) => {
+        if (action.action !== 'interaction' || !own.includes(action)) return;
+        if (mode === 'error') {
+          throw invalidRequest(`the "interaction" script "${action.id}" runs only in a local browser (your handler) and ${leaf} has none: use a provider with one, e.g. zyteProxy() for Zyte's IPs`);
+        }
+        dropped.set(i, `script "${action.id}" runs only in a local browser (your handler): not sent to ${leaf}`);
+        warn(`interaction "${action.id}" not run: your script needs a local browser and ${leaf} has none (zyteProxy() gives Zyte's IPs with xyte's browser)`);
+      });
+      const handed = own.find((action) => action.action !== 'interaction');
+      if (handed) warn(`your "${handed.action}" handler isn't used: the request went to ${leaf}, which runs its own (no provider with a local browser to go to)`);
+    }
+    if (dropped.size === 0) return { request, dropped };
+    return { request: { ...request, actions: actions.filter((_, i) => !dropped.has(i)) }, dropped };
   }
 
   private get actionHandlers(): ActionHandlers {
@@ -688,6 +725,20 @@ const CHALLENGE_MARKERS = [
  * Default ban heuristic: 403/429/503 statuses, or a known anti-bot challenge page. Other 4xx/5xx
  * are real answers and are returned in `statusCode`, as Zyte does.
  */
+/** The API's results for the actions it got, with the ones left out back in their places. */
+function mergeActionResults(
+  actions: readonly Action[],
+  results: ExtractResponse['actions'],
+  dropped: ReadonlyMap<number, string>,
+): NonNullable<ExtractResponse['actions']> {
+  const answered = [...(results ?? [])];
+  return actions.flatMap((action, i) => {
+    if (dropped.has(i)) return [{ action: action.action, elapsedTime: 0, status: 'notExecuted' as const, error: dropped.get(i) }];
+    const result = answered.shift();
+    return result ? [result] : [];
+  });
+}
+
 function buildReport(
   request: ExtractRequest,
   trace: Trace,
