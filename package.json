@@ -1,8 +1,18 @@
 {
   "name": "@xtandard/xyte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Zyte API-compatible /v1/extract client that runs on any proxy provider (Oxylabs, Bright Data, Decodo, IPRoyal, ZenRows, ScrapingBee, ScraperAPI…) or none.",
-  "keywords": ["zyte", "zyte-api", "scraping", "web-scraping", "proxy", "residential-proxy", "oxylabs", "brightdata", "playwright"],
+  "keywords": [
+    "zyte",
+    "zyte-api",
+    "scraping",
+    "web-scraping",
+    "proxy",
+    "residential-proxy",
+    "oxylabs",
+    "brightdata",
+    "playwright"
+  ],
   "license": "MIT",
   "author": "Santiago Montoya <xantiagoma@gmail.com>",
   "repository": {
@@ -27,7 +37,11 @@
   "bin": {
     "xyte": "dist/cli.mjs"
   },
-  "files": ["dist", "docs", "!docs/assets"],
+  "files": [
+    "dist",
+    "docs",
+    "!docs/assets"
+  ],
   "publishConfig": {
     "access": "public"
   },

@@ -1,6 +1,22 @@
 # Changelog
 
 
+## v0.1.1
+
+[compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.0...v0.1.1)
+
+### 🩹 Fixes
+
+- **browser:** Close() during a render's setup no longer hangs ([0441589](https://github.com/xantiagoma/xyte/commit/0441589))
+
+### 📖 Documentation
+
+- **readme:** Npm, CI and license badges; social preview image ([309863a](https://github.com/xantiagoma/xyte/commit/309863a))
+
+### ❤️ Contributors
+
+- Santiago Montoya ([@xantiagoma](https://github.com/xantiagoma))
+
 ## v0.1.0
 
 The first release.
