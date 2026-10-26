@@ -26,7 +26,7 @@ const report = (over: Partial<RequestReport>): RequestReport => ({
 });
 
 describe('StatsRecorder', () => {
-  test("totals in Zyte's /api/v1/stats shape, which snappr's billing check reads", async () => {
+  test("totals in Zyte's /api/v1/stats shape, which a billing check reads", async () => {
     const stats = new StatsRecorder();
     const at = new Date('2026-10-20T10:30:00Z');
     stats.record(report({ costUsd: 0.002, ms: 2000 }), at);
@@ -47,7 +47,7 @@ describe('StatsRecorder', () => {
         { code: 520, count: 1 },
       ],
     });
-    // The exact field snappr's vendor-balances.ts parses.
+    // The exact field a vendor-balance check parses.
     const spend = (res.results[0]!.cost_micro_total as { value: number }[])[0]!.value / 1e6;
     expect(spend).toBeCloseTo(0.003, 6);
   });

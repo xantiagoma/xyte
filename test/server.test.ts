@@ -14,7 +14,7 @@ afterAll(async () => {
   await server.stop();
 });
 
-/** Exactly how snappr's getHTMLFromZyte calls Zyte, with only the base URL changed. */
+/** Exactly how a production getHTMLFromZyte helper calls Zyte, with only the base URL changed. */
 const zyteFetch = (body: unknown, key = 'KEY') =>
   fetch(`${server.url}v1/extract`, {
     method: 'POST',

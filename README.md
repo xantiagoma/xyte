@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/logo.png" alt="xyte" width="128" height="128"></p>
+
 # xyte
 
 **The [Zyte API](https://docs.zyte.com/zyte-api/usage/index.html) `POST /v1/extract`, on any proxy.**
@@ -327,6 +329,7 @@ bun run gen:types    # regenerate src/zyte.gen.ts from spec/zyte-openapi.json (a
 bun run docs:coverage  # regenerate docs/coverage.md from scripts/coverage.ts
 bun run build && bun run docs:api  # regenerate docs/api.md from the doc comments in src/ (CI checks it)
 bun scripts/bench.ts cases.json --providers zyte-api,direct,oxylabs   # compare providers on your sites
+bun run release      # bump, CHANGELOG, tag, push → npm (see docs/releases.md)
 ```
 
 `test:live` takes `XYTE_LIVE_URL` (a deployed xyte, or `https://api.zyte.com/v1/extract` to run

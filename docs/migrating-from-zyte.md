@@ -107,7 +107,7 @@ XYTE_LIVE_URL=https://api.zyte.com/v1/extract bun scripts/live.ts   # key from Z
 ```
 
 Last run (2026-10-24): the same 20 checks pass against xyte (`direct()`, dist on Node) and
-against api.zyte.com (18; the 2 xyte-only checks are skipped). snappr's `getHTMLFromZyte` also
+against api.zyte.com (18; the 2 xyte-only checks are skipped). A production `getHTMLFromZyte` helper also
 works unchanged except for the URL (render + actions, a JSON API, `networkCapture`, a POST).
 
 Probing Zyte directly is what aligned these details with it: incompatible parameters are `422

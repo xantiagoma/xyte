@@ -31,6 +31,7 @@ jobs:
       - run: bun run build
       # docs/api.md is generated from the doc comments: fails if it's stale or an export lacks one.
       - run: bun scripts/api-docs.ts --check
+      - run: bunx publint
 
   node:
     needs: test
@@ -48,8 +49,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium
-      # Built here rather than passed as an artifact: it takes a second, and the private repo's
-      # artifact storage quota can run out.
+      # Built here rather than passed as an artifact: it takes a second.
       - run: bun run build
       - run: node --test test/node/smoke.mjs
 

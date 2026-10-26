@@ -1,0 +1,90 @@
+name: Release
+
+# Publishes to npm when a version tag is pushed (e.g. v0.1.1).
+#
+# Releases: `bun run release` (changelogen bumps the version from the conventional commits since
+# the last tag, writes CHANGELOG.md, commits, tags and pushes, which triggers this workflow).
+#
+# Auth is npm trusted publishing (OIDC): no NPM_TOKEN secret. The trust is configured on npmjs.com
+# for this repo and this workflow file
+# (`npm trust github xyte --repo xantiagoma/xyte --file release.yml --allow-publish`), and needs
+# npm >= 11.5.1 (Node 24 ships it). Provenance comes with it.
+#
+# Re-publish an existing tag (e.g. after a failed publish): run this workflow by hand with `tag`
+# set: `gh workflow run release.yml -f tag=v0.1.1`. (`gh run rerun` would use the workflow as it
+# was at the tag.)
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish (e.g. v0.1.1)'
+        required: true
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      # The same checks as CI, here too: the tag is pushed together with its commit, before CI on
+      # that commit has finished.
+      - run: bun run typecheck
+      - name: Browsers
+        run: |
+          bunx playwright install --with-deps chromium
+          bunx patchright install chromium
+      - run: bun test
+        env:
+          XYTE_TEST_REDIS_URL: redis://127.0.0.1:6379
+      - run: bun run build
+      - run: bun scripts/api-docs.ts --check
+      - run: node --test test/node/smoke.mjs
+      - run: bunx publint
+      - name: The tag matches package.json
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: test "v$(node -p 'require("./package.json").version')" = "${TAG}"
+      # --ignore-scripts: prepublishOnly (typecheck, tests, Node smoke) already ran above.
+      # Skipped if the version is already on npm (v0.1.0 was published by hand, to create the
+      # package that the trust is attached to), so re-running a tag is safe.
+      - name: Publish to npm (with provenance)
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if npm view "xyte@${version}" version >/dev/null 2>&1; then
+            echo "xyte@${version} is already on npm"
+          else
+            npm publish --provenance --access public --ignore-scripts
+          fi
+
+      # changelogen may have created the release already (as a draft): publish it, or create one.
+      - name: Create or publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --draft=false --latest
+          else
+            gh release create "${TAG}" --title "${TAG}" --generate-notes --verify-tag --latest
+          fi
