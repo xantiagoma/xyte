@@ -165,7 +165,7 @@ export class BrowserEngine {
 
       const defaults = contextOptions(attempt, proxy);
       const options = this.options.contextOptions ? await this.options.contextOptions(defaults, info) : defaults;
-      context = await browser.newContext(options);
+      context = await untilAborted(browser.newContext(options), attempt.signal);
       attempt.signal.throwIfAborted();
       // Every request the page makes, as transferred (bodies encoded), for transferBytes.
       const sizes: Promise<number>[] = [];
@@ -180,16 +180,17 @@ export class BrowserEngine {
 
       // The attempt's jar: requestCookies, or the session's cookies (client- or server-managed).
       const cookies = attempt.jar.entries().map(({ cookie, hostOnly }) => toPlaywrightCookie(cookie, hostOnly));
-      if (cookies.length) await context.addCookies(cookies);
+      if (cookies.length) await untilAborted(context.addCookies(cookies), attempt.signal);
       if (this.options.blockResources?.length) {
         const blocked = new Set(this.options.blockResources);
-        await context.route('**/*', (route) =>
-          blocked.has(route.request().resourceType()) ? route.abort() : route.fallback(),
+        await untilAborted(
+          context.route('**/*', (route) => (blocked.has(route.request().resourceType()) ? route.abort() : route.fallback())),
+          attempt.signal,
         );
       }
 
-      const page = await context.newPage();
-      await this.options.onPage?.(page, info);
+      const page = await untilAborted(context.newPage(), attempt.signal);
+      await untilAborted(Promise.resolve(this.options.onPage?.(page, info)), attempt.signal);
       const captures = captureNetwork(page, request.networkCapture);
       // Main-document responses: the last one is the page's real answer, after a JavaScript
       // challenge or a client-side redirect replaced the first.
@@ -305,7 +306,9 @@ export class BrowserEngine {
     } finally {
       attempt.signal.removeEventListener('abort', abort);
       if (context) {
-        for (const cookie of await context.cookies().catch(() => [])) {
+        // Not after an abort: the context is closing, and reading from it can hang.
+        const cookies = attempt.signal.aborted ? [] : await untilAborted(context.cookies(), attempt.signal).catch(() => []);
+        for (const cookie of cookies) {
           attempt.jar.set(fromPlaywrightCookie(cookie), !cookie.domain?.startsWith('.'));
         }
         await context.close().catch(() => {});
@@ -630,6 +633,24 @@ function seconds(value: number | undefined, fallback: number): number {
 
 function truncate(html: string): string {
   return html.length > MAX_BODY_BYTES ? html.slice(0, MAX_BODY_BYTES) : html;
+}
+
+/**
+ * Settles with `promise`, or rejects with the abort reason as soon as `signal` aborts. Aborting
+ * closes the context, and a Playwright call on a context closed mid-call (`newPage()`) can stay
+ * pending forever, which would leave the request, and `xyte.close()` waiting on it, hanging.
+ */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  promise.catch(() => {}); // it may still reject after the abort won the race
+  if (signal.aborted) return Promise.reject(signal.reason);
+  let onAbort = () => {};
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+    }),
+  ]).finally(() => signal.removeEventListener('abort', onAbort));
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

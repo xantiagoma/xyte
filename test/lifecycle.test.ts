@@ -24,6 +24,19 @@ test('close() cancels requests in flight, HTTP and browser, with /client/closed'
   }
 });
 
+// Closing aborts the render wherever it is: launching, creating the context or the page, loading.
+// A close that landed during newPage() (or the cookie read after it) used to hang forever.
+test('close() at any point of a render settles it', async () => {
+  for (let at = 0; at <= 400; at += 25) {
+    const xyte = new Xyte({ retries: 0 });
+    const render = xyte.extract({ url: `${target.base}/api/slow`, browserHtml: true }).catch((e: unknown) => e);
+    await Bun.sleep(at);
+    await xyte.close();
+    const result = await render;
+    if (result instanceof XyteError) expect(result.type).toBe('/client/closed');
+  }
+});
+
 // The mistake that used to leave an orphaned browser and a process that never exits:
 // await using closes the client before the returned render has even started its browser.
 test('return without await inside await using: a /client/closed error, no browser left open', async () => {
