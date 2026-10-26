@@ -9,6 +9,7 @@
   <a href="https://github.com/xantiagoma/xyte/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@xtandard/xyte" alt="license" /></a>
   <img src="https://img.shields.io/badge/types-included-blue" alt="TypeScript types included" />
   <img src="https://img.shields.io/badge/node-%E2%89%A522-339933" alt="Node.js 22 or later" />
+  <a href="https://me.xantiagoma.com/xyte/"><img src="https://img.shields.io/badge/docs-me.xantiagoma.com%2Fxyte-b7f34a" alt="docs site" /></a>
 </p>
 
 **The [Zyte API](https://docs.zyte.com/zyte-api/usage/index.html) `POST /v1/extract`, on any proxy.**
@@ -40,6 +41,8 @@ Zyte in either direction by changing a base URL. It doesn't try to compete with 
 Zyte is one of its providers ([`zyteApi()`](docs/providers.md)), often the right one for hard
 sites. It isn't affiliated with Zyte ([disclaimer](#disclaimer)).
 
+**Docs site: [me.xantiagoma.com/xyte](https://me.xantiagoma.com/xyte/)** (search, every page below).
+
 **Docs:** [coverage of the Zyte API](docs/coverage.md) · [providers](docs/providers.md) ·
 [combining providers](docs/routing.md) · [actions](docs/actions.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
 [browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) ·
@@ -56,6 +59,8 @@ npm i undici
 
 On npm it's `@xtandard/xyte` (npm turns `xyte` down as too close to `vite` and `bytes`); the command
 it installs is `xyte`.
+
+<!-- #region guide -->
 
 ## Library
 
@@ -338,6 +343,10 @@ runs, provider by provider: [actions](docs/actions.md).
 Stats API (`/api/stats`, `/api/v1/stats`); Zyte's Search API isn't implemented. Field-by-field
 status: [coverage](docs/coverage.md).
 
+<!-- #endregion guide -->
+
+<!-- #region about -->
+
 ## Status and versioning
 
 xyte is **early**: it works and is tested (unit, integration with a real browser, Node.js 22/24
@@ -396,6 +405,8 @@ checks CI runs and the commit style. Report vulnerabilities privately, as
 The code is MIT licensed ([LICENSE](LICENSE)). [NOTICE](NOTICE) credits the third-party material
 in the repository, including Zyte's OpenAPI document.
 
+<!-- #endregion about -->
+
 ## Development
 
 ```sh
@@ -410,6 +421,7 @@ bun run docs:coverage  # regenerate docs/coverage.md from scripts/coverage.ts
 bun run build && bun run docs:api  # regenerate docs/api.md from the doc comments in src/ (CI checks it)
 bun scripts/bench.ts cases.json --providers zyte-api,direct,oxylabs   # compare providers on your sites
 bun run release      # bump, CHANGELOG, tag, push → npm (see docs/releases.md)
+bun run site:dev     # the docs site (VitePress over docs/), at localhost:5173/xyte/
 ```
 
 `test:live` takes `XYTE_LIVE_URL` (a deployed xyte, or `https://api.zyte.com/v1/extract` to run

@@ -1,0 +1,56 @@
+name: Pages
+
+# Builds the docs site (VitePress, docs/) and publishes it to GitHub Pages:
+# https://me.xantiagoma.com/xyte/ (the account's Pages domain; also xantiagoma.github.io/xyte/).
+# Local: `bun run site:dev`, or `bun run site:build && bun run site:preview`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - README.md
+      - package.json
+      - bun.lock
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel one in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # lastUpdated reads each page's git history
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run site:build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

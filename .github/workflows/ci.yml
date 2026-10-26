@@ -32,6 +32,8 @@ jobs:
       # docs/api.md is generated from the doc comments: fails if it's stale or an export lacks one.
       - run: bun scripts/api-docs.ts --check
       - run: bunx publint
+      # The docs site builds, with no dead links (it fails on one).
+      - run: bun run site:build
 
   node:
     needs: test

@@ -59,6 +59,9 @@ bunx publint
 bun run test:node           # the built package under real Node.js
 ```
 
+`bun run site:build` also builds the [docs site](https://me.xantiagoma.com/xyte/) and fails on a
+dead link; `bun run site:dev` serves it while you write.
+
 Run `bun run test:node` whenever you touch the transport, the server, the CLI or the browser
 engine. Tests that need Redis run when `XYTE_TEST_REDIS_URL` is set (for example
 `redis://127.0.0.1:6379`). `bun run test:live` hits real sites and isn't part of CI.

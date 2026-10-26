@@ -19,7 +19,7 @@
     "type": "git",
     "url": "git+https://github.com/xantiagoma/xyte.git"
   },
-  "homepage": "https://github.com/xantiagoma/xyte#readme",
+  "homepage": "https://me.xantiagoma.com/xyte/",
   "bugs": {
     "url": "https://github.com/xantiagoma/xyte/issues"
   },
@@ -41,6 +41,10 @@
     "dist",
     "docs",
     "!docs/assets",
+    "!docs/.vitepress",
+    "!docs/index.md",
+    "!docs/guide.md",
+    "!docs/about.md",
     "NOTICE"
   ],
   "publishConfig": {
@@ -58,6 +62,9 @@
     "gen:types": "bun scripts/gen-types.ts && bun scripts/gen-schemas.ts && bun scripts/coverage.ts",
     "docs:coverage": "bun scripts/coverage.ts",
     "docs:api": "bun scripts/api-docs.ts",
+    "site:dev": "vitepress dev docs",
+    "site:build": "vitepress build docs",
+    "site:preview": "vitepress preview docs",
     "release": "changelogen --release --push",
     "prepublishOnly": "bun run typecheck && bun test && bun run test:node"
   },
@@ -86,6 +93,7 @@
     "publint": "^0.3.25",
     "tsdown": "^0.23.2",
     "typescript": "^7.0.2",
-    "undici": "^8.12.3"
+    "undici": "^8.12.3",
+    "vitepress": "1.6.4"
   }
 }

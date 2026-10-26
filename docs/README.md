@@ -1,5 +1,7 @@
 # xyte docs
 
+Also published as a site, with search: **https://me.xantiagoma.com/xyte/** (built from these files).
+
 | Page | What's in it |
 | --- | --- |
 | [lifecycle.md](lifecycle.md) | Creating, sharing and closing a client: `close()`, `await using`, services, Redis stores, tests |
