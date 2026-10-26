@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in the library, the CLI or the server doesn't work as documented, or differs from Zyte's API.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Security vulnerabilities don't go here.** Report them privately, as [SECURITY.md](https://github.com/xantiagoma/xyte/blob/main/SECURITY.md) explains.
+        **Remove every credential** (proxy usernames and passwords, API keys, tokens, cookies) from what you paste below.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Library (new Xyte(...).extract)
+        - CLI (xyte extract, xyte doctor)
+        - Server (xyte serve, createHandler, jobs, Stats API)
+        - Proxy mode
+        - Browser rendering (Playwright, patchright, remote browsers, actions)
+        - A provider preset or combinator
+        - AI extraction
+        - Docker image
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and runtime
+      description: The package version (`npm ls @xtandard/xyte`), and Node.js or Bun with its version.
+      placeholder: "@xtandard/xyte 0.1.1, Node.js 22.15"
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: The provider or combination involved (`direct()`, `oxylabs()`, `rotate([...])`…), without credentials.
+  - type: textarea
+    id: request
+    attributes:
+      label: Request
+      description: The request JSON (or the code) that shows the problem. A public URL helps; if the site matters, say whether it reproduces on another one.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The response or the error (its `type`, `status` and `detail`), and logs if any.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If it's about Zyte compatibility, what Zyte's API returns for the same request, or the part of Zyte's docs that says so.
+    validations:
+      required: true

@@ -40,7 +40,8 @@
   "files": [
     "dist",
     "docs",
-    "!docs/assets"
+    "!docs/assets",
+    "NOTICE"
   ],
   "publishConfig": {
     "access": "public"

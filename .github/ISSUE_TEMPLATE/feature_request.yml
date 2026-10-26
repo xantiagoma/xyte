@@ -1,0 +1,37 @@
+name: Feature request
+description: A missing Zyte API field, provider, option or integration.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [docs/coverage.md](https://github.com/xantiagoma/xyte/blob/main/docs/coverage.md) first: it lists what of the Zyte API is implemented and what isn't.
+        xyte is a personal project maintained on a best-effort basis, so there's no promise a request gets built.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - A Zyte API field or behaviour
+        - A provider preset (proxy network, scraping API, remote browser)
+        - A server, CLI or deployment feature
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you need
+      description: What you want to do, and what gets in the way today. For a Zyte field, link Zyte's docs for it. For a provider, link its proxy or API docs.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you've tried
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I could open a pull request for this (see CONTRIBUTING.md).

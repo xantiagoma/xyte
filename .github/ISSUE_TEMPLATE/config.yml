@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/xantiagoma/xyte/security/advisories/new
+    about: Report vulnerabilities privately through GitHub's private vulnerability reporting, never in a public issue (SECURITY.md).
+  - name: Documentation
+    url: https://github.com/xantiagoma/xyte/blob/main/docs/README.md
+    about: Configuration, providers, routing, browser, actions, deployment and the API reference.
+  - name: Getting help
+    url: https://github.com/xantiagoma/xyte/blob/main/SUPPORT.md
+    about: Where to ask questions and what to include.

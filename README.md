@@ -30,6 +30,16 @@ Three ways to use it:
 - **[In front of Zyte](#mixing-providers-zyte-included)**: keep Zyte for the sites that need it,
   send the rest through cheaper exits, with one client.
 
+### Why it exists
+
+xyte is a personal project: a library that makes one scraping flow easier to write. One
+request format for every exit, fallbacks from a cheap exit to a better one when a site bans,
+and the same code whether the request goes to Zyte, to a proxy, or nowhere special. It speaks
+Zyte's API because that API is well designed and well documented, so code moves between xyte and
+Zyte in either direction by changing a base URL. It doesn't try to compete with or replace Zyte:
+Zyte is one of its providers ([`zyteApi()`](docs/providers.md)), often the right one for hard
+sites. It isn't affiliated with Zyte ([disclaimer](#disclaimer)).
+
 **Docs:** [coverage of the Zyte API](docs/coverage.md) · [providers](docs/providers.md) ·
 [combining providers](docs/routing.md) · [actions](docs/actions.md) · [observability](docs/observability.md) · [configuration](docs/configuration.md) ·
 [browser & stealth](docs/browser.md) · [AI extraction](docs/extraction.md) ·
@@ -327,6 +337,64 @@ runs, provider by provider: [actions](docs/actions.md).
 **Beyond `/v1/extract`:** xyte's server also answers Zyte's proxy mode (`--proxy-port`) and its
 Stats API (`/api/stats`, `/api/v1/stats`); Zyte's Search API isn't implemented. Field-by-field
 status: [coverage](docs/coverage.md).
+
+## Status and versioning
+
+xyte is **early**: it works and is tested (unit, integration with a real browser, Node.js 22/24
+smoke tests, live checks against real sites and against Zyte), but it's young and its API can
+still change. Versions follow [ZeroVer](https://0ver.org): `0.MINOR.PATCH`, with no `1.0`
+planned. A minor (`0.2.0`) may break the API; a patch (`0.1.2`) doesn't. Pin with `^0.x.y` and
+read the [changelog](CHANGELOG.md) before moving to a new minor. How releases work:
+[docs/releases.md](docs/releases.md).
+
+## Disclaimer
+
+xyte is a personal, non-commercial project. Its author built it for their own scraping and
+publishes it in case it's useful to others. It isn't a company or a product, and it isn't meant
+to compete with or replace Zyte or any other service it works with.
+
+- **Not affiliated.** Zyte and Zyte API are trademarks of Zyte Group Ltd. Oxylabs, Bright Data,
+  Decodo, IPRoyal, ZenRows, ScrapingBee, ScraperAPI, Browserless, OpenAI and the other names in
+  this repository are trademarks of their respective owners. They appear only to describe
+  compatibility and integrations. xyte is not affiliated with, endorsed by or sponsored by any of
+  them, and links to providers are not affiliate links.
+- **Compatibility is best effort.** It follows Zyte's public documentation and OpenAPI document
+  (see [NOTICE](NOTICE)), and was checked against the live API, but it can differ from Zyte's
+  service, and Zyte can change. [docs/coverage.md](docs/coverage.md) lists what is and isn't
+  implemented.
+- **Provided as is.** The software comes "as is", without warranty of any kind, as the
+  [MIT licence](LICENSE) states. You use it at your own risk, and you're responsible for how you
+  deploy and operate it: security, availability, and costs.
+- **No commitments.** There's no support agreement, no SLA and no guaranteed roadmap. Fixes,
+  features and releases happen on a best-effort basis ([SUPPORT.md](SUPPORT.md)). Under ZeroVer
+  any minor release may include breaking changes.
+- **Your scraping is your responsibility.** You're responsible for what you fetch and what you do
+  with it: the laws that apply (computer misuse, copyright and database rights, data protection
+  such as the GDPR when pages contain personal data), the websites' terms of service and
+  `robots.txt`, and not overloading the sites you visit. xyte doesn't check any of that for you.
+  Only access content you're allowed to access.
+- **Anti-bot features.** Stealth browsers, captcha solvers and ban retries exist to match what
+  Zyte offers and to keep a legitimate flow working. Getting past a site's access controls can
+  break its terms or the law where you are. Whether you may use them on a given site is your call
+  and your responsibility.
+- **Third-party services.** Proxy networks, scraping APIs, remote browsers, LLMs and captcha
+  solvers are used with your own accounts, under their own terms and prices. The costs xyte
+  reports are estimates from published prices and your configuration: your provider's bill is
+  the truth.
+- **Your credentials and data stay with you.** xyte runs where you run it and has no telemetry. It
+  contacts only the sites you request and the services you configure, plus `ipinfo.io` when you
+  run `xyte doctor` (`--url` changes it).
+
+## Contributing, security and licence
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the
+checks CI runs and the commit style. Report vulnerabilities privately, as
+[SECURITY.md](SECURITY.md) explains, never in a public issue. Questions go where
+[SUPPORT.md](SUPPORT.md) says. Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+The code is MIT licensed ([LICENSE](LICENSE)). [NOTICE](NOTICE) credits the third-party material
+in the repository, including Zyte's OpenAPI document.
 
 ## Development
 

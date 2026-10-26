@@ -1,0 +1,30 @@
+xyte
+Copyright (c) 2026 Santiago Montoya
+Licensed under the MIT License (see LICENSE).
+
+xyte is an independent project. It is not affiliated with, endorsed by or sponsored by Zyte Group
+Ltd or any other company named in this repository. Zyte and Zyte API are trademarks of Zyte Group
+Ltd; other names are trademarks of their respective owners and are used only to describe
+compatibility and integrations.
+
+Third-party material in this repository
+---------------------------------------
+
+spec/zyte-openapi.json
+  Zyte API's OpenAPI document ("Web Data Extraction API", contact: Zyte), taken from Zyte's public
+  API reference: https://docs.zyte.com/zyte-api/usage/reference.html
+  It is included for interoperability: xyte implements the same request and response format, and
+  its types are generated from it. It remains the work of Zyte Group Ltd and is not covered by
+  xyte's MIT License. One upstream typo is patched (ProductNavigation.required was nested under
+  properties). It is not part of the npm package.
+
+src/zyte.gen.ts
+  TypeScript types generated from spec/zyte-openapi.json with openapi-typescript
+  (https://github.com/openapi-ts/openapi-typescript, MIT).
+
+src/schemas.gen.ts
+  Zyte's AI-extraction output schemas (product, article, job posting…), extracted from
+  spec/zyte-openapi.json by scripts/gen-schemas.ts, so an LLM can return data in the same shape.
+
+The npm package has no runtime dependencies. Optional peer dependencies (playwright, undici, and
+the browsers and services you configure) are installed and licensed separately.
