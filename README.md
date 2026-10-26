@@ -28,17 +28,20 @@ Three ways to use it:
 [migrating from Zyte](docs/migrating-from-zyte.md) · [API reference](docs/api.md) · [examples](examples/)
 
 ```sh
-npm i xyte
+npm i xytejs
 # browser requests (browserHtml, screenshot, actions, networkCapture):
 npm i playwright && npx playwright install chromium
 # proxies on Node.js (Bun has proxy support built into fetch); undici 8 needs Node 22.19+:
 npm i undici
 ```
 
+On npm it's `xytejs` (npm turns `xyte` down as too close to `vite` and `bytes`); the command it
+installs is `xyte`.
+
 ## Library
 
 ```ts
-import { Xyte, oxylabs, decodeBody } from 'xyte';
+import { Xyte, oxylabs, decodeBody } from 'xytejs';
 
 const xyte = new Xyte({
   proxy: oxylabs({ username: process.env.OXYLABS_USERNAME!, password: process.env.OXYLABS_PASSWORD! }),
@@ -90,7 +93,7 @@ Requests and responses are typed from Zyte's OpenAPI spec. All options (`retries
 ## Drop-in server
 
 ```sh
-XYTE_PROVIDER=oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… npx xyte serve --port 8011
+XYTE_PROVIDER=oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… npx xytejs serve --port 8011
 ```
 
 ```diff
@@ -118,10 +121,10 @@ App Platform / Modal configs: [deploy](docs/deploy.md). To serve it from your ow
 CLI one-offs:
 
 ```sh
-npx xyte extract https://example.com --raw              # HTTP, prints the body
-npx xyte extract https://example.com --browser --country GB
-npx xyte extract --json '{"url":"https://example.com","browserHtml":true}'
-npx xyte doctor --country US   # each configured provider: credentials, exit IP/country, quota
+npx xytejs extract https://example.com --raw              # HTTP, prints the body
+npx xytejs extract https://example.com --browser --country GB
+npx xytejs extract --json '{"url":"https://example.com","browserHtml":true}'
+npx xytejs doctor --country US   # each configured provider: credentials, exit IP/country, quota
 ```
 
 ## Providers
@@ -161,7 +164,7 @@ No single provider is the cheapest *and* gets through everywhere. Three combinat
 behind one client ([details and recipes](docs/routing.md)):
 
 ```ts
-import { direct, oxylabs, rotate, route, Xyte, zyteApi } from 'xyte';
+import { direct, oxylabs, rotate, route, Xyte, zyteApi } from 'xytejs';
 
 const residential = oxylabs({ username, password });
 const zyte = zyteApi({ apiKey: process.env.ZYTE_API_KEY! });

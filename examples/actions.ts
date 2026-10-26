@@ -1,6 +1,6 @@
 // Zyte's own actions (searchKeyword, setLocation, interaction) outside Zyte: handlers that run in
 // xyte's browser. See docs/browser.md. The selectors are illustrative.
-import { Xyte } from 'xyte';
+import { Xyte } from 'xytejs';
 
 const xyte = new Xyte({
   actions: {

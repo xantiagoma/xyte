@@ -1,6 +1,6 @@
 // Stealthier rendering with patchright (npm i patchright && npx patchright install chrome).
 import { chromium } from 'patchright';
-import { decodo, Xyte } from 'xyte';
+import { decodo, Xyte } from 'xytejs';
 
 const xyte = new Xyte({
   proxy: decodo({ username: process.env.DECODO_USERNAME!, password: process.env.DECODO_PASSWORD! }),

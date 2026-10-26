@@ -63,7 +63,7 @@ Certificates are P-256 ECDSA, generated with `node:crypto` (no dependencies), on
 ## Library
 
 ```ts
-import { serveProxyMode, Xyte } from 'xyte';
+import { serveProxyMode, Xyte } from 'xytejs';
 
 const proxy = await serveProxyMode(new Xyte({ proxy: … }), { apiKeys: ['KEY'], port: 8012, ca });
 proxy.caCert; // PEM for clients

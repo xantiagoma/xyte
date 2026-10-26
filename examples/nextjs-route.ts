@@ -1,6 +1,6 @@
 // Next.js App Router: app/api/zyte/v1/extract/route.ts → POST /api/zyte/v1/extract.
 // Needs the Node.js runtime (proxies, browser); not the Edge runtime.
-import { createHandler, proxyFromEnv, Xyte } from 'xyte';
+import { createHandler, proxyFromEnv, Xyte } from 'xytejs';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;

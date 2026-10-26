@@ -5,7 +5,7 @@ Zyte's AI outputs (`product`, `productList`, `productNavigation`, `article`, `ar
 and `customAttributes`) run through **any LLM you choose**:
 
 ```ts
-import { llmExtractors, openAICompatible, Xyte } from 'xyte';
+import { llmExtractors, openAICompatible, Xyte } from 'xytejs';
 
 const xyte = new Xyte({
   extractors: llmExtractors({

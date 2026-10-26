@@ -1,5 +1,5 @@
 // Bun.serve with routes: the endpoint next to your own.
-import { createHandler, proxyFromEnv, Xyte } from 'xyte';
+import { createHandler, proxyFromEnv, Xyte } from 'xytejs';
 
 const extract = createHandler(new Xyte({ proxy: proxyFromEnv() }));
 

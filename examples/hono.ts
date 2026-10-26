@@ -1,6 +1,6 @@
 // Mount the Zyte-compatible endpoint inside an existing Hono app: POST /zyte/v1/extract.
 import { Hono } from 'hono';
-import { createHandler, proxyFromEnv, Xyte } from 'xyte';
+import { createHandler, proxyFromEnv, Xyte } from 'xytejs';
 
 const xyte = new Xyte({ proxy: proxyFromEnv() });
 const app = new Hono();

@@ -1,7 +1,7 @@
 // Let xyte learn, per site, the cheapest exit that works: free first, a residential proxy next,
 // Zyte last, with a circuit breaker on the proxy and a cap on what Zyte can spend.
 // See docs/routing.md.
-import { adaptive, budget, decodeBody, direct, healthy, oxylabs, Xyte, zyteApi } from 'xyte';
+import { adaptive, budget, decodeBody, direct, healthy, oxylabs, Xyte, zyteApi } from 'xytejs';
 
 const smart = adaptive([
   direct(),

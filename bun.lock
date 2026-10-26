@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "xyte",
+      "name": "xytejs",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "@types/express": "^5.0.6",

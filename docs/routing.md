@@ -215,7 +215,7 @@ variables is one instance, so its budget is shared.
 ## `watch()`: check providers ahead of requests
 
 ```ts
-import { rotate, scrapingBee, scrapingBeeUsage, statusPage, watch, zyteApi } from 'xyte';
+import { rotate, scrapingBee, scrapingBeeUsage, statusPage, watch, zyteApi } from 'xytejs';
 
 const bee = watch(scrapingBee({ apiKey }), { check: scrapingBeeUsage({ apiKey, minRemaining: 500 }), every: 60 });
 const zyte = watch(zyteApi({ apiKey: zyteKey }), { check: statusPage('https://status.zyte.com') });
@@ -258,7 +258,7 @@ has its own budget, circuits, learned scores and sessions. Pass a shared `StateS
 share it:
 
 ```ts
-import { budget, healthy, redisStore, redisStoreFromUrl, watch } from 'xyte';
+import { budget, healthy, redisStore, redisStoreFromUrl, watch } from 'xytejs';
 
 const store = redisStoreFromUrl(process.env.REDIS_URL!); // Bun's client, else ioredis or redis if installed
 // or with your own client: redisStore((cmd) => redis.call(cmd[0]!, ...cmd.slice(1)))
