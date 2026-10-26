@@ -71,7 +71,8 @@ jobs:
       - name: Publish to npm (with provenance)
         run: |
           version="$(node -p 'require("./package.json").version')"
-          if npm view "@xtandard/xyte@${version}" version >/dev/null 2>&1; then
+          # The version document, not `npm view`: the package document can lag minutes behind a publish.
+          if curl -sf "https://registry.npmjs.org/@xtandard/xyte/${version}" >/dev/null; then
             echo "@xtandard/xyte@${version} is already on npm"
           else
             npm publish --provenance --access public --ignore-scripts
