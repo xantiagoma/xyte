@@ -1,6 +1,15 @@
-<p align="center"><img src="docs/assets/logo.png" alt="xyte" width="128" height="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/logo.png" alt="xyte" width="128" height="128"></p>
 
 # xyte
+
+<p>
+  <a href="https://www.npmjs.com/package/@xtandard/xyte"><img src="https://img.shields.io/npm/v/@xtandard/xyte?color=blue" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@xtandard/xyte"><img src="https://img.shields.io/npm/dm/@xtandard/xyte" alt="npm downloads" /></a>
+  <a href="https://github.com/xantiagoma/xyte/actions/workflows/ci.yml"><img src="https://github.com/xantiagoma/xyte/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/xantiagoma/xyte/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@xtandard/xyte" alt="license" /></a>
+  <img src="https://img.shields.io/badge/types-included-blue" alt="TypeScript types included" />
+  <img src="https://img.shields.io/badge/node-%E2%89%A522-339933" alt="Node.js 22 or later" />
+</p>
 
 **The [Zyte API](https://docs.zyte.com/zyte-api/usage/index.html) `POST /v1/extract`, on any proxy.**
 
