@@ -9,6 +9,7 @@ import { sleep } from './util.ts';
  */
 export type CaptchaKind = 'recaptchaV2' | 'recaptchaV3' | 'hcaptcha' | 'turnstile';
 
+/** A captcha found on a page, as a solver gets it. */
 export interface CaptchaTask {
   kind: CaptchaKind;
   siteKey: string;
@@ -18,6 +19,7 @@ export interface CaptchaTask {
   action?: string;
 }
 
+/** Solves captchas for browser renders (`browser.captcha`): `capsolver()`, `twoCaptcha()`, or your own. */
 export interface CaptchaSolver {
   readonly name: string;
   /** Resolves with the token the widget would have produced. */

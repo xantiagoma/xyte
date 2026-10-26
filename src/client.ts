@@ -31,6 +31,7 @@ export type Extractor = (input: {
   options: unknown;
 }) => unknown | Promise<unknown>;
 
+/** What the ban check (`isBan`) looks at: the target's answer to one attempt. */
 export interface BanCheck {
   url: string;
   statusCode: number;
@@ -38,6 +39,7 @@ export interface BanCheck {
   html?: string;
 }
 
+/** Per-call options of `extract()`. */
 export interface ExtractOptions {
   /** Aborts the request (all attempts). Rejects with the signal's reason. */
   signal?: AbortSignal;
@@ -47,6 +49,7 @@ export interface ExtractOptions {
   onReport?: (report: RequestReport) => void;
 }
 
+/** Options of `new Xyte()`. Everything is optional: `new Xyte()` makes direct requests. */
 export interface XyteOptions {
   /** Where requests exit. Default: `direct()` (no proxy). */
   proxy?: ProxyProvider;
@@ -136,6 +139,10 @@ export interface XyteOptions {
   onWarning?: (message: string, info: { url: string }) => void;
 }
 
+/**
+ * One attempt of an `extract()`: which provider, how it went, how long, how many bytes, what it cost.
+ * Passed to `onAttempt`, and listed in `RequestReport.attempts`.
+ */
 export interface AttemptInfo extends AttemptOutcome {
   /** The `extract()` call it belongs to (same id as its `RequestReport`). */
   requestId: string;
@@ -164,6 +171,7 @@ export interface Rate {
   perSuccess?: number;
 }
 
+/** Your prices by provider name (`oxylabs`, `zyte-api`…); a name also covers its variants (`oxylabs` → `oxylabs-residential`). */
 export type Rates = Readonly<Record<string, Rate>>;
 
 /** The rate for a provider: its exact name, else the longest key it starts with (`oxylabs` → `oxylabs-residential`). */
@@ -277,6 +285,16 @@ const MAX_PASS_OVERS = 10;
 /** Client-managed sessions (`session.id`) remembered per process. */
 const MAX_CLIENT_SESSIONS = 10_000;
 
+/**
+ * The client: Zyte API's `POST /v1/extract` through the providers you choose.
+ *
+ * ```ts
+ * const xyte = new Xyte({ proxy: oxylabs({ username, password }) });
+ * const page = await xyte.extract({ url, httpResponseBody: true });
+ * ```
+ *
+ * Close it when done if it rendered pages (see docs/lifecycle.md).
+ */
 export class Xyte {
   private readonly proxy: ProxyProvider;
   private readonly retries: number;
@@ -448,6 +466,7 @@ export class Xyte {
     await this.browser.close();
   }
 
+  /** What makes `await using xyte = new Xyte(…)` work: calls `close()` when the block ends (docs/lifecycle.md). */
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
   }
@@ -1034,6 +1053,10 @@ function lenient(request: ExtractRequest): ExtractRequest {
   };
 }
 
+/**
+ * The default ban check: a 403, 429 or 503, or a 200 that is an anti-bot challenge page
+ * (Cloudflare, DataDome, PerimeterX, Akamai…). Replace it with the `isBan` option.
+ */
 export function isLikelyBan(page: BanCheck): boolean {
   if (BAN_STATUSES.has(page.statusCode)) return true;
   const html = page.html;

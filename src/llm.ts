@@ -11,6 +11,7 @@ import { htmlToMarkdown } from './markdown.ts';
 import { OUTPUT_SCHEMAS, type OutputSchemaField } from './schemas.gen.ts';
 import type { ExtractionField } from './types.ts';
 
+/** One model call `llmExtractors()` makes: a prompt for one extraction field, and the schema to answer in. */
 export interface CompletionRequest {
   /** The extraction field, e.g. `product`. */
   field: ExtractionField;
@@ -20,14 +21,20 @@ export interface CompletionRequest {
   schema: object;
 }
 
+/** A model's answer, with its token usage if known. */
 export interface Completion {
   /** The model's answer: JSON text (code fences are tolerated) or an already-parsed object. */
   output: string | object;
   usage?: { inputTokens?: number; outputTokens?: number };
 }
 
+/**
+ * Calls your model: gets a `CompletionRequest`, returns the answer (text, an object, or a `Completion`).
+ * `openAICompatible()` makes one for any OpenAI-compatible API.
+ */
 export type Complete = (request: CompletionRequest) => Promise<string | object | Completion>;
 
+/** Options of `llmExtractors()`. */
 export interface LlmExtractorOptions {
   complete: Complete;
   /** Fields to provide. Default: all AI fields (product…pageContent, serp, customAttributes). */

@@ -47,6 +47,7 @@ const hourOf = (date: Date) => {
   return d;
 };
 
+/** The query parameters of `GET /api/stats`, as on Zyte. */
 export interface StatsQuery {
   organization_id?: string | number;
   start_time?: string;
@@ -64,6 +65,10 @@ export interface StatsQuery {
   include_domain_health?: string | boolean;
 }
 
+/**
+ * Records each request's report and answers Zyte's Stats API queries over them (`GET /api/stats`).
+ * Keeps hourly buckets in a store, so with Redis every instance reports the same totals.
+ */
 export class StatsRecorder {
   private readonly store: StateStore;
   private readonly retention: number;
@@ -196,8 +201,10 @@ export class StatsRecorder {
   }
 }
 
+/** An invalid Stats API query: the server answers it with a 400. */
 export class StatsQueryError extends Error {}
 
+/** The Stats API's answer, in Zyte's shape. */
 export interface StatsResponse {
   page: number;
   page_size: number;

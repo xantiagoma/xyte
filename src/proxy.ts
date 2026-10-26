@@ -48,6 +48,7 @@ export interface AttemptOutcome {
   captchas?: { kind: string; solver: string; solved: boolean; ms: number; error?: string }[];
 }
 
+/** A proxy for one attempt: what a proxy provider's `resolve()` returns. */
 export interface ProxyEndpoint {
   /** `http://user:pass@host:port` (or `https://`). */
   url: string;
@@ -92,6 +93,7 @@ export interface ApiEndpoint {
   unsupported?: (request: ExtractRequest) => readonly string[];
 }
 
+/** What an `ApiEndpoint`'s `api()` resolves with: the service's answer in Zyte's shape. */
 export interface ApiResult {
   /** The Zyte-shaped response (url, statusCode, httpResponseBody / browserHtml, …). */
   response: ExtractResponse;
@@ -137,6 +139,10 @@ export const isApiEndpoint = (endpoint: ProxyEndpoint | ApiEndpoint | null): end
 
 const encode = encodeURIComponent;
 
+/**
+ * A proxy URL with the credentials percent-encoded: `proxyEndpointUrl({ host: 'pr.oxylabs.io', port: 7777, username, password })`
+ * → `http://user:p%40ss@pr.oxylabs.io:7777`.
+ */
 export function proxyEndpointUrl(args: {
   host: string;
   port: number | string;

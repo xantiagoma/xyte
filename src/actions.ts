@@ -2,6 +2,12 @@ import type { Locator, Page } from 'playwright';
 import { unsupported } from './errors.ts';
 import type { Action } from './types.ts';
 
+/** Zyte's `searchKeyword` action: type `keyword` into the page's search box and submit. */
+export type SearchKeywordAction = Extract<Action, { action: 'searchKeyword' }>;
+/** Zyte's `setLocation` action: set the site's delivery or store location to an address. */
+export type SetLocationAction = Extract<Action, { action: 'setLocation' }>;
+/** Zyte's `interaction` action: run a script by `id` (on Zyte, one from its cloud IDE). */
+export type InteractionAction = Extract<Action, { action: 'interaction' }>;
 /**
  * Zyte's own actions, which rely on Zyte's per-site knowledge (`searchKeyword`, `setLocation`) or
  * on scripts stored in Zyte's cloud IDE (`interaction`). Zyte runs them on attempts that reach
@@ -9,11 +15,9 @@ import type { Action } from './types.ts';
  * locally), or the built-in heuristic for `searchKeyword`. Without one, `unsupportedActions`
  * decides (skip with a warning, pass over to Zyte, or a 400). See docs/actions.md.
  */
-export type SearchKeywordAction = Extract<Action, { action: 'searchKeyword' }>;
-export type SetLocationAction = Extract<Action, { action: 'setLocation' }>;
-export type InteractionAction = Extract<Action, { action: 'interaction' }>;
 export type ZyteOnlyAction = SearchKeywordAction | SetLocationAction | InteractionAction;
 
+/** What an action handler gets besides the page and the action. */
 export interface ActionHandlerContext {
   /** The page's current URL. */
   url: URL;
@@ -38,6 +42,10 @@ export type PerSite<A extends ZyteOnlyAction> = ActionHandler<A> | Readonly<Reco
 /** Handlers by the `id` the action names; `'*'` is every other id. A plain function is `{ '*': fn }`. */
 export type ById<A extends ZyteOnlyAction> = ActionHandler<A> | Readonly<Record<string, ActionEntry<A>>>;
 
+/**
+ * The `actions` option: how `searchKeyword`, `setLocation` and `interaction` run outside Zyte.
+ * Each takes a handler, or a table by site (`PerSite`) or by id (`ById`). See docs/actions.md.
+ */
 export interface ActionHandlers {
   /** `'*'` defaults to `searchBox`, a heuristic that finds the page's search box; `null` (or `false`) turns it off. */
   searchKeyword?: PerSite<SearchKeywordAction> | false;
@@ -49,6 +57,7 @@ export interface ActionHandlers {
 
 const ZYTE_ONLY = new Set<string>(['searchKeyword', 'setLocation', 'interaction']);
 
+/** Whether an action is one of Zyte's own three (`searchKeyword`, `setLocation`, `interaction`). */
 export const isZyteOnlyAction = (action: Action): action is ZyteOnlyAction => ZYTE_ONLY.has(action.action);
 
 /** The entry a table has for `matches` keys, else its `'*'`; undefined when it says nothing. */

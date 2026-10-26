@@ -30,6 +30,7 @@
     "test:live": "bun run build && bun scripts/live.ts",
     "gen:types": "bun scripts/gen-types.ts && bun scripts/gen-schemas.ts && bun scripts/coverage.ts",
     "docs:coverage": "bun scripts/coverage.ts",
+    "docs:api": "bun scripts/api-docs.ts",
     "prepublishOnly": "bun run typecheck && bun test && bun run test:node"
   },
   "peerDependencies": {

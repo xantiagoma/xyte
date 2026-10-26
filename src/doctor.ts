@@ -23,6 +23,7 @@ export interface DoctorResult {
   quota?: CheckResult | { error: string };
 }
 
+/** Options of `doctor()`: what to check, and how. */
 export interface DoctorOptions {
   env?: Record<string, string | undefined>;
   /** Provider names (`XYTE_PROVIDER` names, or `direct`). Default: `direct` plus every one the environment configures. */

@@ -162,6 +162,7 @@ export function weighted<P extends ProxyProvider>(entries: readonly (readonly [P
   });
 }
 
+/** Options of `healthy()`, the circuit breaker. */
 export interface HealthyOptions {
   /** Consecutive failed attempts (proxy or network errors, not bans) that open the circuit. Default 5. */
   failures?: number;
@@ -234,6 +235,7 @@ export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOp
   };
 }
 
+/** Options of `budget()`. */
 export interface BudgetOptions {
   /** Attempts allowed per window. */
   max: number;
@@ -309,6 +311,7 @@ export interface CheckResult {
 /** Asks a provider's API or status page how it is. Built-in ones are in `checks`. */
 export type ProviderCheck = (signal: AbortSignal) => Promise<CheckResult>;
 
+/** Options of `watch()`. */
 export interface WatchOptions {
   /** One or more checks; the provider is available while all of them say so. */
   check: ProviderCheck | readonly ProviderCheck[];
@@ -326,6 +329,7 @@ export interface WatchOptions {
   onError?: (error: unknown, provider: string) => void;
 }
 
+/** What `watch()` returns: a provider that also exposes its last check. */
 export type WatchedProvider<E extends ProxyEndpoint | ApiEndpoint> = ProxyProvider<E> & {
   /** The last check's result; undefined before the first one finished. */
   status(): CheckResult | undefined;
@@ -410,6 +414,7 @@ export function watch<P extends ProxyProvider>(provider: P, options: WatchOption
   };
 }
 
+/** Options of `adaptive()`. */
 export interface AdaptiveOptions {
   /** A provider is used for a site while its success score there is at least this. Default 0.5. */
   minSuccess?: number;
@@ -434,6 +439,7 @@ export interface AdaptiveOptions {
 /** Shared adaptive scores are dropped after a week without updates. */
 const SCORES_TTL = 7 * 86_400;
 
+/** What `adaptive()` returns: a provider that also reports its learned scores. */
 export type AdaptiveProvider<E extends ProxyEndpoint | ApiEndpoint> = ProxyProvider<E> & {
   /** Current scores, by site and provider (1: always works, 0: never). */
   scores(): Record<string, Record<string, number>>;

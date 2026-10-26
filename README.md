@@ -325,6 +325,7 @@ bun run typecheck
 bun run build        # tsdown → dist/
 bun run gen:types    # regenerate src/zyte.gen.ts from spec/zyte-openapi.json (and the coverage doc)
 bun run docs:coverage  # regenerate docs/coverage.md from scripts/coverage.ts
+bun run build && bun run docs:api  # regenerate docs/api.md from the doc comments in src/ (CI checks it)
 bun scripts/bench.ts cases.json --providers zyte-api,direct,oxylabs   # compare providers on your sites
 ```
 

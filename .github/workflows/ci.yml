@@ -29,6 +29,8 @@ jobs:
       - name: Coverage doc is up to date
         run: bun scripts/coverage.ts && git diff --exit-code docs/coverage.md
       - run: bun run build
+      # docs/api.md is generated from the doc comments: fails if it's stale or an export lacks one.
+      - run: bun scripts/api-docs.ts --check
 
   node:
     needs: test

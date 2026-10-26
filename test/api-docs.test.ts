@@ -11,7 +11,7 @@ test('docs/api.md covers every export', async () => {
     ...[...index.matchAll(/\btype ([A-Z]\w*)/g)].map((m) => m[1]!),
     ...[...types.matchAll(/^export type (\w+)/gm)].map((m) => m[1]!),
   ]);
-  // Named as code: `name`, `name(…)`, `name<…>`, or in a `a, b, c` list.
-  const missing = [...names].filter((name) => !new RegExp('`' + name + '(?=[`(<])').test(doc)).sort();
+  // Each has its own section (scripts/api-docs.ts generates them from the doc comments).
+  const missing = [...names].filter((name) => !doc.includes('### `' + name + '`')).sort();
   expect(missing).toEqual([]);
 });

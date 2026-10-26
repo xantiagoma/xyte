@@ -24,6 +24,7 @@ export interface JobsOptions {
   onReport?: (report: RequestReport) => void;
 }
 
+/** An asynchronous job, as `POST /v1/jobs` and `GET /v1/jobs/{id}` return it. */
 export interface Job {
   id: string;
   status: 'queued' | 'running' | 'done' | 'failed';
@@ -39,6 +40,10 @@ export interface Job {
   callback?: { status: 'pending' | 'delivered' | 'failed'; attempts: number; lastError?: string };
 }
 
+/**
+ * Runs requests in the background (`POST /v1/jobs`): `submit()` answers at once with a job, `get()` reads it
+ * later, and a `callbackUrl` gets the result POSTed, signed (see `verifyWebhook`).
+ */
 export class Jobs {
   private readonly store: StateStore;
   private readonly ttl: number;
@@ -66,6 +71,7 @@ export class Jobs {
     return queued;
   }
 
+  /** The job as it is now; undefined if unknown, or older than `ttl`. */
   async get(id: string): Promise<Job | undefined> {
     const value = await this.store.get(`job:${id}`);
     return value ? (JSON.parse(value) as Job) : undefined;

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { memoryStore, resilient, type StateStore } from './state.ts';
 import type { ExtractRequest, ExtractResponse } from './types.ts';
 
+/** The `cache` option: keep responses for a while and answer repeated requests from them. */
 export interface CacheOptions {
   /**
    * Seconds a response stays fresh: one value for every site, or per site keyed by host
@@ -32,6 +33,10 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/**
+ * The cache's default key: a hash of the request without its labels (`tags`, `jobId`, `echoData`),
+ * so the same request with different tags is a hit.
+ */
 export function requestKey(request: ExtractRequest): string {
   const rest: Record<string, unknown> = { ...request };
   for (const label of LABELS) delete rest[label];

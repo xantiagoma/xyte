@@ -1,5 +1,6 @@
 import type { Problem } from './types.ts';
 
+/** A Zyte error body (an RFC 7807 problem): `type`, `status`, `title` and an optional `detail`. */
 export type XyteProblem = Required<Pick<Problem, 'type' | 'status' | 'title'>> & {
   detail?: string;
 };
@@ -9,9 +10,13 @@ export type XyteProblem = Required<Pick<Problem, 'type' | 'status' | 'title'>> &
  * (https://docs.zyte.com/zyte-api/usage/errors.html), so code written against Zyte keeps working.
  */
 export class XyteError extends Error {
+  /** The HTTP status Zyte answers with: 400, 422, 429, 500, 520, 521… */
   readonly status: number;
+  /** The problem type, the stable thing to branch on: `/download/website-ban`, `/request/invalid`… */
   readonly type: string;
+  /** A short human-readable summary of the type. */
   readonly title: string;
+  /** What went wrong for this request, when there's more to say. */
   readonly detail?: string;
   readonly #retryable?: boolean;
 
@@ -31,6 +36,7 @@ export class XyteError extends Error {
     return this.#retryable ?? (this.status === 429 || this.status === 503 || this.status === 520 || this.status === 500);
   }
 
+  /** The problem as Zyte's error body; what `xyte serve` answers with. */
   toJSON(): XyteProblem {
     return { type: this.type, status: this.status, title: this.title, detail: this.detail };
   }
@@ -44,7 +50,9 @@ export const invalidRequest = (detail: string): XyteError =>
  * a 429). Retried like any download error; if it is the last one, that problem is returned as is.
  */
 export class UpstreamProblem extends Error {
+  /** Always `UpstreamProblem`. */
   override name = 'UpstreamProblem';
+  /** The upstream's problem, returned to the caller as is if no retry succeeds. */
   readonly problem: XyteProblem;
 
   constructor(problem: XyteProblem) {

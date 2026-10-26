@@ -5,6 +5,7 @@ import { Jobs, type JobsOptions } from './jobs.ts';
 import { StatsQueryError, StatsRecorder, type StatsQuery } from './stats.ts';
 import type { ExtractRequest } from './types.ts';
 
+/** Options of `createHandler()`. */
 export interface HandlerOptions {
   /**
    * Accepted API keys, sent like Zyte's: HTTP basic auth with the key as the username. When
@@ -43,6 +44,7 @@ export interface HandlerOptions {
 
 const DEFAULT_MAX_BODY = 10 * 1024 * 1024;
 
+/** A Web-standard request handler, as `Bun.serve`, Deno, Hono and Workers take. */
 export type FetchHandler = (request: Request) => Promise<Response>;
 
 /**

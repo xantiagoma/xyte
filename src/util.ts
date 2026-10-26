@@ -13,7 +13,17 @@ export function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Buffer.from(value, 'base64'));
 }
 
-/** Decodes an `httpResponseBody` (or captured body) as UTF-8 text. */
+/**
+ * An `httpResponseBody` (or a `networkCapture` body) as UTF-8 text. Bodies are base64 in Zyte's
+ * API, because they can be anything (an image, a PDF):
+ *
+ * ```ts
+ * const page = await xyte.extract({ url, httpResponseBody: true });
+ * const html = decodeBody(page.httpResponseBody!);
+ * ```
+ *
+ * For binary content, decode to bytes instead: `Buffer.from(body, 'base64')`.
+ */
 export function decodeBody(base64: string): string {
   return Buffer.from(base64, 'base64').toString('utf8');
 }

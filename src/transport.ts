@@ -1,6 +1,7 @@
 import { serverError } from './errors.ts';
 import type { ProxyEndpoint } from './proxy.ts';
 
+/** One HTTP request as a `Transport` gets it: URL, method, headers, body, the proxy to go through, and a signal. */
 export interface TransportRequest {
   url: string;
   method: string;

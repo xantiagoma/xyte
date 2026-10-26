@@ -12,6 +12,7 @@ interface Element {
 }
 type Node = Element | string;
 
+/** Options of `htmlToMarkdown()`. */
 export interface MarkdownOptions {
   /** Base for relative links and images. */
   url?: string;
@@ -168,6 +169,10 @@ function mainContent(root: Element): Element | undefined {
   return undefined;
 }
 
+/**
+ * The built-in `markdown` extraction: HTML to Markdown, the main content only (Zyte's default) or the
+ * whole page. Relative links and images are resolved against `url`.
+ */
 export function htmlToMarkdown(html: string, options: MarkdownOptions = {}): string {
   const root = parseHtml(html);
   const scope = options.scope ?? 'mainContent';

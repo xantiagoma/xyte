@@ -20,6 +20,7 @@ export type RateLimits = Readonly<Record<string, string | SiteLimit>>;
 
 const UNITS: Record<string, number> = { s: 1, m: 60, h: 3600 };
 
+/** Parses a rate limit like `'2/s'`, `'120/m'` or `'5/10s'` into `{ rate, per }` (`per` in seconds). */
 export function parseLimit(value: string | SiteLimit): SiteLimit {
   if (typeof value !== 'string') return value;
   const match = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d*)\s*([smh])\s*$/.exec(value);

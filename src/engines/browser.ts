@@ -49,6 +49,11 @@ export interface BrowserHookInfo {
   context: ProxyContext;
 }
 
+/**
+ * The `browser` option: how renders run. A local Chromium by default; `launch` for your own
+ * (Patchright, Camoufox…: see the stealth presets), `connect` for a hosted browser, plus page
+ * hooks, stealth and captcha solving. See docs/browser.md.
+ */
 export interface BrowserOptions {
   /**
    * The Playwright-compatible browser type to launch. Default: `chromium` from `playwright`

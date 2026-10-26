@@ -10,6 +10,8 @@ A Zyte API-compatible `POST /v1/extract` client/server that runs on any proxy pr
 - `bun run test:node` builds and runs `test/node/smoke.mjs` under real Node against `dist/`. Run it
   after touching the transport, server, CLI or browser engine.
 - `playwright` and `undici` are optional peers, loaded with dynamic `import()` only when needed.
+- `docs/api.md` is generated from the doc comments (`bun run build && bun run docs:api`); every export
+  and public class member needs one, and CI fails when the file is stale.
 - Types in `src/zyte.gen.ts` are generated from `spec/zyte-openapi.json` (`bun run gen:types`); don't edit by hand.
 - `isolatedDeclarations` is on (TS 7 has no API for tsdown's dts): exported functions/consts need explicit types.
 
