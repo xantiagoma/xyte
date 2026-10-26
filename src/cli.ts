@@ -4,6 +4,7 @@ import { Xyte } from './client.ts';
 import {
   browserFromEnv,
   caFromEnv,
+  closeSharedStores,
   cacheFromEnv,
   extractorsFromEnv,
   jobsFromEnv,
@@ -123,8 +124,9 @@ if (command === 'serve') {
     );
     process.exit(1);
   }
+  const stats = statsFromEnv(env);
   const server = await serve(
-    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true', jobs: jobsFromEnv(env), stats: statsFromEnv(env) }),
+    createHandler(xyte, { apiKeys, blockPrivateTargets: env.XYTE_ALLOW_PRIVATE_TARGETS !== 'true', jobs: jobsFromEnv(env), stats }),
     { port: num(values.port ?? env.PORT), hostname },
   );
   console.error(`[xyte] listening on ${server.url}v1/extract`);
@@ -145,6 +147,9 @@ if (command === 'serve') {
     await server.stop();
     await proxyMode?.stop();
     await xyte.close();
+    // The last second of stats is still buffered; then the Redis connection, if any.
+    await stats?.flush();
+    await closeSharedStores();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
@@ -170,6 +175,7 @@ if (command === 'serve') {
     process.exitCode = 1;
   } finally {
     await xyte.close();
+    await closeSharedStores();
   }
 } else if (command === 'batch') {
   // One request per line (Zyte JSON, or just a URL); one JSON result per line, as they finish.
@@ -194,6 +200,7 @@ if (command === 'serve') {
     console.log(JSON.stringify({ index: result.index, url: result.request.url, ...(error ? { error } : { response: result.response }) }));
   }
   await xyte.close();
+  await closeSharedStores();
   if (failed > 0) {
     console.error(`[xyte] ${failed} request(s) failed`);
     process.exitCode = 1;
@@ -211,6 +218,7 @@ if (command === 'serve') {
     url: values.url,
   });
   console.log(formatDoctor(results));
+  await closeSharedStores();
   if (results.some((r) => !r.ok || (r.quota && (!('available' in r.quota) || !r.quota.available)))) process.exitCode = 1;
 } else {
   console.error(`unknown command "${command}"\n\n${HELP}`);

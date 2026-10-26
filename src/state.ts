@@ -8,6 +8,11 @@ export interface StateStore {
   incr(key: string, by: number, ttl: number): Promise<number>;
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl: number): Promise<void>;
+  /**
+   * Releases what the store holds open, such as a Redis connection (which, with some clients, keeps
+   * the process from exiting). Optional: memory stores and `redisStore(send)` have nothing to close.
+   */
+  close?(): Promise<void>;
 }
 
 /** State in this process. `maxEntries` caps it, dropping the least recently written first. */
@@ -77,36 +82,46 @@ export function redisStore(send: RedisSend, options: { prefix?: string } = {}): 
 
 /**
  * Redis at `url` (`redis://…`) with the client at hand: Bun's built-in one, else the `ioredis` or
- * `redis` package if installed. The connection opens on first use.
+ * `redis` package if installed. The connection opens on first use; `close()` (or `await using`)
+ * closes it, which on Node with `ioredis` or `redis` is what lets the process exit.
  */
-export function redisStoreFromUrl(url: string, options: { prefix?: string } = {}): StateStore {
-  let client: Promise<RedisSend> | undefined;
-  const connect = async (): Promise<RedisSend> => {
-    const bun = (globalThis as { Bun?: { RedisClient?: new (url: string) => { send(command: string, args: string[]): Promise<unknown> } } }).Bun;
+export function redisStoreFromUrl(url: string, options: { prefix?: string } = {}): StateStore & { close(): Promise<void> } & AsyncDisposable {
+  type Client = { send: RedisSend; close: () => Promise<unknown> };
+  let client: Promise<Client> | undefined;
+  const connect = async (): Promise<Client> => {
+    const bun = (globalThis as { Bun?: { RedisClient?: new (url: string) => { send(command: string, args: string[]): Promise<unknown>; close(): void } } }).Bun;
     if (bun?.RedisClient) {
       const redis = new bun.RedisClient(url);
-      return (command) => redis.send(command[0]!, command.slice(1));
+      return { send: (command) => redis.send(command[0]!, command.slice(1)), close: async () => redis.close() };
     }
     const load = (name: string): Promise<Record<string, unknown>> => import(name);
     const ioredis = await load('ioredis').catch(() => undefined);
     if (ioredis) {
-      const Redis = (ioredis.default ?? ioredis) as new (url: string) => { call(command: string, ...args: string[]): Promise<unknown> };
+      const Redis = (ioredis.default ?? ioredis) as new (url: string) => { call(command: string, ...args: string[]): Promise<unknown>; quit(): Promise<unknown> };
       const redis = new Redis(url);
-      return (command) => redis.call(command[0]!, ...command.slice(1));
+      return { send: (command) => redis.call(command[0]!, ...command.slice(1)), close: () => redis.quit() };
     }
     const nodeRedis = await load('redis').catch(() => undefined);
     if (nodeRedis) {
       const createClient = nodeRedis.createClient as (options: { url: string }) => {
         connect(): Promise<unknown>;
         sendCommand(command: string[]): Promise<unknown>;
+        quit(): Promise<unknown>;
       };
       const redis = createClient({ url });
       await redis.connect();
-      return (command) => redis.sendCommand(command);
+      return { send: (command) => redis.sendCommand(command), close: () => redis.quit() };
     }
     throw new Error('xyte: a Redis store needs Bun, or the "ioredis" or "redis" package');
   };
-  return redisStore((command) => (client ??= connect()).then((send) => send(command)), options);
+  const store = redisStore((command) => (client ??= connect()).then((c) => c.send(command)), options);
+  // Closes the connection if one was opened; the next operation opens a new one.
+  const close = async () => {
+    const opened = client;
+    client = undefined;
+    if (opened) await (await opened.catch(() => undefined))?.close().catch(() => {});
+  };
+  return { ...store, close, [Symbol.asyncDispose]: close };
 }
 
 /**
@@ -133,5 +148,6 @@ export function resilient(store: StateStore, onError: (error: unknown) => void =
     incr: guard((s) => s.incr.bind(s)),
     get: guard((s) => s.get.bind(s)),
     set: guard((s) => s.set.bind(s)),
+    close: async () => store.close?.(),
   };
 }

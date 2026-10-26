@@ -288,6 +288,8 @@ export class Xyte {
   private readonly pool: SessionPool;
   private readonly cache: ResponseCache | undefined;
   private readonly pacer: Pacer | undefined;
+  /** Requests in flight, so close() can cancel them before closing the browser they may open. */
+  private readonly inFlight = new Map<AbortController, Promise<unknown>>();
   private readonly limit: <T>(task: () => Promise<T>) => Promise<T>;
 
   constructor(private readonly options: XyteOptions = {}) {
@@ -308,6 +310,16 @@ export class Xyte {
    * with an `XyteError` carrying Zyte's status and problem type.
    */
   extract(request: ExtractRequest, options: ExtractOptions = {}): Promise<ExtractResponse> {
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    const running = this.extractCached(request, { ...options, signal });
+    this.inFlight.set(controller, running);
+    const forget = () => this.inFlight.delete(controller);
+    running.then(forget, forget);
+    return running;
+  }
+
+  private extractCached(request: ExtractRequest, options: ExtractOptions): Promise<ExtractResponse> {
     const ttl = this.cache?.ttlFor(request) ?? 0;
     if (!this.cache || ttl <= 0) return this.extractNow(request, options);
     const queued = Date.now();
@@ -359,7 +371,8 @@ export class Xyte {
    * any iterable or async iterable (a list, a file read line by line, a queue), keeps at most
    * `concurrency` in flight (default: the client's, else 16), and yields `{ index, request,
    * response }` or `{ index, request, error }`: one failure doesn't stop the batch. The client's
-   * `concurrency`, `rateLimits`, cache and reports apply to each request as usual.
+   * `concurrency`, `rateLimits`, cache and reports apply to each request as usual. Leaving the
+   * loop early (`break`, `return`, an exception) cancels the requests still in flight.
    */
   async *extractMany(
     requests: Iterable<ExtractRequest> | AsyncIterable<ExtractRequest>,
@@ -368,6 +381,9 @@ export class Xyte {
     const window = Math.max(1, options.concurrency ?? (Number.isFinite(this.options.concurrency ?? Number.NaN) ? this.options.concurrency! : 16));
     const source = Symbol.asyncIterator in requests ? requests[Symbol.asyncIterator]() : (requests as Iterable<ExtractRequest>)[Symbol.iterator]();
     const running = new Map<number, Promise<BatchResult>>();
+    // Aborted when the caller stops iterating, so requests nobody will read don't keep going.
+    const stop = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, stop.signal]) : stop.signal;
     let index = 0;
     let exhausted = false;
     const fill = async () => {
@@ -382,19 +398,27 @@ export class Xyte {
         const request = next.value;
         running.set(
           i,
-          this.extract(request, { signal: options.signal }).then(
+          this.extract(request, { signal }).then(
             (response): BatchResult => ({ index: i, request, response }),
             (error: unknown): BatchResult => ({ index: i, request, error }),
           ),
         );
       }
     };
-    await fill();
-    while (running.size > 0) {
-      const done = await Promise.race(running.values());
-      running.delete(done.index);
-      yield done;
+    try {
       await fill();
+      while (running.size > 0) {
+        const done = await Promise.race(running.values());
+        running.delete(done.index);
+        yield done;
+        await fill();
+      }
+    } finally {
+      if (running.size > 0 || !exhausted) {
+        stop.abort();
+        await Promise.allSettled(running.values());
+        if (!exhausted) await source.return?.();
+      }
     }
   }
 
@@ -405,9 +429,23 @@ export class Xyte {
     return results;
   }
 
-  /** Closes the shared browser, if one was started. */
-  close(): Promise<void> {
-    return this.browser.close();
+  /**
+   * Cancels the requests in flight (they reject with a `/client/closed` error), waits for them to
+   * settle, then closes the shared browser, if one was started. Safe to call more than once, and
+   * the client keeps working afterwards: the next render launches a new browser.
+   */
+  async close(): Promise<void> {
+    const pending = [...this.inFlight];
+    for (const [controller] of pending) {
+      controller.abort(
+        new XyteError(
+          { status: 500, type: '/client/closed', title: 'Client Closed', detail: 'xyte.close() was called while this request was in flight' },
+          { retryable: false },
+        ),
+      );
+    }
+    await Promise.allSettled(pending.map(([, running]) => running));
+    await this.browser.close();
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

@@ -334,6 +334,17 @@ function sharedStore(url: string): StateStore {
   return store;
 }
 
+/**
+ * Closes the Redis connections the `*FromEnv` helpers opened for `XYTE_REDIS_URL` (one per URL,
+ * shared by all of them). Call it on shutdown, after `xyte.close()`: on Node with `ioredis` or
+ * `redis`, an open connection keeps the process from exiting.
+ */
+export async function closeSharedStores(): Promise<void> {
+  const open = [...stores.values()];
+  stores.clear();
+  await Promise.all(open.map((store) => store.close?.()));
+}
+
 /** A provider by its `XYTE_PROVIDER` name (or `direct`), as is: no budget, breaker or watch. */
 export function providerFromName(name: string, env: Env = process.env): ProxyProvider {
   const key = name.trim().toLowerCase();

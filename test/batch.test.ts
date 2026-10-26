@@ -51,6 +51,40 @@ test('extractMany: at most `concurrency` in flight, fed lazily from an async sou
   expect(pulled).toBe(6);
 });
 
+test('extractMany: leaving the loop early cancels what is in flight and closes the source', async () => {
+  let finished = 0;
+  let aborted = 0;
+  let sourceClosed = false;
+  async function* source() {
+    try {
+      for (let i = 0; ; i++) yield { url: `${target.base}/${i === 0 ? 'html' : 'api/slow'}?i=${i}`, httpResponseBody: true };
+    } finally {
+      sourceClosed = true;
+    }
+  }
+  const xyte = new Xyte({
+    retries: 0,
+    transport: async (req) => {
+      try {
+        const res = await fetch(req.url, { method: req.method, headers: req.headers, signal: req.signal });
+        finished++;
+        return res;
+      } catch (error) {
+        aborted++;
+        throw error;
+      }
+    },
+  });
+  for await (const result of xyte.extractMany(source(), { concurrency: 3 })) {
+    expect(result.index).toBe(0); // /html answers first
+    break;
+  }
+  expect(sourceClosed).toBe(true);
+  expect(aborted).toBe(2); // the two slow ones still running, not left to finish unread
+  await Bun.sleep(600);
+  expect(finished).toBe(1);
+});
+
 test('xyte batch: JSONL in, JSONL out', async () => {
   const input = `${target.base}/html\n# a comment\n{"url":"${target.base}/missing","httpResponseBody":true}\n`;
   const proc = Bun.spawn(['bun', 'src/cli.ts', 'batch', '-'], { stdin: new Blob([input]), stdout: 'pipe', stderr: 'pipe' });

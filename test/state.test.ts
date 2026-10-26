@@ -94,7 +94,30 @@ describe('stores', () => {
     await store.set('s', 'hello', 60);
     expect(await store.get('s')).toBe('hello');
     expect(await store.get('missing')).toBeNull();
+    // close() releases the connection; using the store again opens a new one.
+    await store.close!();
+    await store.close!();
+    expect(await store.get('s')).toBe('hello');
+    await store.close!();
   });
+
+  // On Node, ioredis's open connection keeps the process alive until the store is closed.
+  test.skipIf(!redisUrl)('on Node with ioredis, the process exits once the store is closed', async () => {
+    const script = (close: boolean) => `
+      import { redisStoreFromUrl } from ${JSON.stringify(new URL('../src/state.ts', import.meta.url).pathname)};
+      const store = redisStoreFromUrl(${JSON.stringify(redisUrl)});
+      await store.set('xyte-test:exit', '1', 10);
+      ${close ? 'await store.close();' : ''}
+    `;
+    const run = async (close: boolean) => {
+      const proc = Bun.spawn(['node', '--experimental-strip-types', '--no-warnings', '--input-type=module', '-e', script(close)], { stderr: 'pipe' });
+      const exited = await Promise.race([proc.exited.then(() => true), Bun.sleep(4000).then(() => false)]);
+      proc.kill();
+      return exited;
+    };
+    expect(await run(true)).toBe(true);
+    expect(await run(false)).toBe(false);
+  }, 15_000);
 });
 
 describe('shared state across instances', () => {

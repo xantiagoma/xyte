@@ -63,42 +63,18 @@ await xyte.close(); // closes the shared browser
 
 ### Closing the client
 
-The first browser request (`browserHtml`, `screenshot`, `actions`…) launches a Chromium that the
-client keeps and reuses for every later render. It stays open, and keeps the process alive,
-until you close the client with `close()`. A client that only made HTTP requests has nothing to
-close; calling `close()` anyway is harmless.
-
-The usual way, anywhere:
+The first render launches a browser that the client reuses, and it keeps your process alive
+until you close the client:
 
 ```ts
+await using xyte = new Xyte({ proxy }); // closed when the block ends, even on an exception
+// or, where that syntax doesn't run (plain JavaScript on Node.js 22):
 const xyte = new Xyte({ proxy });
-try {
-  await xyte.extract({ url, browserHtml: true });
-} finally {
-  await xyte.close(); // runs even if extract() threw
-}
+try { … } finally { await xyte.close(); }
 ```
 
-The same, written with `await using` (JavaScript's explicit resource management): the client is
-closed automatically when the block ends, normally or by an exception. `Xyte` supports it by
-implementing `Symbol.asyncDispose`, which calls `close()`.
-
-```ts
-{
-  await using xyte = new Xyte({ proxy });
-  await xyte.extract({ url, browserHtml: true });
-} // closed here
-```
-
-| Where | `await using` |
-| --- | --- |
-| Bun | works |
-| Node.js 24+ | works |
-| TypeScript (5.2+, or `tsc` 7) compiled for Node.js 22 | works: the compiler turns it into plain code, and Node.js 22 has `Symbol.asyncDispose` |
-| Plain JavaScript on Node.js 22 | a syntax error: use `try` / `finally` |
-
-In a long-running service, create one client at startup and close it on shutdown (e.g. on
-`SIGTERM`), as `xyte serve` does: a client per request would launch a browser per request.
+[The client's lifecycle](docs/lifecycle.md) explains `await using`, where it runs, the `return
+await` trap, services (one client, closed on `SIGTERM`), Redis stores and tests.
 
 ### Many at once
 
@@ -273,6 +249,7 @@ back (a captcha served with a 200 counts as a failure), the median latency and t
 | 500 | `/server/internal` | xyte misconfigured (a provider that can't build its URL, Playwright not installed) | no |
 | 520 | `/download/website-ban` | every attempt was a ban | yes, then returned |
 | 520 | `/download/temporary-error` | every attempt failed at the proxy or network level | yes, then returned |
+| 500 | `/client/closed` | `xyte.close()` was called while the request was in flight | no |
 
 A target's own 4xx/5xx is not an error: it's a 200 with `statusCode` set, as on Zyte. Bans are
 403, 429, 503, or a known challenge page (Cloudflare, DataDome, PerimeterX, Imperva, Akamai);

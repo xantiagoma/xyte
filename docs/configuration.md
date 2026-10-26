@@ -30,7 +30,7 @@ your own code), the server handler options, and the CLI.
 
 `extract(request, { signal, onWarning, onReport })` takes an `AbortSignal` that cancels every
 attempt, and per-call warning and report callbacks. `close()` closes the shared browser the first render launched; `await using xyte = new Xyte(…)`
-does it when the block ends ([closing the client](../README.md#closing-the-client), including
+does it when the block ends ([the client's lifecycle](lifecycle.md), including
 where that syntax works).
 
 ## Environment variables

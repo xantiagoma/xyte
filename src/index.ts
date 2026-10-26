@@ -21,6 +21,7 @@ export {
   browserFromEnv,
   caFromEnv,
   cacheFromEnv,
+  closeSharedStores,
   extractorsFromEnv,
   jobsFromEnv,
   PROVIDER_NAMES,
