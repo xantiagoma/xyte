@@ -43,13 +43,14 @@ npm attaches the trust to an existing package, so v0.1.0 was published by hand a
 up after it:
 
 ```sh
-bunx npm@latest login --auth-type=web
-bunx npm@latest publish --access public --otp=<code>
-bunx npm@latest trust github xyte --repo xantiagoma/xyte --file release.yml --allow-publish -y --otp=<code>
+bunx npm@11 login --auth-type=web
+bunx npm@11 publish --access public --otp=<code>
+bunx npm@11 trust github xyte --repo xantiagoma/xyte --file release.yml --allow-publish -y --otp=<code>
 ```
 
-`npm trust` needs npm 11.10 or later, hence `npm@latest`. The trust names the workflow file:
-renaming `release.yml` breaks publishing until the trust is updated.
+`npm trust` needs npm 11.10 or later, and npm 12 needs Node.js 22.22 or later, hence `npm@11`.
+The trust names the workflow file: renaming `release.yml` breaks publishing until the trust is
+updated.
 
 ## What's in the package
 
