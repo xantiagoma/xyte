@@ -11,7 +11,7 @@ proxy for one attempt. Every preset follows the same rules:
 - **Credentials**: in code, or from env vars via `XYTE_PROVIDER=<name>` (see the table).
 
 ```ts
-import { Xyte, nodeMaven, rotate, zenrows } from 'xytejs';
+import { Xyte, nodeMaven, rotate, zenrows } from '@xtandard/xyte';
 
 new Xyte({
   proxy: rotate([nodeMaven({ username, password }), zenrows({ apiKey })]),
@@ -122,7 +122,7 @@ connect: async ({ country }) => {
 Write the provider's format once:
 
 ```ts
-import { template } from 'xytejs';
+import { template } from '@xtandard/xyte';
 
 template('http://{env:INFATICA_USER}[_c_{country}]_s_{session}_ttl_30m:{env:INFATICA_PASS}@pool.infatica.io:10000');
 ```
@@ -179,7 +179,7 @@ statusCode, html }) }` from a provider's `resolve`; see `src/apis.ts`.
 ## Writing a provider
 
 ```ts
-import type { ProxyProvider } from 'xytejs';
+import type { ProxyProvider } from '@xtandard/xyte';
 
 const mine: ProxyProvider = {
   name: 'mine',

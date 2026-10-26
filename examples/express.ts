@@ -1,6 +1,6 @@
 // Mount inside an existing Express app: POST /zyte/v1/extract.
 import express from 'express';
-import { createHandler, proxyFromEnv, toNodeHandler, Xyte } from 'xytejs';
+import { createHandler, proxyFromEnv, toNodeHandler, Xyte } from '@xtandard/xyte';
 
 const xyte = new Xyte({ proxy: proxyFromEnv() });
 const app = express();

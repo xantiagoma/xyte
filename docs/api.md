@@ -6,7 +6,7 @@ Everything `xyte` exports, with its doc comment and its TypeScript declaration (
 parameters are documented inside it). Types are TypeScript-only (`import type`).
 
 ```ts
-import { Xyte, oxylabs, decodeBody } from 'xytejs';
+import { Xyte, oxylabs, decodeBody } from '@xtandard/xyte';
 ```
 
 - [Client](#client): `Xyte`, `createXyte`, `XyteOptions`, `ExtractOptions`, `BatchResult`, `decodeBody`, `Transport`, `TransportRequest`, `SessionPoolOptions`

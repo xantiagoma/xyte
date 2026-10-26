@@ -45,7 +45,7 @@ up after it:
 ```sh
 bunx npm@11 login --auth-type=web
 bunx npm@11 publish --access public --otp=<code>
-bunx npm@11 trust github xytejs --repo xantiagoma/xyte --file release.yml --allow-publish -y --otp=<code>
+bunx npm@11 trust github @xtandard/xyte --repo xantiagoma/xyte --file release.yml --allow-publish -y --otp=<code>
 ```
 
 `npm trust` needs npm 11.10 or later, and npm 12 needs Node.js 22.22 or later, hence `npm@11`.

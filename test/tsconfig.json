@@ -4,7 +4,7 @@
     "isolatedDeclarations": false,
     "declaration": false,
     "paths": {
-      "xytejs": [
+      "@xtandard/xyte": [
         "../src/index.ts"
       ]
     }

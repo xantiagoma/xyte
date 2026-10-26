@@ -1,6 +1,6 @@
 // A provider per site: free where the site lets anyone in, residential where it doesn't, Zyte
 // only where nothing else gets through. See docs/routing.md.
-import { decodeBody, direct, oxylabs, rotate, route, Xyte, zyteApi } from 'xytejs';
+import { decodeBody, direct, oxylabs, rotate, route, Xyte, zyteApi } from '@xtandard/xyte';
 
 const residential = oxylabs({ username: process.env.OXYLABS_USERNAME!, password: process.env.OXYLABS_PASSWORD! });
 const zyte = zyteApi({ apiKey: process.env.ZYTE_API_KEY! });

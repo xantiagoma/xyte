@@ -1,5 +1,5 @@
 // Library use: the same request JSON as api.zyte.com/v1/extract, through any proxy.
-import { decodeBody, oxylabs, rotate, Xyte, XyteError, zenrows } from 'xytejs';
+import { decodeBody, oxylabs, rotate, Xyte, XyteError, zenrows } from '@xtandard/xyte';
 
 const xyte = new Xyte({
   // Oxylabs first; a retry goes through ZenRows (survives one provider being down).

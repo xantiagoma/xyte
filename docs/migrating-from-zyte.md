@@ -28,7 +28,7 @@ A typical helper, such as one with `getHTMLFromZyte({ url, actions, options })` 
 Zyte and retries transient statuses, becomes:
 
 ```ts
-import { Xyte, XyteError, proxyFromEnv, type ExtractRequest } from 'xytejs';
+import { Xyte, XyteError, proxyFromEnv, type ExtractRequest } from '@xtandard/xyte';
 
 const xyte = new Xyte({ proxy: proxyFromEnv(), concurrency: 10 }); // replaces p-limit
 

@@ -7,7 +7,7 @@ name: Release
 #
 # Auth is npm trusted publishing (OIDC): no NPM_TOKEN secret. The trust is configured on npmjs.com
 # for this repo and this workflow file
-# (`npm trust github xytejs --repo xantiagoma/xyte --file release.yml --allow-publish`), and needs
+# (`npm trust github @xtandard/xyte --repo xantiagoma/xyte --file release.yml --allow-publish`), and needs
 # npm >= 11.5.1 (Node 24 ships it). Provenance comes with it.
 #
 # Re-publish an existing tag (e.g. after a failed publish): run this workflow by hand with `tag`
@@ -71,8 +71,8 @@ jobs:
       - name: Publish to npm (with provenance)
         run: |
           version="$(node -p 'require("./package.json").version')"
-          if npm view "xytejs@${version}" version >/dev/null 2>&1; then
-            echo "xytejs@${version} is already on npm"
+          if npm view "@xtandard/xyte@${version}" version >/dev/null 2>&1; then
+            echo "@xtandard/xyte@${version} is already on npm"
           else
             npm publish --provenance --access public --ignore-scripts
           fi

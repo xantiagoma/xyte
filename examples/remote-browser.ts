@@ -1,5 +1,5 @@
 // Render in a hosted browser per request instead of a local Chromium.
-import { Xyte } from 'xytejs';
+import { Xyte } from '@xtandard/xyte';
 
 const xyte = new Xyte({
   browser: {

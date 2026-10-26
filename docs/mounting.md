@@ -10,7 +10,7 @@ By default it matches **any path ending in** `/v1/extract`, so it works under a 
 not your framework strips it. Pass `basePath: '/zyte'` to match `/zyte/v1/extract` only.
 
 ```ts
-import { createHandler, proxyFromEnv, toNodeHandler, Xyte } from 'xytejs';
+import { createHandler, proxyFromEnv, toNodeHandler, Xyte } from '@xtandard/xyte';
 
 const xyte = new Xyte({ proxy: proxyFromEnv() });
 const handler = createHandler(xyte, { apiKeys: ['secret'], basePath: '/zyte' });

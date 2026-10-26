@@ -383,7 +383,7 @@ const lines: string[] = [
   "parameters are documented inside it). Types are TypeScript-only (`import type`).",
   '',
   '```ts',
-  "import { Xyte, oxylabs, decodeBody } from 'xytejs';",
+  "import { Xyte, oxylabs, decodeBody } from '@xtandard/xyte';",
   '```',
   '',
   ...GROUPS.map((g) => `- [${g.title}](#${anchor(g.title)}): ${g.names.map((n) => `\`${n}\``).join(', ')}`),

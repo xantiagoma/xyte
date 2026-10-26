@@ -30,7 +30,7 @@ npm i patchright && npx patchright install chrome   # or: chromium
 
 ```ts
 import { chromium } from 'patchright';
-import { decodo, Xyte } from 'xytejs';
+import { decodo, Xyte } from '@xtandard/xyte';
 
 const xyte = new Xyte({
   proxy: decodo({ username, password }),
@@ -64,7 +64,7 @@ Notes:
 One line per browser, as presets you spread into `browser` (or name in `XYTE_BROWSER`):
 
 ```ts
-import { camoufox, cloakBrowser, patchright, rebrowser, Xyte } from 'xytejs';
+import { camoufox, cloakBrowser, patchright, rebrowser, Xyte } from '@xtandard/xyte';
 
 new Xyte({ browser: { ...camoufox({ humanize: true }), blockResources: ['image', 'font'] } });
 ```
@@ -153,7 +153,7 @@ attempt), so hooks can match locale and timezone to the exit country.
 ## Captchas
 
 ```ts
-import { capsolver, twoCaptcha, Xyte } from 'xytejs';
+import { capsolver, twoCaptcha, Xyte } from '@xtandard/xyte';
 
 new Xyte({ browser: { captcha: capsolver({ apiKey: process.env.CAPSOLVER_API_KEY! }) } });
 ```
