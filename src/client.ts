@@ -496,6 +496,9 @@ export class Xyte {
     let lastReason = 'unknown error';
     let lastCause: unknown;
     let lastWasBan = false;
+    // The last attempt that got an answer (a ban, an upstream's problem): what the request fails
+    // with, rather than a network error on a later attempt that got none.
+    let answered: { reason: string; cause: unknown; ban: boolean } | undefined;
     const { requestId } = trace;
     // browserFallback: after a ban, a plain GET goes on in a browser.
     let inBrowser = plan.browser;
@@ -668,6 +671,7 @@ export class Xyte {
             lastReason = describe(error);
             lastCause = error;
             lastWasBan = false;
+            answered = { reason: lastReason, cause: error, ban: false };
             verdict = { result: 'error', reason: lastReason, fatal: true, ...upstreamOf };
             if ((context.path?.length ?? 0) === 0) throw new XyteError(error.problem, { cause: error, retryable: false });
             down.set(context.path!.at(-1)!, error);
@@ -681,6 +685,7 @@ export class Xyte {
           lastCause = error;
           // An upstream API's ban (Zyte's /download/website-ban) is a ban, not a provider failure.
           lastWasBan = error instanceof UpstreamProblem && error.problem.type.includes('ban');
+          if (error instanceof UpstreamProblem) answered = { reason: lastReason, cause: error, ban: lastWasBan };
           verdict = { result: lastWasBan ? 'ban' : 'error', reason: lastReason, ...upstreamOf };
           continue;
         }
@@ -697,6 +702,7 @@ export class Xyte {
           lastReason = `ban detected (HTTP ${result.statusCode})${escalated ? ' in the browser' : ''}`;
           lastCause = undefined;
           lastWasBan = true;
+          answered = { reason: lastReason, cause: undefined, ban: true };
           verdict = { result: 'ban', reason: lastReason, ...page };
           if (canEscalate) inBrowser = true;
           continue;
@@ -737,6 +743,13 @@ export class Xyte {
       }
     }
 
+    // A ban three attempts ago says more than the connection reset that ended the request: callers
+    // tell "the site banned us" from "the network failed", and only the second is worth a rerun.
+    if (answered && !lastWasBan && !(lastCause instanceof UpstreamProblem)) {
+      lastReason = answered.reason;
+      lastCause = answered.cause;
+      lastWasBan = answered.ban;
+    }
     // The upstream API's own last answer (Zyte's 520 /download/website-ban…), as Zyte gave it.
     if (lastCause instanceof UpstreamProblem) throw new XyteError(lastCause.problem, { cause: lastCause, ...(lastCause.fatal && { retryable: false }) });
     throw temporaryDownloadError(`${lastReason} after ${this.retries + 1} attempts`, {
