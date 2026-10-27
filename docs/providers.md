@@ -196,7 +196,10 @@ const proxy = rotate([
 attempts (`[{ provider: 'oxylabs-residential', result: 'ban' }, { provider: 'oxylabs-residential',
 result: 'ok' }]`) and its request id. Its `transferBytes` are the remote ones, so a per-GB
 [rate](routing.md#costs) on `xyte-oxylabs` prices it. `zyteApi({ endpoint })` would work too,
-without the detail.
+without the detail. An attempt on it waits up to `timeout` seconds (default 150, rather than the
+client's `timeout`), since the remote retries on its side. The client needs no browser: the
+remote renders. The whole pattern, with Modal and Cloud Run fleets, is in
+[deploying](deploy.md#a-thin-client-and-a-remote-fleet).
 
 **Names.** Every `zyteApi()` is called `zyte-api` unless you pass `name`; give each endpoint its
 own, so each has its own line in reports, `rates`, circuits, budgets and `adaptive()`. For any

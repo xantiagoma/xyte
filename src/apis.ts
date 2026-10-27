@@ -41,6 +41,11 @@ export interface ZyteApiOptions {
    * endpoint when a combinator has several, so each keeps its own numbers.
    */
   name?: string;
+  /**
+   * Seconds an attempt on this endpoint may take, instead of the client's `timeout`. `xyteApi()`
+   * defaults to 150 (the remote server retries on its side, and 150 s is Modal's web limit).
+   */
+  timeout?: number;
   /** Resolved at call time: a stub put on `globalThis.fetch` later is used too. */
   fetch?: typeof fetch;
 }
@@ -66,7 +71,7 @@ function upstreamOf(headers: Headers): UpstreamInfo | undefined {
   };
 }
 
-function zyteCompatible(options: ZyteApiOptions, defaults: { name: string; endpoint?: string; upstream: boolean }): ProxyProvider<ApiEndpoint> {
+function zyteCompatible(options: ZyteApiOptions, defaults: { name: string; endpoint?: string; upstream: boolean; timeout?: number }): ProxyProvider<ApiEndpoint> {
   const endpoint = options.endpoint ?? defaults.endpoint;
   if (!endpoint) throw new Error(`${defaults.name}: an endpoint is required`);
   return {
@@ -74,6 +79,7 @@ function zyteCompatible(options: ZyteApiOptions, defaults: { name: string; endpo
     extracts: true,
     zyteActions: true,
     resolve: () => ({
+      timeout: options.timeout ?? defaults.timeout,
       async api(request, { signal }) {
         const res = await (options.fetch ?? fetch)(endpoint, {
           method: 'POST',
@@ -119,9 +125,11 @@ export function zyteApi(options: ZyteApiOptions): ProxyProvider<ApiEndpoint> {
  * required `endpoint` that also reads its `X-Xyte-Attempts` / `X-Xyte-Transfer-Bytes` headers, so
  * the local attempt carries the remote ones (`upstream`) and the bytes they moved. Default name
  * `xyte`; give each deployment its own: `xyteApi({ endpoint, apiKey, name: 'xyte-oxylabs' })`.
+ * An attempt waits up to `timeout` seconds (default 150): keep the remote's retries × timeout
+ * under it. The client needs no browser: the remote renders.
  */
 export function xyteApi(options: ZyteApiOptions & { endpoint: string }): ProxyProvider<ApiEndpoint> {
-  return zyteCompatible(options, { name: 'xyte', upstream: true });
+  return zyteCompatible(options, { name: 'xyte', upstream: true, timeout: 150 });
 }
 
 /** "US" → "UnitedStates" (Scrappey's country format). */

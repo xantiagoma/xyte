@@ -622,8 +622,11 @@ export class Xyte {
             }
             const sent = this.apiRequest(request, { leaf, cannot, own: zyteOnly.own, mode, warn });
             // A scraping API takes the whole request (it renders, solves and proxies itself).
-            releaseSlot = await this.pacer?.acquire(request.url, signal);
-            const answer = await endpoint.api(sent.request, { context, signal });
+            // An API that retries on its own side (another xyte server) can need longer than an attempt.
+            const apiSignal =
+              endpoint.timeout == null ? signal : cancel ? AbortSignal.any([AbortSignal.timeout(endpoint.timeout * 1000), cancel]) : AbortSignal.timeout(endpoint.timeout * 1000);
+            releaseSlot = await this.pacer?.acquire(request.url, apiSignal);
+            const answer = await endpoint.api(sent.request, { context, signal: apiSignal });
             if (sent.dropped.size > 0) answer.response.actions = mergeActionResults(request.actions ?? [], answer.response.actions, sent.dropped);
             result = {
               response: answer.response,

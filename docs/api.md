@@ -972,6 +972,8 @@ Another xyte server (`xyte serve`, e.g. a deployment with its own proxy): `zyteA
 required `endpoint` that also reads its `X-Xyte-Attempts` / `X-Xyte-Transfer-Bytes` headers, so
 the local attempt carries the remote ones (`upstream`) and the bytes they moved. Default name
 `xyte`; give each deployment its own: `xyteApi({ endpoint, apiKey, name: 'xyte-oxylabs' })`.
+An attempt waits up to `timeout` seconds (default 150): keep the remote's retries × timeout
+under it. The client needs no browser: the remote renders.
 
 ```ts
 function xyteApi(options: ZyteApiOptions & {
@@ -993,6 +995,11 @@ interface ZyteApiOptions {
    * endpoint when a combinator has several, so each keeps its own numbers.
    */
   name?: string;
+  /**
+   * Seconds an attempt on this endpoint may take, instead of the client's `timeout`. `xyteApi()`
+   * defaults to 150 (the remote server retries on its side, and 150 s is Modal's web limit).
+   */
+  timeout?: number;
   /** Resolved at call time: a stub put on `globalThis.fetch` later is used too. */
   fetch?: typeof fetch;
 }
@@ -1185,6 +1192,8 @@ interface ApiEndpoint {
    * Omitted: it can do everything.
    */
   unsupported?: (request: ExtractRequest) => readonly string[];
+  /** Seconds an attempt on this API may take, instead of the client's `timeout`. */
+  timeout?: number;
 }
 ```
 

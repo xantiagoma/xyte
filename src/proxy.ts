@@ -99,6 +99,8 @@ export interface ApiEndpoint {
    * Omitted: it can do everything.
    */
   unsupported?: (request: ExtractRequest) => readonly string[];
+  /** Seconds an attempt on this API may take, instead of the client's `timeout`. */
+  timeout?: number;
 }
 
 /** What an `ApiEndpoint`'s `api()` resolves with: the service's answer in Zyte's shape. */

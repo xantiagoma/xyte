@@ -112,10 +112,9 @@ and point the health check at `/healthz`.
 
 ## Modal
 
-[`deploy/modal_app.py`](../deploy/modal_app.py) builds the repo's Dockerfile and runs
-`xyte serve` behind `@modal.web_server`. It works, but Modal is Python-first: you pay
-image-build time on changes and per-container memory. Prefer Cloud Run unless you're already on
-Modal.
+[`deploy/modal_app.py`](../deploy/modal_app.py) builds the repo's Dockerfile (the browser image)
+and runs `xyte serve` behind `@modal.web_server`, one container per `XYTE_MODAL_CONCURRENCY`
+requests, scaling with traffic.
 
 ```sh
 modal secret create xyte OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
@@ -133,18 +132,97 @@ modal secret create xyte-oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_
 XYTE_MODAL_APP=xyte-oxylabs XYTE_PROVIDER=oxylabs XYTE_MODAL_MIN_CONTAINERS=1 modal deploy deploy/modal_app.py
 ```
 
-| Variable | Default | |
-| --- | --- | --- |
-| `XYTE_MODAL_APP` | `xyte` | The app's name, and so its URL (`https://<workspace>--<app>-serve.modal.run`) |
-| `XYTE_PROVIDER` | `oxylabs` | What `xyte serve` uses ([configuration](configuration.md)); anything else (`XYTE_ROUTES`, `XYTE_CIRCUIT_BREAKER`…) goes in the secret |
-| `XYTE_MODAL_SECRET` | the app's name | The Modal secret with the provider's credentials and `XYTE_API_KEYS` |
-| `XYTE_MODAL_MIN_CONTAINERS` | `0` | Containers kept warm: `1` avoids the cold start (tens of seconds for the browser image), billed while idle |
-| `XYTE_MODAL_CONCURRENCY` | `8` | Requests per container (`@modal.concurrent` and `XYTE_CONCURRENCY`) |
+| Variable | Default | Modal setting | |
+| --- | --- | --- | --- |
+| `XYTE_MODAL_APP` | `xyte` | `modal.App(name)` | The app's name, and so its URL: `https://<workspace>--<app>-serve.modal.run` |
+| `XYTE_PROVIDER` | `oxylabs` | | What `xyte serve` uses ([configuration](configuration.md)). Anything else (`XYTE_ROUTES`, `XYTE_CIRCUIT_BREAKER`, `XYTE_REDIS_URL`…) goes in the secret |
+| `XYTE_MODAL_SECRET` | the app's name | `secrets` | The provider's credentials and `XYTE_API_KEYS` |
+| `XYTE_MODAL_MIN_CONTAINERS` | `0` | `min_containers` | Containers kept warm while idle. `1` removes the cold start, billed around the clock |
+| `XYTE_MODAL_MAX_CONTAINERS` | `10` | `max_containers` | The cap on spend, and on concurrency at the provider |
+| `XYTE_MODAL_BUFFER_CONTAINERS` | `0` | `buffer_containers` | Idle containers kept ready *while traffic flows*, so a burst doesn't wait for a cold start |
+| `XYTE_MODAL_SCALEDOWN` | `300` | `scaledown_window` | Seconds an idle container lives (Modal allows 2–1200; its default is 60). Longer: fewer cold starts, more idle billing |
+| `XYTE_MODAL_CONCURRENCY` | `8` | `@modal.concurrent(max_inputs)`, `XYTE_CONCURRENCY` | Requests one container takes at most |
+| `XYTE_MODAL_TARGET_INPUTS` | ¾ of the above | `@modal.concurrent(target_inputs)` | What the autoscaler aims for: a new container starts at this load, and the gap to `max_inputs` is burst room while it boots |
+| `XYTE_MODAL_MEMORY`, `XYTE_MODAL_CPU` | `2048`, `2` | `memory`, `cpu` | Per container |
+| `XYTE_MODAL_REGION` | any | `region` | `us`, `eu`, `ap`… near the proxy's gateway or your callers. Modal bills 1.15× for a broad region, 1.75× for a narrow one |
+| `XYTE_TIMEOUT`, `XYTE_RETRIES` | `30`, `3` | | Per attempt and retries. Set them here, at deploy time, not in the secret |
 
 The values are baked into the image as well, because Modal imports the file again inside the
-container. From another service, each app is one provider:
-`xyteApi({ endpoint: 'https://<workspace>--xyte-decodo-serve.modal.run/v1/extract', apiKey, name: 'xyte-decodo' })`
-([providers](providers.md#another-xyte-server-as-a-provider)).
+container.
+
+**Sizing.**
+
+- **Requests take long, not much CPU.** A scrape mostly waits on the network, so one container
+  takes several at once. Chromium sets the limit: about 8 renders on 2 CPUs and 2 GiB. For
+  HTTP-only traffic, `XYTE_MODAL_CONCURRENCY=32` (or more) is fine.
+- **Max containers × concurrency is the fleet's peak.** Keep it within what the proxy plan allows
+  in parallel, and what you're willing to pay for.
+- **Cold starts** are tens of seconds: the browser image is large, and Chromium starts on the first
+  render. Against them:
+  - `XYTE_MODAL_MIN_CONTAINERS=1` while it matters (business hours, a crawl);
+  - `XYTE_MODAL_BUFFER_CONTAINERS` for bursty traffic;
+  - a long `XYTE_MODAL_SCALEDOWN` for traffic that is regular but sparse.
+
+  `Function.autoscaler.update(min_containers=…)` changes them without a redeploy, from a scheduled
+  job for instance. A redeploy puts the file's values back.
+- **150 seconds per web request** is Modal's limit. Past it Modal answers 303, redirecting to a URL
+  that waits for the result. Keep `XYTE_TIMEOUT` × (`XYTE_RETRIES` + 1) under it (30 × 4 = 120 by
+  default; deploying warns otherwise). On the calling side, `xyteApi()` waits up to 150 s per
+  attempt.
+- **State across containers.** Each container has its own circuits, budgets, cache, sessions and
+  async jobs. Set `XYTE_REDIS_URL` in the secret to share them
+  ([routing](routing.md#shared-state-across-instances-redis)).
+- **Auth** is xyte's own (`XYTE_API_KEYS`). Modal's `requires_proxy_auth` would add a second
+  layer that Zyte clients can't send.
+- **Memory snapshots** don't apply. The server runs as a subprocess, and Chromium starts per
+  container.
+
+From another service, each app is one provider: `xyteApi({ endpoint:
+'https://<workspace>--xyte-decodo-serve.modal.run/v1/extract', apiKey, name: 'xyte-decodo' })`.
+See below.
+
+## A thin client and a remote fleet
+
+The scraping service doesn't have to render anything itself. It installs `@xtandard/xyte` alone,
+with no Playwright, no Chromium, and no proxy credentials, and sends every request to xyte servers
+running elsewhere. Those servers do the heavy lifting: the browser, the proxy, the retries.
+
+```
+your service ── xyte (no browser) ──┬─ xyteApi ─▶ xyte on Modal     ── oxylabs ──▶ site
+               rotate · healthy     ├─ xyteApi ─▶ xyte on Cloud Run ── decodo  ──▶ site
+               reports · costs      └─ zyteApi ─▶ Zyte API                     ──▶ site
+```
+
+```ts
+import { healthy, rotate, Xyte, xyteApi, zyteApi } from '@xtandard/xyte';
+
+const key = process.env.XYTE_FLEET_KEY!;
+const xyte = new Xyte({
+  proxy: rotate([
+    healthy(xyteApi({ endpoint: 'https://you--xyte-oxylabs-serve.modal.run/v1/extract', apiKey: key, name: 'xyte-oxylabs' })),
+    healthy(xyteApi({ endpoint: 'https://xyte-decodo-abc123.a.run.app/v1/extract', apiKey: key, name: 'xyte-decodo' })),
+    healthy(zyteApi({ apiKey: process.env.ZYTE_API_KEY! })),
+  ]),
+  rates: { 'xyte-oxylabs': { perGB: 4 }, 'xyte-decodo': { perGB: 3.5 }, 'zyte-api': { perRequest: 0.0013 } },
+});
+const page = await xyte.extract({ url: 'https://example.com', browserHtml: true });
+```
+
+- **Any platform.** A fleet is anything that runs `xyte serve`: Modal, Cloud Run, Fly, a VM. The
+  client only sees a URL and a key.
+- **Nothing to render locally.** API providers take the whole request: `browserHtml`, `screenshot`,
+  `actions` and `networkCapture` run on the remote, so the client's image stays small and
+  Playwright isn't needed. What runs locally stays local: your [action handlers](actions.md),
+  which pass over APIs, and the LLM [extractors](extraction.md), if you configure them here.
+- **Failover.** An outage, a 5xx, or a 401/403 from a fleet or from Zyte (a bad key, a suspended
+  account) moves the request on to the next provider. `healthy()` takes a failing one out for a
+  while.
+- **One report.** Each local attempt carries the remote's own attempts (`upstream`) and bytes. The
+  caller sees `xyte-oxylabs → oxylabs-residential:ban, oxylabs-residential:ok`, and `rates` per
+  fleet price it ([observability](observability.md)).
+- **Timeouts.** A remote attempt waits up to 150 s (`xyteApi({ timeout })`), since the remote
+  retries on its side. Keep the remote's `XYTE_TIMEOUT` × attempts under that, and the client's
+  `retries` low: moving on to the next fleet beats asking the same one again.
 
 ## Serverless functions (Vercel, Netlify, Lambda, Cloudflare Workers)
 

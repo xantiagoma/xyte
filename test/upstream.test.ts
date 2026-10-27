@@ -278,3 +278,21 @@ test('XYTE_WATCH: zyte-api checks its status page, and its spend with the Stats 
     globalThis.fetch = original;
   }
 });
+
+test('an endpoint’s own timeout replaces the client’s for its attempts', async () => {
+  const slow = Bun.serve({
+    port: 0,
+    fetch: async () => {
+      await Bun.sleep(400);
+      return Response.json({ url: 'https://x.example/', statusCode: 200, httpResponseBody: btoa('slow') });
+    },
+  });
+  const endpoint = `http://127.0.0.1:${slow.port}/v1/extract`;
+  const longer = await new Xyte({ timeout: 0.1, retries: 0, proxy: xyteApi({ endpoint, apiKey: 'k', timeout: 2 }) }).extract({ url: 'https://x.example/', httpResponseBody: true });
+  expect(decodeBody(longer.httpResponseBody!)).toBe('slow');
+  const error = await new Xyte({ timeout: 0.1, retries: 0, proxy: zyteApi({ endpoint, apiKey: 'k' }) })
+    .extract({ url: 'https://x.example/', httpResponseBody: true })
+    .catch((e) => e);
+  expect(error.status).toBe(520);
+  slow.stop(true);
+});
