@@ -1,6 +1,23 @@
 # Changelog
 
 
+## v0.1.3
+
+[compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.2...v0.1.3)
+
+### 🚀 Enhancements
+
+- **combinators:** Fallback(primary, fallbacks, { primaryAttempts }) ([06eb505](https://github.com/xantiagoma/xyte/commit/06eb505))
+- **docker:** Publish ghcr.io/xantiagoma/xyte images on release; Modal from the image ([c56f102](https://github.com/xantiagoma/xyte/commit/c56f102))
+
+### 🩹 Fixes
+
+- **client:** Fail with the last upstream answer (a ban, a problem), not a later network error ([e008238](https://github.com/xantiagoma/xyte/commit/e008238))
+
+### ❤️ Contributors
+
+- Santiago Montoya ([@xantiagoma](https://github.com/xantiagoma))
+
 ## v0.1.2
 
 [compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.1...v0.1.2)

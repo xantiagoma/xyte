@@ -1,6 +1,6 @@
 {
   "name": "@xtandard/xyte",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A Zyte API-compatible /v1/extract client that runs on any proxy provider (Oxylabs, Bright Data, Decodo, IPRoyal, ZenRows, ScrapingBee, ScraperAPI…) or none.",
   "keywords": [
     "zyte",
