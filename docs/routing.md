@@ -7,6 +7,7 @@ Your calling code doesn't change; only the `proxy` option (or `XYTE_PROVIDER` / 
 | Combinator | Picks the provider by | Typical use |
 | --- | --- | --- |
 | [`rotate([a, b, …])`](#rotate-fall-back-on-retries) | the attempt number | fall back to another provider after a ban or an outage |
+| [`fallback(primary, [a, …], { primaryAttempts })`](#fallback-a-primary-then-the-rest) | how the request's attempts on the primary went | Zyte (or one fleet) for most attempts; the others only when it can't |
 | [`route({ host: p }, fallback)`](#route-a-provider-per-site) | the target's host | the cheapest exit that works on each site |
 | [`adaptive([cheap, …, expensive])`](#adaptive-learn-the-cheapest-provider-per-site) | what worked on the site lately | `route()` without maintaining it: learns per site, follows changes |
 | [`byKind({ http, browser })`](#bykind-http-or-browser) | HTTP request or browser render | per-request APIs for HTTP, per-GB proxies for renders |
@@ -63,6 +64,12 @@ passed over for the rest of it; alone, the problem is the answer, with no retrie
 providers left are ones that answered that, the last such problem is returned
 ([providers](providers.md#api-only-services)).
 
+**What a request fails with**, when every attempt failed: the last attempt that got an answer.
+That's a ban (`/download/website-ban`) or the upstream's own problem, Zyte's included. A
+network error on a later attempt doesn't replace it: three Zyte bans followed by a reset
+connection to a fleet come back as Zyte's ban, not as `/download/temporary-error`. Only when no
+attempt got any answer is it a `/download/temporary-error`.
+
 After each attempt the client tells the provider how it went (`ok`, `ban`, `error`, or `aborted`
 when the attempt says nothing about the provider), and combinators pass that on to the child
 they chose. That's what `adaptive`, `healthy` and `budget` learn from; your own providers can
@@ -94,9 +101,28 @@ attempts go a, b, a, b. Typical uses:
   gateway outage), you lose one attempt instead of the request.
 
 `rotate([a, a, b])` weights it: two attempts on `a` before trying `b`. For more attempts in total,
-raise `retries`.
+raise `retries`. To give a primary most attempts and the rest the remainder, `fallback()` says it
+directly.
 
 From env: `XYTE_PROVIDER=oxylabs,zyte-api`.
+
+## `fallback()`: a primary, then the rest
+
+```ts
+const zyte = healthy(zyteApi({ apiKey }));
+fallback(zyte, [fleetA, fleetB], { primaryAttempts: 3 });
+```
+
+Each request gives the primary its first `primaryAttempts` attempts (default 3: with the default
+`retries: 3`, the fallbacks get the 4th). After that, the fallbacks rotate. They also take over:
+
+- **every attempt**, while the primary is unavailable (its `healthy()` circuit is open, its
+  `budget()` is spent, a `watch()` check failed);
+- **the rest of the request**, as soon as the primary is passed over for it (an account problem
+  such as a suspended Zyte account, or an action it can't run).
+
+Unlike `rotate([z, z, z, fleet])`, which gives the same result, it doesn't depend on the list
+length matching `retries`.
 
 ## `route()`: a provider per site
 

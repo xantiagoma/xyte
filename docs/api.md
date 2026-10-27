@@ -10,9 +10,9 @@ import { Xyte, oxylabs, decodeBody } from '@xtandard/xyte';
 ```
 
 - [Client](#client): `Xyte`, `createXyte`, `XyteOptions`, `ExtractOptions`, `BatchResult`, `decodeBody`, `Transport`, `TransportRequest`, `SessionPoolOptions`
-- [Requests, responses and errors](#requests-responses-and-errors): `ExtractRequest`, `ExtractResponse`, `ExtractionField`, `EXTRACTION_FIELDS`, `Action`, `ActionName`, `ActionResult`, `ActionSelector`, `Cookie`, `HttpHeader`, `CapturedResponse`, `NetworkCaptureFilter`, `CountryCode`, `Problem`, `ZyteSchemas`, `XyteError`, `XyteProblem`, `UpstreamProblem`, `isLikelyBan`, `BanCheck`
+- [Requests, responses and errors](#requests-responses-and-errors): `ExtractRequest`, `ExtractResponse`, `ExtractionField`, `EXTRACTION_FIELDS`, `Action`, `ActionName`, `ActionResult`, `ActionSelector`, `Cookie`, `HttpHeader`, `CapturedResponse`, `NetworkCaptureFilter`, `CountryCode`, `Problem`, `ZyteSchemas`, `XyteError`, `XyteProblem`, `UpstreamProblem`, `UpstreamInfo`, `isLikelyBan`, `BanCheck`
 - [Providers](#providers): `direct`, `proxyUrl`, `template`, `custom`, `proxyEndpointUrl`, `oxylabs`, `brightData`, `decodo`, `smartproxy`, `iproyal`, `nodeMaven`, `soax`, `netNut`, `webshare`, `rayobyte`, `packetStream`, `evomi`, `dataImpulse`, `massive`, `proxySeller`, `anyIp`, `thordata`, `abcProxy`, `proxy922`, `lunaProxy`, `proxyEmpire`, `rapidProxy`, `swiftProxy`, `zenrows`, `scrapingBee`, `scraperApi`, `crawlbase`, `scrapeDo`, `scrapingAnt`, `scrapeOps`, `scrapfly`, `oxylabsUnblocker`, `zyteProxy`, `zyteApi`, `xyteApi`, `ZyteApiOptions`, `scrappey`, `scrapingBot`, `brightDataBrowser`, `browserless`, `zenrowsBrowser`, `oxylabsBrowser`, `nodeMavenBrowser`, `PROVIDER_NAMES`, `ProxyProvider`, `ProxyEndpoint`, `ApiEndpoint`, `ApiResult`, `ProxyContext`, `EndpointOf`, `AttemptOutcome`
-- [Combining providers](#combining-providers): `rotate`, `route`, `adaptive`, `byKind`, `byCountry`, `byIpType`, `weighted`, `healthy`, `named`, `budget`, `watch`, `AdaptiveOptions`, `AdaptiveProvider`, `HealthyOptions`, `BudgetOptions`, `WatchOptions`, `WatchedProvider`
+- [Combining providers](#combining-providers): `rotate`, `fallback`, `FallbackOptions`, `route`, `adaptive`, `byKind`, `byCountry`, `byIpType`, `weighted`, `healthy`, `named`, `budget`, `watch`, `AdaptiveOptions`, `AdaptiveProvider`, `HealthyOptions`, `BudgetOptions`, `WatchOptions`, `WatchedProvider`
 - [Provider checks](#provider-checks): `scrapingBeeUsage`, `zenrowsUsage`, `scraperApiUsage`, `oxylabsUsage`, `zyteSpend`, `statusPage`, `allChecks`, `STATUS_PAGES`, `ProviderCheck`, `CheckResult`
 - [Shared state](#shared-state): `StateStore`, `memoryStore`, `redisStore`, `redisStoreFromUrl`, `resilient`, `RedisSend`
 - [Actions](#actions): `ActionHandlers`, `ActionHandler`, `ActionHandlerContext`, `ActionEntry`, `PerSite`, `ById`, `SearchKeywordAction`, `SetLocationAction`, `InteractionAction`, `ZyteOnlyAction`, `searchBox`, `isZyteOnlyAction`
@@ -471,6 +471,24 @@ class UpstreamProblem extends Error {
     fatal?: boolean;
     upstream?: UpstreamInfo;
   });
+}
+```
+
+### `UpstreamInfo`
+
+An upstream xyte server's report of a request, from its `X-Xyte-*` headers.
+
+```ts
+interface UpstreamInfo {
+  /** Its attempts, in order: `provider` is its leaf (`oxylabs-residential`), `result` its verdict. */
+  attempts: {
+    provider: string;
+    result: string;
+  }[];
+  /** Bytes its attempts moved (`X-Xyte-Transfer-Bytes`). */
+  transferBytes?: number;
+  /** Its request id (`X-Xyte-Request-Id`), to find the request in its logs. */
+  requestId?: string;
 }
 ```
 
@@ -1314,6 +1332,32 @@ Unavailable providers (an open `healthy()` circuit, a spent `budget()`) are skip
 function rotate<P extends ProxyProvider>(providers: readonly P[]): ProxyProvider<EndpointOf<P>>;
 ```
 
+### `fallback`
+
+The primary while it works, then the fallbacks: `fallback(zyteApi(…), [fleet], { primaryAttempts: 3 })`.
+Each request gives the primary its first `primaryAttempts` attempts, then rotates through the
+fallbacks. The fallbacks get every attempt when the primary is unavailable (an open `healthy()`
+circuit, a spent `budget()`), and the rest of the request once it is passed over (an account
+problem, an action it can't run). Counted per request, from each attempt's report.
+
+```ts
+function fallback<P extends ProxyProvider, F extends ProxyProvider>(primary: P, fallbacks: readonly F[], options?: FallbackOptions): ProxyProvider<EndpointOf<P | F>>;
+```
+
+### `FallbackOptions`
+
+Options for `fallback()`.
+
+```ts
+interface FallbackOptions {
+  /**
+   * Attempts the primary gets per request before the fallbacks take over. Default 3: with the
+   * default `retries: 3` (4 attempts), the fallbacks get the last one.
+   */
+  primaryAttempts?: number;
+}
+```
+
 ### `route`
 
 Picks the provider by the target's host, so each site gets the cheapest exit that works on it:
@@ -1390,6 +1434,8 @@ gateway outage), the provider is reported unavailable for `cooldown` seconds, an
 `weighted()` and `adaptive()` go straight to the others instead of losing an attempt on it.
 Bans don't count: they say the site blocked an IP, not that the provider is down. Used alone,
 an open circuit doesn't block requests (there is nothing to fall back to).
+The circuit belongs to the instance: use one instance everywhere it appears, and every use
+shares the circuit (in `rotate([h, h, h, x])`, `h` has one), or with a shared `store`, one key.
 
 ```ts
 function healthy<P extends ProxyProvider>(provider: P, options?: HealthyOptions): ProxyProvider<EndpointOf<P>>;
@@ -1607,7 +1653,8 @@ account runs dry. Reads `cost_micro_total` from Zyte's Stats API
 (`zyte-api-stats.zyte.com/api/v1/stats`), which takes the *dashboard* API key (not the Zyte API
 key) and your `organizationId` (the number in the dashboard URL, `/o/000000`). The cycle starts
 on `cycleStartDay` (1–28, UTC; default 1). The Stats API allows 20 requests a minute: keep
-`watch()`'s `every` at 60 or more. Not yet checked against an account.
+`watch()`'s `every` at 60 or more. Checked against an account: its total matches `/api/stats`'s
+`cost_microusd_total`.
 
 ```ts
 function zyteSpend(options: CheckOptions & {

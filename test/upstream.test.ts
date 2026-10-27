@@ -3,8 +3,10 @@ import {
   createHandler,
   decodeBody,
   direct,
+  fallback,
   healthy,
   named,
+  proxyUrl,
   rotate,
   watch,
   Xyte,
@@ -295,4 +297,81 @@ test('an endpoint’s own timeout replaces the client’s for its attempts', asy
     .catch((e) => e);
   expect(error.status).toBe(520);
   slow.stop(true);
+});
+
+describe('the final error prefers an answer over a network failure', () => {
+  const ban = { type: '/download/website-ban', status: 520, title: 'Website Ban', detail: 'no ban-free response' };
+
+  test('Zyte bans three times, then the fleet resets the connection: the ban is what comes back', async () => {
+    const zyte = startUpstream(520, ban);
+    // Accepts and drops the connection.
+    const dead = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { open: (socket) => void socket.end(), data: () => {} } });
+    const z = zyteApi({ apiKey: 'k', endpoint: zyte.endpoint });
+    const fleet = xyteApi({ endpoint: `http://127.0.0.1:${dead.port}/v1/extract`, apiKey: 'k', name: 'fleet' });
+    const { xyte, reports } = reporting({ retries: 3, proxy: rotate([z, z, z, fleet]) });
+    const error = await xyte.extract({ url: 'https://x.example/', httpResponseBody: true }).catch((e) => e);
+    expect(attempts(reports[0])).toEqual(['zyte-api:ban', 'zyte-api:ban', 'zyte-api:ban', 'fleet:error']);
+    expect(error.toJSON()).toEqual(ban);
+    expect(error.cause?.name).toBe('UpstreamProblem');
+    zyte.stop();
+    dead.stop(true);
+  });
+
+  test('a local ban, then a dead proxy: website-ban, not temporary-error', async () => {
+    const banning = Bun.serve({ port: 0, fetch: () => new Response('blocked', { status: 429 }) });
+    const error = await new Xyte({ retries: 1, proxy: rotate([direct(), proxyUrl('http://u:p@127.0.0.1:1')]) })
+      .extract({ url: `http://127.0.0.1:${banning.port}/`, httpResponseBody: true })
+      .catch((e) => e);
+    expect(error).toMatchObject({ status: 520, type: '/download/website-ban' });
+    banning.stop(true);
+  });
+
+  test('no attempt got an answer: still a temporary-error', async () => {
+    const error = await new Xyte({ retries: 1, proxy: proxyUrl('http://u:p@127.0.0.1:1') })
+      .extract({ url: 'http://example.com/', httpResponseBody: true })
+      .catch((e) => e);
+    expect(error).toMatchObject({ status: 520, type: '/download/temporary-error' });
+  });
+});
+
+describe('fallback(primary, fallbacks)', () => {
+  const ok = (body: string) => (async () => Response.json({ url: 'https://x.example/', statusCode: 200, httpResponseBody: btoa(body) })) as unknown as typeof globalThis.fetch;
+  const failing = (async () => Response.json({ type: '/download/temporary-error', status: 520, title: 'x' }, { status: 520 })) as unknown as typeof globalThis.fetch;
+
+  test('the primary gets its attempts, the fallback the last one', async () => {
+    const proxy = fallback(zyteApi({ apiKey: 'k', fetch: failing }), [zyteApi({ apiKey: 'k', fetch: ok('fleet'), name: 'fleet' })], { primaryAttempts: 3 });
+    const { xyte, reports } = reporting({ retries: 3, proxy });
+    const res = await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    expect(decodeBody(res.httpResponseBody!)).toBe('fleet');
+    expect(attempts(reports[0])).toEqual(['zyte-api:error', 'zyte-api:error', 'zyte-api:error', 'fleet:ok']);
+    expect(reports[0]!.attempts[3]!.path).toEqual(['fleet']);
+  });
+
+  test('a working primary is all there is', async () => {
+    const { xyte, reports } = reporting({ proxy: fallback(zyteApi({ apiKey: 'k', fetch: ok('zyte') }), [zyteApi({ apiKey: 'k', fetch: failing, name: 'fleet' })]) });
+    await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    expect(reports.map(attempts)).toEqual([['zyte-api:ok'], ['zyte-api:ok']]);
+  });
+
+  test('an account problem hands the rest of the request to the fallbacks, rotating', async () => {
+    const zyte = startUpstream(403, suspended);
+    const proxy = fallback(zyteApi({ apiKey: 'k', endpoint: zyte.endpoint }), [zyteApi({ apiKey: 'k', fetch: failing, name: 'a' }), zyteApi({ apiKey: 'k', fetch: ok('b'), name: 'b' })]);
+    const { xyte, reports } = reporting({ retries: 3, proxy });
+    const res = await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    expect(decodeBody(res.httpResponseBody!)).toBe('b');
+    expect(attempts(reports[0])).toEqual(['zyte-api:error', 'a:error', 'b:ok']);
+    expect(zyte.calls()).toBe(1);
+    zyte.stop();
+  });
+
+  test('with the primary’s circuit open, the fallbacks get every attempt', async () => {
+    const zyte = startUpstream(403, suspended);
+    const proxy = fallback(healthy(zyteApi({ apiKey: 'k', endpoint: zyte.endpoint })), [zyteApi({ apiKey: 'k', fetch: ok('fleet'), name: 'fleet' })]);
+    const { xyte, reports } = reporting({ proxy });
+    await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    await xyte.extract({ url: 'https://x.example/', httpResponseBody: true });
+    expect(reports.map(attempts)).toEqual([['zyte-api:error', 'fleet:ok'], ['fleet:ok']]);
+    zyte.stop();
+  });
 });

@@ -90,6 +90,69 @@ export function named<P extends ProxyProvider>(name: string, provider: P): Proxy
   };
 }
 
+/** Options for `fallback()`. */
+export interface FallbackOptions {
+  /**
+   * Attempts the primary gets per request before the fallbacks take over. Default 3: with the
+   * default `retries: 3` (4 attempts), the fallbacks get the last one.
+   */
+  primaryAttempts?: number;
+}
+
+/**
+ * The primary while it works, then the fallbacks: `fallback(zyteApi(…), [fleet], { primaryAttempts: 3 })`.
+ * Each request gives the primary its first `primaryAttempts` attempts, then rotates through the
+ * fallbacks. The fallbacks get every attempt when the primary is unavailable (an open `healthy()`
+ * circuit, a spent `budget()`), and the rest of the request once it is passed over (an account
+ * problem, an action it can't run). Counted per request, from each attempt's report.
+ */
+export function fallback<P extends ProxyProvider, F extends ProxyProvider>(
+  primary: P,
+  fallbacks: readonly F[],
+  options: FallbackOptions = {},
+): ProxyProvider<EndpointOf<P | F>> {
+  const primaryAttempts = options.primaryAttempts ?? 3;
+  /** Per request: attempts the primary and the fallbacks made, and whether the primary is out. */
+  const requests = new Map<string, { primary: number; fallback: number; out: boolean }>();
+  const chosen = new Map<string, ProxyProvider>();
+  const stateOf = (context: ProxyContext) => {
+    const key = context.requestId ?? context.sessionId;
+    let state = requests.get(key);
+    if (!state) remember(requests, key, (state = { primary: 0, fallback: 0, out: false }));
+    return state;
+  };
+  const pick = (context: ProxyContext): ProxyProvider => {
+    const state = stateOf(context);
+    const usePrimary = fallbacks.length === 0 || (!state.out && state.primary < primaryAttempts && isAvailable(primary, context));
+    return usePrimary ? primary : firstAvailable(fallbacks, state.fallback, context);
+  };
+  return {
+    name: `fallback(${primary.name}→${fallbacks.map((p) => p.name).join(',')})`,
+    extracts: primary.extracts || fallbacks.some((p) => p.extracts),
+    zyteActions: primary.zyteActions || fallbacks.some((p) => p.zyteActions),
+    resolve(context) {
+      const child = pick(context);
+      context.path?.push(child.name);
+      remember(chosen, attemptKey(context), child);
+      return child.resolve(context) as Resolved<EndpointOf<P | F>>;
+    },
+    available: (context) => isAvailable(primary, context) || fallbacks.some((p) => isAvailable(p, context)),
+    report(context, outcome) {
+      const key = attemptKey(context);
+      const child = chosen.get(key);
+      chosen.delete(key);
+      if (!child) return;
+      const state = stateOf(context);
+      if (child === primary) {
+        // Passed over (it can't serve this request) or an account problem: done with it here.
+        if (outcome.result === 'aborted' || outcome.fatal) state.out = true;
+        else state.primary++;
+      } else state.fallback++;
+      child.report?.(context, outcome);
+    },
+  };
+}
+
 /**
  * Picks the provider by the target's host, so each site gets the cheapest exit that works on it:
  * `route({ 'doordash.com': zyteApi(…), 'wolt.com': direct() }, residential)`. A key matches the
@@ -204,6 +267,8 @@ const SHARED_REFRESH_MS = 2000;
  * `weighted()` and `adaptive()` go straight to the others instead of losing an attempt on it.
  * Bans don't count: they say the site blocked an IP, not that the provider is down. Used alone,
  * an open circuit doesn't block requests (there is nothing to fall back to).
+ * The circuit belongs to the instance: use one instance everywhere it appears, and every use
+ * shares the circuit (in `rotate([h, h, h, x])`, `h` has one), or with a shared `store`, one key.
  */
 export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOptions = {}): ProxyProvider<EndpointOf<P>> {
   const failures = options.failures ?? 5;

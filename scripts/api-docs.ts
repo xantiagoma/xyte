@@ -49,6 +49,7 @@ const GROUPS: Group[] = [
       "XyteError",
       "XyteProblem",
       "UpstreamProblem",
+      "UpstreamInfo",
       "isLikelyBan",
       "BanCheck"
     ]
@@ -120,6 +121,8 @@ const GROUPS: Group[] = [
     "intro": "Providers built from other providers. [Routing](routing.md) explains each, with examples.",
     "names": [
       "rotate",
+      "fallback",
+      "FallbackOptions",
       "route",
       "adaptive",
       "byKind",

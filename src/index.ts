@@ -48,13 +48,14 @@ export {
 export { doctor, formatDoctor, type DoctorOptions, type DoctorResult } from './doctor.ts';
 export { Jobs, verifyWebhook, type Job, type JobsOptions } from './jobs.ts';
 export { StatsQueryError, StatsRecorder, type StatsOptions, type StatsQuery, type StatsResponse } from './stats.ts';
-export { UpstreamProblem, XyteError, type XyteProblem } from './errors.ts';
+export { UpstreamProblem, XyteError, type UpstreamInfo, type XyteProblem } from './errors.ts';
 export {
   adaptive,
   budget,
   byCountry,
   byIpType,
   byKind,
+  fallback,
   healthy,
   named,
   rotate,
@@ -65,6 +66,7 @@ export {
   type AdaptiveProvider,
   type BudgetOptions,
   type CheckResult,
+  type FallbackOptions,
   type HealthyOptions,
   type ProviderCheck,
   type WatchedProvider,

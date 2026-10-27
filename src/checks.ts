@@ -108,7 +108,8 @@ function cycleStart(day: number, now: Date = new Date()): Date {
  * (`zyte-api-stats.zyte.com/api/v1/stats`), which takes the *dashboard* API key (not the Zyte API
  * key) and your `organizationId` (the number in the dashboard URL, `/o/000000`). The cycle starts
  * on `cycleStartDay` (1–28, UTC; default 1). The Stats API allows 20 requests a minute: keep
- * `watch()`'s `every` at 60 or more. Not yet checked against an account.
+ * `watch()`'s `every` at 60 or more. Checked against an account: its total matches `/api/stats`'s
+ * `cost_microusd_total`.
  */
 export function zyteSpend(
   options: CheckOptions & {
