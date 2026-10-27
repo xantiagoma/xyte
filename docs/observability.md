@@ -57,7 +57,7 @@ A report for a DoorDash page the proxy got banned on, then Zyte served (illustra
 | `tags`, `jobId` | the request's own, as sent: Zyte's `tags` (`{ "spider": "yelp" }`) label requests for its Stats API; here they label the report and every attempt, so analytics can group by them |
 | `outcome` | `ok` (a response came back, the target's own 4xx/5xx included), `error` (an `XyteError`: `error` has its status and type), `aborted` (cancelled) |
 | `provider` | the provider that served the response: the leaf a combinator picked, not `rotate(…)` |
-| `attempts[]` | every attempt in order: `provider`, `path` (each combinator's choice, outermost first), `result` (`ok`, `ban`, `error`, `aborted`: no verdict on the provider, e.g. a [pass-over](actions.md#pass-overs), whose `reason` says why), `reason`, `statusCode`, `ms`, `bytes` (the page), `transferBytes` (the wire), `browser`, `captchas` (with a [captcha solver](browser.md#captchas)) |
+| `attempts[]` | every attempt in order: `provider`, `path` (each combinator's choice, outermost first), `result` (`ok`, `ban`, `error`, `aborted`: no verdict on the provider, e.g. a [pass-over](actions.md#pass-overs), whose `reason` says why), `reason`, `statusCode`, `ms`, `bytes` (the page), `transferBytes` (the wire), `browser`, `captchas` (with a [captcha solver](browser.md#captchas)), `fatal` (an account problem: the provider can't serve anything until it's fixed), `upstream` (through [another xyte server](providers.md#another-xyte-server-as-a-provider): its attempts and request id) |
 | `byProvider` | attempts, results, bytes and time summed per provider: what each one cost this request |
 | `escalated` | `browserFallback` moved it from HTTP to a browser |
 | `queuedMs` / `ms` | waiting for a `concurrency` slot, then working |
@@ -106,7 +106,8 @@ X-Xyte-Transfer-Bytes: 3120
 X-Xyte-Warning: geolocation "DE" not applied: …   (when there is one)
 ```
 
-Zyte clients ignore them; the JSON body is unchanged.
+Zyte clients ignore them; the JSON body is unchanged. A client using
+[`xyteApi()`](providers.md#another-xyte-server-as-a-provider) reads them into its own report.
 
 ## Request logs
 

@@ -170,7 +170,7 @@ export function openAICompatible(options: {
   fetch?: typeof fetch;
 }): Complete {
   const base = (options.baseURL ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const doFetch = options.fetch ?? fetch;
+  const doFetch = (...args: Parameters<typeof fetch>): Promise<Response> => (options.fetch ?? fetch)(...args);
   return async ({ field, system, prompt, schema }) => {
     const res = await doFetch(`${base}/chat/completions`, {
       method: 'POST',

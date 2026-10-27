@@ -13,7 +13,7 @@ import {
 } from './proxy.ts';
 import type { Extractor, Rate, Rates } from './client.ts';
 import { adaptive, budget, byKind, healthy, rotate, route, watch, type BudgetOptions, type ProviderCheck } from './combinators.ts';
-import { oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage } from './checks.ts';
+import { allChecks, oxylabsUsage, scraperApiUsage, scrapingBeeUsage, STATUS_PAGES, statusPage, zenrowsUsage, zyteSpend } from './checks.ts';
 import { createCertificateAuthority, type CertificateAuthority } from './ca.ts';
 import type { CacheOptions } from './cache.ts';
 import { capsolver, twoCaptcha } from './captcha.ts';
@@ -142,6 +142,8 @@ const REMOTE_BROWSERS: Record<string, (env: Env) => NonNullable<BrowserOptions['
  * - `XYTE_WATCH=true`: wraps providers that have a usage API or status page in `watch()`
  *   (`XYTE_WATCH_EVERY` seconds, default 60). Oxylabs needs `OXYLABS_LIMIT_GB` (and, if the
  *   proxy user isn't the account's main one, `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD`).
+ *   Zyte's spend is checked too with `ZYTE_STATS_API_KEY` (the dashboard key),
+ *   `ZYTE_ORGANIZATION_ID` and `ZYTE_LIMIT_USD` (optional `ZYTE_MAX_PERCENT`, `ZYTE_CYCLE_START_DAY`).
  * - `XYTE_REDIS_URL=redis://…`: budgets, circuits and checks are shared by every instance.
  *
  * A provider named in several places is one instance, so its budget and circuit are shared.
@@ -379,6 +381,18 @@ export function checkFor(name: string, env: Env): ProviderCheck | undefined {
       const password = env.OXYLABS_API_PASSWORD ?? env.OXYLABS_PASSWORD;
       if (!env.OXYLABS_LIMIT_GB || !username || !password) return undefined;
       return oxylabsUsage({ username, password, limitGB: Number(env.OXYLABS_LIMIT_GB) });
+    }
+    case 'zyte-api': {
+      const status = statusPage(STATUS_PAGES['zyte-api']!);
+      if (!env.ZYTE_STATS_API_KEY || !env.ZYTE_ORGANIZATION_ID || !env.ZYTE_LIMIT_USD) return status;
+      const spend = zyteSpend({
+        apiKey: env.ZYTE_STATS_API_KEY,
+        organizationId: env.ZYTE_ORGANIZATION_ID,
+        limitUsd: Number(env.ZYTE_LIMIT_USD),
+        ...(env.ZYTE_MAX_PERCENT && { maxPercent: Number(env.ZYTE_MAX_PERCENT) }),
+        ...(env.ZYTE_CYCLE_START_DAY && { cycleStartDay: Number(env.ZYTE_CYCLE_START_DAY) }),
+      });
+      return allChecks([status, spend]);
     }
     default:
       return STATUS_PAGES[name] ? statusPage(STATUS_PAGES[name]) : undefined;

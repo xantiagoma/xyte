@@ -5,6 +5,7 @@ import { Pacer, type RateLimits } from './pace.ts';
 import { BROWSER_ONLY, BROWSER_OUTPUTS, HTTP_ONLY } from './fields.ts';
 import { runHttp, type EngineAttempt, type EngineResult } from './engines/http.ts';
 import {
+  type UpstreamInfo,
   type XyteProblem,
   domainUnreachable,
   invalidRequest,
@@ -511,6 +512,8 @@ export class Xyte {
     // use up retries: only real attempts count. A route that never leads to a suitable provider
     // would pass over forever, hence the caps.
     let passedOver = false;
+    // Providers that answered with an account problem (bad key, suspended): not tried again here.
+    const down = new Map<string, UpstreamProblem>();
     let passOvers = 0;
     let passOversInARow = 0;
     let real = 0;
@@ -526,7 +529,7 @@ export class Xyte {
       // A provider passed over (below) made no request: not a retry, nothing to back off from.
       if (attempt > 0 && !passedOver) {
         this.options.onRetry?.({ attempt, url: request.url, reason: lastReason });
-        await sleep(backoff(attempt));
+        await sleep(backoff(real));
         cancel?.throwIfAborted();
       }
       passedOver = false;
@@ -560,6 +563,7 @@ export class Xyte {
         let result: EngineResult;
         let trusted = false;
         let direct = true;
+        let upstream: UpstreamInfo | undefined;
         try {
           if (pooled) {
             pooled.ready ??= this.initSession(request, pooled, context, signal);
@@ -596,6 +600,13 @@ export class Xyte {
             lastReason = reason;
             verdict = { result: 'aborted', reason };
           };
+          const problem = down.get(leaf);
+          if (problem) {
+            // Nothing else left to try: its problem is the answer, it would only answer it again.
+            if (!canPassOver) throw new XyteError(problem.problem, { cause: problem, retryable: false });
+            passOver(`${leaf} answered with an account problem: passed over`);
+            continue;
+          }
           const zyteOnly = inBrowser ? classifyActions(request.actions, this.actionHandlers, context.url) : { own: [], builtIn: [], none: [] };
           const mode = this.options.unsupportedActions ?? 'warn';
           if (isApiEndpoint(endpoint)) {
@@ -614,7 +625,14 @@ export class Xyte {
             releaseSlot = await this.pacer?.acquire(request.url, signal);
             const answer = await endpoint.api(sent.request, { context, signal });
             if (sent.dropped.size > 0) answer.response.actions = mergeActionResults(request.actions ?? [], answer.response.actions, sent.dropped);
-            result = { response: answer.response, statusCode: answer.statusCode, headers: answer.headers ?? [], html: answer.html };
+            result = {
+              response: answer.response,
+              statusCode: answer.statusCode,
+              headers: answer.headers ?? [],
+              html: answer.html,
+              transferBytes: answer.transferBytes ?? answer.upstream?.transferBytes,
+            };
+            upstream = answer.upstream;
             trusted = answer.trusted === true;
           } else {
             // Here Zyte's own actions run through local handlers. Those you didn't write a handler for
@@ -640,6 +658,18 @@ export class Xyte {
           }
           if (error instanceof XyteError) throw error;
           if (cancel?.aborted) throw cancel.reason;
+          const upstreamOf = error instanceof UpstreamProblem && error.upstream ? { upstream: error.upstream, transferBytes: error.upstream.transferBytes } : {};
+          if (error instanceof UpstreamProblem && error.fatal) {
+            // The provider's account, not the request: alone, that is the answer (retries would get
+            // the same); in a combinator, the next provider gets the request.
+            lastReason = describe(error);
+            lastCause = error;
+            lastWasBan = false;
+            verdict = { result: 'error', reason: lastReason, fatal: true, ...upstreamOf };
+            if ((context.path?.length ?? 0) === 0) throw new XyteError(error.problem, { cause: error, retryable: false });
+            down.set(context.path!.at(-1)!, error);
+            continue;
+          }
           const classified = classifyError(error, { direct, host: context.url.hostname });
           if (classified === 'unreachable') {
             throw domainUnreachable(`could not resolve ${new URL(request.url).hostname}`, error);
@@ -648,7 +678,7 @@ export class Xyte {
           lastCause = error;
           // An upstream API's ban (Zyte's /download/website-ban) is a ban, not a provider failure.
           lastWasBan = error instanceof UpstreamProblem && error.problem.type.includes('ban');
-          verdict = { result: lastWasBan ? 'ban' : 'error', reason: lastReason };
+          verdict = { result: lastWasBan ? 'ban' : 'error', reason: lastReason, ...upstreamOf };
           continue;
         }
 
@@ -657,6 +687,7 @@ export class Xyte {
           bytes: result.html ? new TextEncoder().encode(result.html).byteLength : undefined,
           transferBytes: result.transferBytes,
           ...(result.captchas && { captchas: result.captchas }),
+          ...(upstream && { upstream }),
         };
 
         if (!trusted && this.isBan({ url: result.response.url ?? request.url, statusCode: result.statusCode, headers: result.headers, html: result.html })) {
@@ -704,7 +735,7 @@ export class Xyte {
     }
 
     // The upstream API's own last answer (Zyte's 520 /download/website-ban…), as Zyte gave it.
-    if (lastCause instanceof UpstreamProblem) throw new XyteError(lastCause.problem, { cause: lastCause });
+    if (lastCause instanceof UpstreamProblem) throw new XyteError(lastCause.problem, { cause: lastCause, ...(lastCause.fatal && { retryable: false }) });
     throw temporaryDownloadError(`${lastReason} after ${this.retries + 1} attempts`, {
       ban: lastWasBan,
       cause: lastCause,

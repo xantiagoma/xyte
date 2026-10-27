@@ -50,7 +50,7 @@ export function createTaskSolver(options: {
   timeout?: number;
   fetch?: typeof fetch;
 }): CaptchaSolver {
-  const doFetch = options.fetch ?? fetch;
+  const doFetch = (...args: Parameters<typeof fetch>): Promise<Response> => (options.fetch ?? fetch)(...args);
   const call = async (path: string, body: Record<string, unknown>, signal?: AbortSignal) => {
     const res = await doFetch(`${options.endpoint}/${path}`, {
       method: 'POST',

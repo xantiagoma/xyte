@@ -86,8 +86,13 @@ Where xyte answers differently from Zyte, depending on how it's configured:
   heuristic handles `searchKeyword`, and `setLocation` / `interaction` need your handlers. Without
   one they're skipped with a warning and an action status of `notExecuted`, unless
   `unsupportedActions` says otherwise ([actions](actions.md)). HTML-only APIs (Scrappey,
-  ScrapingBot) run no actions at all. Zyte's proxy mode (port 8011) and its Stats API aren't implemented: xyte serves only
-  `POST /v1/extract`.
+  ScrapingBot) run no actions at all.
+- Zyte's proxy mode and Stats API are there too: `xyte serve --proxy-port 8012`
+  ([proxy mode](proxy-mode.md)) and `GET /api/v1/stats`, whose numbers cover only the requests
+  that server handled ([Stats API](observability.md#a-zyte-compatible-stats-api)).
+- With `zyteApi()` in a `rotate()`, a suspended account or a bad key (Zyte's 401/403) moves the
+  request on to the next provider, as an outage would, and `healthy()` opens Zyte's circuit at
+  once. Alone, the 403 comes back as Zyte sent it, after one call.
 
 These match Zyte, so they need no changes: `screenshot` defaults to JPEG (`screenshotOptions.format:
 "png"` for PNG); a target error is HTTP 200 with its `statusCode`; problem types (`/request/invalid`,

@@ -117,6 +117,35 @@ and point the health check at `/healthz`.
 image-build time on changes and per-container memory. Prefer Cloud Run unless you're already on
 Modal.
 
+```sh
+modal secret create xyte OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
+modal deploy deploy/modal_app.py
+```
+
+Several apps from the same file, each with its own provider and secret, are set by env at deploy
+time:
+
+```sh
+modal secret create xyte-decodo DECODO_USERNAME=… DECODO_PASSWORD=… XYTE_API_KEYS=…
+XYTE_MODAL_APP=xyte-decodo XYTE_PROVIDER=decodo modal deploy deploy/modal_app.py
+
+modal secret create xyte-oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
+XYTE_MODAL_APP=xyte-oxylabs XYTE_PROVIDER=oxylabs XYTE_MODAL_MIN_CONTAINERS=1 modal deploy deploy/modal_app.py
+```
+
+| Variable | Default | |
+| --- | --- | --- |
+| `XYTE_MODAL_APP` | `xyte` | The app's name, and so its URL (`https://<workspace>--<app>-serve.modal.run`) |
+| `XYTE_PROVIDER` | `oxylabs` | What `xyte serve` uses ([configuration](configuration.md)); anything else (`XYTE_ROUTES`, `XYTE_CIRCUIT_BREAKER`…) goes in the secret |
+| `XYTE_MODAL_SECRET` | the app's name | The Modal secret with the provider's credentials and `XYTE_API_KEYS` |
+| `XYTE_MODAL_MIN_CONTAINERS` | `0` | Containers kept warm: `1` avoids the cold start (tens of seconds for the browser image), billed while idle |
+| `XYTE_MODAL_CONCURRENCY` | `8` | Requests per container (`@modal.concurrent` and `XYTE_CONCURRENCY`) |
+
+The values are baked into the image as well, because Modal imports the file again inside the
+container. From another service, each app is one provider:
+`xyteApi({ endpoint: 'https://<workspace>--xyte-decodo-serve.modal.run/v1/extract', apiKey, name: 'xyte-decodo' })`
+([providers](providers.md#another-xyte-server-as-a-provider)).
+
 ## Serverless functions (Vercel, Netlify, Lambda, Cloudflare Workers)
 
 These can only run HTTP requests: there's no Chromium, and Cloudflare Workers can't dial

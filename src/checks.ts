@@ -93,6 +93,61 @@ export function oxylabsUsage(options: CheckOptions & { username: string; passwor
   };
 }
 
+/** When the current billing cycle began: the last `day` of the month (UTC) not after `now`. */
+function cycleStart(day: number, now: Date = new Date()): Date {
+  const d = Math.min(Math.max(1, Math.trunc(day)), 28);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), d));
+  if (start > now) start.setUTCMonth(start.getUTCMonth() - 1);
+  return start;
+}
+
+/**
+ * Zyte API spend this billing cycle, against `limitUsd` (Zyte has no balance endpoint): unavailable
+ * from `maxPercent` of it (default 100), so a combinator moves to the next provider before Zyte's
+ * account runs dry. Reads `cost_micro_total` from Zyte's Stats API
+ * (`zyte-api-stats.zyte.com/api/v1/stats`), which takes the *dashboard* API key (not the Zyte API
+ * key) and your `organizationId` (the number in the dashboard URL, `/o/000000`). The cycle starts
+ * on `cycleStartDay` (1–28, UTC; default 1). The Stats API allows 20 requests a minute: keep
+ * `watch()`'s `every` at 60 or more. Not yet checked against an account.
+ */
+export function zyteSpend(
+  options: CheckOptions & {
+    apiKey: string;
+    organizationId: string | number;
+    limitUsd: number;
+    maxPercent?: number;
+    cycleStartDay?: number;
+    /** Default `USD`: the currency your organization is billed in. */
+    currency?: string;
+    /** Default `https://zyte-api-stats.zyte.com`. */
+    baseUrl?: string;
+  },
+): ProviderCheck {
+  const base = (options.baseUrl ?? 'https://zyte-api-stats.zyte.com').replace(/\/+$/, '');
+  const currency = (options.currency ?? 'USD').toUpperCase();
+  return async (signal) => {
+    const now = new Date();
+    const params = new URLSearchParams({
+      organization_id: String(options.organizationId),
+      start_time: cycleStart(options.cycleStartDay ?? 1, now).toISOString(),
+      end_time: now.toISOString(),
+    });
+    const stats = await getJson(`${base}/api/v1/stats?${params}`, { headers: { authorization: `Basic ${btoa(`${options.apiKey}:`)}` }, signal }, options.fetch);
+    const results = (stats.results ?? []) as { cost_micro_total?: { currency?: string; value?: unknown }[] }[];
+    const micro = results.reduce(
+      (total, r) => total + (r.cost_micro_total ?? []).filter((c) => (c.currency ?? '').toUpperCase() === currency).reduce((sum, c) => sum + (num(c.value) ?? 0), 0),
+      0,
+    );
+    const spent = micro / 1e6;
+    const cap = options.limitUsd * ((options.maxPercent ?? 100) / 100);
+    return {
+      available: spent < cap,
+      remaining: Math.max(0, options.limitUsd - spent),
+      detail: `zyte ${spent.toFixed(2)}/${options.limitUsd} ${currency} this cycle`,
+    };
+  };
+}
+
 /**
  * A Statuspage page (`https://status.zyte.com`, IPRoyal, Webshare…): unavailable while its
  * indicator is one of `downOn` (default `major`, `critical`; `minor` is a partial degradation).
@@ -104,6 +159,19 @@ export function statusPage(url: string, options: CheckOptions & { downOn?: reado
     const status = (page.status ?? {}) as { indicator?: string; description?: string };
     const indicator = status.indicator ?? 'unknown';
     return { available: !downOn.includes(indicator), detail: `${new URL(url).host}: ${status.description ?? indicator}` };
+  };
+}
+
+/** Several checks as one, all of which must pass (what `watch()` does with an array). */
+export function allChecks(checks: readonly ProviderCheck[]): ProviderCheck {
+  return async (signal) => {
+    const results = await Promise.all(checks.map((check) => check(signal)));
+    const remaining = results.flatMap((r) => (r.remaining === undefined ? [] : [r.remaining]));
+    return {
+      available: results.every((r) => r.available),
+      detail: results.flatMap((r) => (r.detail ? [r.detail] : [])).join('; ') || undefined,
+      remaining: remaining.length > 0 ? Math.min(...remaining) : undefined,
+    };
   };
 }
 

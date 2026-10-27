@@ -1,4 +1,5 @@
 import type { ExtractRequest, ExtractResponse } from './types.ts';
+import type { UpstreamInfo } from './errors.ts';
 import { sessionNumber, sessionToken } from './util.ts';
 
 /** What a provider gets to pick an exit for one attempt of one request. */
@@ -44,6 +45,13 @@ export interface AttemptOutcome {
    */
   transferBytes?: number;
   reason?: string;
+  /**
+   * The provider can't serve any request until someone fixes it (a bad key, a suspended account):
+   * `healthy()` opens its circuit at once.
+   */
+  fatal?: boolean;
+  /** Through another xyte server (`xyteApi()`): its attempts, e.g. `oxylabs-residential:ban, oxylabs-residential:ok`. */
+  upstream?: UpstreamInfo;
   /** Captchas met in a browser render with `browser.captcha`, and whether they were solved. */
   captchas?: { kind: string; solver: string; solved: boolean; ms: number; error?: string }[];
 }
@@ -104,6 +112,10 @@ export interface ApiResult {
   html?: string;
   /** The service already handled bans (Zyte): skip xyte's ban check on this answer. */
   trusted?: boolean;
+  /** Bytes the service reported moving for it (another xyte server's `X-Xyte-Transfer-Bytes`). */
+  transferBytes?: number;
+  /** The service's own report of its attempts, when it is another xyte server (`xyteApi()`). */
+  upstream?: UpstreamInfo;
 }
 
 /** Picks the exit for each attempt. Presets resolve to a `ProxyEndpoint`; API adapters to an `ApiEndpoint`. */

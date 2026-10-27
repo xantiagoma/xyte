@@ -3,7 +3,7 @@
  * they take the whole Zyte request and answer in Zyte's shape, so they mix with proxies in
  * `rotate()`.
  */
-import { UpstreamProblem, XyteError } from './errors.ts';
+import { UpstreamProblem, XyteError, type UpstreamInfo } from './errors.ts';
 import type { ApiEndpoint, ApiResult, ProxyProvider } from './proxy.ts';
 import type { ExtractRequest, ExtractResponse } from './types.ts';
 import { decodeBody, fromBase64 } from './util.ts';
@@ -31,50 +31,97 @@ function htmlResult(request: ExtractRequest, page: { url: string; statusCode: nu
   return { response, statusCode: page.statusCode, html: page.html, headers: page.headers };
 }
 
-/**
- * Zyte API itself (https://docs.zyte.com/zyte-api/usage/reference.html): the request is forwarded
- * unchanged, so every Zyte feature works, AI extraction included. Use it as the last resort:
- * `rotate([nodeMaven(…), zyteApi({ apiKey })])`.
- */
-export function zyteApi(options: { apiKey: string; endpoint?: string; fetch?: typeof fetch }): ProxyProvider<ApiEndpoint> {
-  const endpoint = options.endpoint ?? 'https://api.zyte.com/v1/extract';
-  const doFetch = options.fetch ?? fetch;
+/** Options for `zyteApi()` and `xyteApi()`. */
+export interface ZyteApiOptions {
+  apiKey: string;
+  /** Default `https://api.zyte.com/v1/extract`; any Zyte-compatible `/v1/extract` works. */
+  endpoint?: string;
+  /**
+   * The provider's name in reports, `rates`, circuits and budgets. Default `zyte-api`. Set one per
+   * endpoint when a combinator has several, so each keeps its own numbers.
+   */
+  name?: string;
+  /** Resolved at call time: a stub put on `globalThis.fetch` later is used too. */
+  fetch?: typeof fetch;
+}
+
+/** Account problems (bad key, suspended account): no request will go through until they're fixed. */
+const isAccountProblem = (status: number, type: string | undefined) => status === 401 || status === 403 || type?.startsWith('/auth/') === true;
+
+/** Another xyte server's report, from its response headers (`X-Xyte-Attempts`…). */
+function upstreamOf(headers: Headers): UpstreamInfo | undefined {
+  const attempts = headers.get('x-xyte-attempts');
+  if (attempts == null) return undefined;
+  const bytes = Number(headers.get('x-xyte-transfer-bytes'));
   return {
-    name: 'zyte-api',
+    attempts: attempts
+      .split(',')
+      .filter(Boolean)
+      .map((entry) => {
+        const at = entry.lastIndexOf(':');
+        return at === -1 ? { provider: entry, result: 'unknown' } : { provider: entry.slice(0, at), result: entry.slice(at + 1) };
+      }),
+    ...(Number.isFinite(bytes) && headers.has('x-xyte-transfer-bytes') && { transferBytes: bytes }),
+    ...(headers.get('x-xyte-request-id') && { requestId: headers.get('x-xyte-request-id')! }),
+  };
+}
+
+function zyteCompatible(options: ZyteApiOptions, defaults: { name: string; endpoint?: string; upstream: boolean }): ProxyProvider<ApiEndpoint> {
+  const endpoint = options.endpoint ?? defaults.endpoint;
+  if (!endpoint) throw new Error(`${defaults.name}: an endpoint is required`);
+  return {
+    name: options.name ?? defaults.name,
     extracts: true,
     zyteActions: true,
     resolve: () => ({
       async api(request, { signal }) {
-        const res = await doFetch(endpoint, {
+        const res = await (options.fetch ?? fetch)(endpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: basic(options.apiKey, '') },
           body: JSON.stringify(request),
           signal,
         });
         const body = (await res.json().catch(() => ({}))) as ExtractResponse & { type?: string; title?: string; detail?: string };
+        const upstream = defaults.upstream ? upstreamOf(res.headers) : undefined;
         if (res.ok) {
           const html = body.browserHtml ?? (body.httpResponseBody ? decodeBody(body.httpResponseBody) : undefined);
-          return { response: body, statusCode: body.statusCode ?? 200, html, trusted: true };
+          return { response: body, statusCode: body.statusCode ?? 200, html, trusted: true, ...(upstream && { upstream }) };
         }
-        // Rate limits, bans and server errors: retry (or move on to the next provider).
-        if (res.status === 429 || res.status >= 500) {
-          throw new UpstreamProblem({
-            status: res.status,
-            type: body.type ?? '/download/temporary-error',
-            title: body.title ?? 'Zyte API error',
-            detail: body.detail,
-          });
-        }
-        // Request and account errors are final: pass Zyte's problem through.
-        throw new XyteError({
+        const problem = {
           status: res.status,
-          type: body.type ?? '/request/invalid',
+          type: body.type ?? (res.status === 401 ? '/auth/not-valid' : '/download/temporary-error'),
           title: body.title ?? 'Zyte API error',
           detail: body.detail,
-        });
+        };
+        // Account problems are the provider's, not the request's: inside a combinator the next
+        // provider gets the request. Rate limits, bans and server errors: retry (or move on).
+        const fatal = isAccountProblem(res.status, body.type);
+        if (fatal || res.status === 429 || res.status >= 500) throw new UpstreamProblem(problem, { fatal, upstream });
+        // Request errors (400, 422…) are final: pass Zyte's problem through.
+        throw new XyteError({ ...problem, type: body.type ?? '/request/invalid' });
       },
     }),
   };
+}
+
+/**
+ * Zyte API itself (https://docs.zyte.com/zyte-api/usage/reference.html): the request is forwarded
+ * unchanged, so every Zyte feature works, AI extraction included. Use it as the last resort:
+ * `rotate([nodeMaven(…), zyteApi({ apiKey })])`. A bad key or a suspended account (401, 403)
+ * moves a combinator on to its next provider; alone, it is the answer, with no retries.
+ */
+export function zyteApi(options: ZyteApiOptions): ProxyProvider<ApiEndpoint> {
+  return zyteCompatible(options, { name: 'zyte-api', endpoint: 'https://api.zyte.com/v1/extract', upstream: false });
+}
+
+/**
+ * Another xyte server (`xyte serve`, e.g. a deployment with its own proxy): `zyteApi()` with a
+ * required `endpoint` that also reads its `X-Xyte-Attempts` / `X-Xyte-Transfer-Bytes` headers, so
+ * the local attempt carries the remote ones (`upstream`) and the bytes they moved. Default name
+ * `xyte`; give each deployment its own: `xyteApi({ endpoint, apiKey, name: 'xyte-oxylabs' })`.
+ */
+export function xyteApi(options: ZyteApiOptions & { endpoint: string }): ProxyProvider<ApiEndpoint> {
+  return zyteCompatible(options, { name: 'xyte', upstream: true });
 }
 
 /** "US" → "UnitedStates" (Scrappey's country format). */
@@ -92,7 +139,7 @@ function compactCountryName(code: string): string {
  * your account (they're mapped from `solution.response` / `statusCode` / `currentUrl`).
  */
 export function scrappey(options: { apiKey: string; fetch?: typeof fetch; params?: Record<string, unknown> }): ProxyProvider<ApiEndpoint> {
-  const doFetch = options.fetch ?? fetch;
+  const doFetch = (...args: Parameters<typeof fetch>): Promise<Response> => (options.fetch ?? fetch)(...args);
   return {
     name: 'scrappey',
     resolve: () => ({
@@ -158,7 +205,7 @@ export function scrapingBot(options: {
   options?: Record<string, unknown>;
   fetch?: typeof fetch;
 }): ProxyProvider<ApiEndpoint> {
-  const doFetch = options.fetch ?? fetch;
+  const doFetch = (...args: Parameters<typeof fetch>): Promise<Response> => (options.fetch ?? fetch)(...args);
   return {
     name: 'scrapingbot',
     resolve: () => ({

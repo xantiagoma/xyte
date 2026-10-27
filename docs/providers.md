@@ -158,7 +158,8 @@ detection, extractors and `rotate()` work as with proxies, so the two kinds can 
 
 | Adapter | `XYTE_PROVIDER` · env | Notes | |
 | --- | --- | --- | --- |
-| `zyteApi({ apiKey })` | `zyte-api` · `ZYTE_API_KEY` | Forwards the request to Zyte unchanged, so **every** Zyte feature works (AI extraction, actions, sessions). Zyte's bans and problems pass through. Bans aren't re-checked locally. | 🟢 |
+| `zyteApi({ apiKey, endpoint?, name? })` | `zyte-api` · `ZYTE_API_KEY` | Forwards the request to Zyte unchanged, so **every** Zyte feature works (AI extraction, actions, sessions). Zyte's bans and problems pass through. Bans aren't re-checked locally. `endpoint` takes any Zyte-compatible `/v1/extract`. | 🟢 |
+| `xyteApi({ endpoint, apiKey, name? })` | – | Another `xyte serve` (say, a deployment with its own proxy), as `zyteApi()` does it, plus its report: see [below](#another-xyte-server-as-a-provider) | 🟢 |
 | `scrappey({ apiKey })` | `scrappey` · `SCRAPPEY_API_KEY` | `requestType` browser/request from the request, `proxyCountry`, cookies, headers, POST bodies | 🟡 response fields |
 | `scrapingBot({ username, apiKey, options? })` | `scrapingbot` · `SCRAPINGBOT_USERNAME/API_KEY` | Raw HTML API; the target status isn't reported (assumed 200) | 🟡 option names |
 
@@ -169,6 +170,37 @@ Alone, actions are skipped (`notExecuted` with the reason, plus a warning) or re
 `unsupportedActions: 'error'`, and a `screenshot` or `networkCapture` is a 400. An `ApiEndpoint`
 you write can declare the same: `unsupported: (request) => request.screenshot ? ['screenshot'] : []`.
 Which provider runs which actions: [actions](actions.md#which-providers-run-them).
+
+**Account problems.** A 401 or 403 from `zyteApi()` or `xyteApi()` (Zyte's `/auth/not-valid`,
+`/auth/key-not-found`, `/auth/account-suspended`: a bad key, an account out of balance) is the
+provider's failure, not the request's. Inside a combinator the request moves on to the next
+provider and that one isn't tried again for it; the attempt is an `error`, so `healthy()` opens
+the circuit (at once, for these), and `budget()` and `adaptive()` count it. Alone, the problem
+comes back as Zyte sent it (`retryable: false`), after a single call. A 400 or 422 is still the
+request's: it comes back as is, combinator or not.
+
+### Another xyte server as a provider
+
+```ts
+import { rotate, xyteApi, zyteApi } from '@xtandard/xyte';
+
+const proxy = rotate([
+  zyteApi({ apiKey: process.env.ZYTE_API_KEY! }),
+  xyteApi({ endpoint: 'https://you--xyte-oxylabs-serve.modal.run/v1/extract', apiKey: process.env.XYTE_KEY!, name: 'xyte-oxylabs' }),
+  xyteApi({ endpoint: 'https://you--xyte-decodo-serve.modal.run/v1/extract', apiKey: process.env.XYTE_KEY!, name: 'xyte-decodo' }),
+]);
+```
+
+`xyteApi()` is `zyteApi()` with a required `endpoint` that also reads the remote server's
+[report headers](observability.md#server-headers). Each local attempt gets `upstream`: the remote
+attempts (`[{ provider: 'oxylabs-residential', result: 'ban' }, { provider: 'oxylabs-residential',
+result: 'ok' }]`) and its request id. Its `transferBytes` are the remote ones, so a per-GB
+[rate](routing.md#costs) on `xyte-oxylabs` prices it. `zyteApi({ endpoint })` would work too,
+without the detail.
+
+**Names.** Every `zyteApi()` is called `zyte-api` unless you pass `name`; give each endpoint its
+own, so each has its own line in reports, `rates`, circuits, budgets and `adaptive()`. For any
+other provider, `named('oxylabs-us', oxylabs({ … }))` does the same.
 
 `zyteApi()` vs `zyteProxy()`: the API adapter has full fidelity, AI extraction included. Proxy mode
 only carries HTTP and browser HTML, but goes through xyte's own engines and extractors.

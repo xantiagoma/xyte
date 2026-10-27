@@ -164,7 +164,8 @@ npx @xtandard/xyte doctor --country US   # each configured provider: credentials
 | `zenrows({ apiKey })` | ZenRows API proxy mode | `premium_proxy=true&proxy_country=us&session_id=…` |
 | `scrapingBee({ apiKey })` | ScrapingBee proxy mode | `premium_proxy=True&country_code=us&session_id=…` |
 | `scraperApi({ apiKey })` | ScraperAPI proxy mode | `scraperapi.country_code=us.session_number=…` |
-| `zyteApi({ apiKey })` | Zyte API itself | the request, forwarded unchanged |
+| `zyteApi({ apiKey, name? })` | Zyte API itself | the request, forwarded unchanged |
+| `xyteApi({ endpoint, apiKey, name? })` | another `xyte serve` (a deployment with its own proxy) | the request, forwarded; its attempts come back in the report |
 | `template('http://u[-country-{country:lower}]-session-{session}:p@host:port')` | **any provider**, from its URL format | placeholders + optional `[parts]` |
 | `custom(name, ctx => url)` | anything you build | you decide |
 
@@ -273,6 +274,7 @@ back (a captcha served with a 200 counts as a failure), the median latency and t
 | 400 | `/request/invalid` | malformed request (bad `url`, header syntax), a field xyte doesn't support, an AI field without an extractor | no |
 | 400 | `/request/invalid-json` | the body isn't JSON (server) | no |
 | 401 | `/auth/key-not-found` | wrong or missing key (server with `XYTE_API_KEYS`) | no |
+| 401, 403 | `/auth/*` | `zyteApi()` / `xyteApi()` alone: the upstream's key is wrong or its account suspended, as it answered. In a combinator the next provider gets the request instead | no |
 | 421 | `/website/domain-unreachable` | the domain doesn't resolve (`direct()` only; through a proxy it's a 520) | no |
 | 422 | `/request/unprocessable` | incompatible parameters (`browserHtml` + `httpResponseBody`, actions on an HTTP request…), or nothing requested | no |
 | 500 | `/server/internal` | xyte misconfigured (a provider that can't build its URL, Playwright not installed) | no |
@@ -284,7 +286,8 @@ A target's own 4xx/5xx is not an error: it's a 200 with `statusCode` set, as on 
 403, 429, 503, or a known challenge page (Cloudflare, DataDome, PerimeterX, Imperva, Akamai);
 override with `isBan`. Each retry goes through a fresh session (a new IP), with exponential
 backoff; `onRetry` reports them. With `zyteApi()`, Zyte's own last problem is returned as Zyte
-gave it. `error.retryable` says whether retrying later makes sense, as with Zyte's own clients
+gave it. An account problem from Zyte (a bad key, a suspended account) isn't the request's fault:
+inside a combinator the next provider gets the request and Zyte isn't tried again for it. `error.retryable` says whether retrying later makes sense, as with Zyte's own clients
 (true for 429, 500, 503 and 520, except xyte's own misconfiguration 500s).
 
 ## How Zyte behaviour maps

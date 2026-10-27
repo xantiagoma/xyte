@@ -75,6 +75,22 @@ export function rotate<P extends ProxyProvider>(providers: readonly P[]): ProxyP
 }
 
 /**
+ * The same provider under another name, for reports, `rates`, circuits, budgets and `adaptive()`:
+ * `named('oxylabs-us', oxylabs({ … }))`. Two instances of one preset in a combinator otherwise
+ * share a name, and with it their numbers.
+ */
+export function named<P extends ProxyProvider>(name: string, provider: P): ProxyProvider<EndpointOf<P>> {
+  return {
+    name,
+    extracts: provider.extracts,
+    zyteActions: provider.zyteActions,
+    resolve: (context) => provider.resolve(context) as Resolved<EndpointOf<P>>,
+    ...(provider.available && { available: (context: ProxyContext) => provider.available!(context) }),
+    ...(provider.report && { report: (context: ProxyContext, outcome: AttemptOutcome) => provider.report!(context, outcome) }),
+  };
+}
+
+/**
  * Picks the provider by the target's host, so each site gets the cheapest exit that works on it:
  * `route({ 'doordash.com': zyteApi(…), 'wolt.com': direct() }, residential)`. A key matches the
  * host and its subdomains (`doordash.com` matches `www.doordash.com`); the longest match wins.
@@ -164,7 +180,10 @@ export function weighted<P extends ProxyProvider>(entries: readonly (readonly [P
 
 /** Options of `healthy()`, the circuit breaker. */
 export interface HealthyOptions {
-  /** Consecutive failed attempts (proxy or network errors, not bans) that open the circuit. Default 5. */
+  /**
+   * Consecutive failed attempts (proxy or network errors, not bans) that open the circuit. Default
+   * 5. An account problem (a bad key, a suspended account) opens it at once.
+   */
   failures?: number;
   /** Seconds the circuit stays open. Then one attempt is let through: a failure reopens it. Default 60. */
   cooldown?: number;
@@ -213,8 +232,9 @@ export function healthy<P extends ProxyProvider>(provider: P, options: HealthyOp
     report(context, outcome) {
       if (outcome.result === 'error') {
         errors++;
-        // Half-open after the cooldown: a single failure reopens the circuit.
-        if (tripped || errors >= failures) {
+        // Half-open after the cooldown: a single failure reopens the circuit. An account problem
+        // (a suspended account) opens it at once: the next requests would all fail the same way.
+        if (tripped || errors >= failures || outcome.fatal) {
           if (!tripped) options.onChange?.(true, provider.name);
           openUntil = Date.now() + cooldown * 1000;
           tripped = true;

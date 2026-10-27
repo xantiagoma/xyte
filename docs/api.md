@@ -11,9 +11,9 @@ import { Xyte, oxylabs, decodeBody } from '@xtandard/xyte';
 
 - [Client](#client): `Xyte`, `createXyte`, `XyteOptions`, `ExtractOptions`, `BatchResult`, `decodeBody`, `Transport`, `TransportRequest`, `SessionPoolOptions`
 - [Requests, responses and errors](#requests-responses-and-errors): `ExtractRequest`, `ExtractResponse`, `ExtractionField`, `EXTRACTION_FIELDS`, `Action`, `ActionName`, `ActionResult`, `ActionSelector`, `Cookie`, `HttpHeader`, `CapturedResponse`, `NetworkCaptureFilter`, `CountryCode`, `Problem`, `ZyteSchemas`, `XyteError`, `XyteProblem`, `UpstreamProblem`, `isLikelyBan`, `BanCheck`
-- [Providers](#providers): `direct`, `proxyUrl`, `template`, `custom`, `proxyEndpointUrl`, `oxylabs`, `brightData`, `decodo`, `smartproxy`, `iproyal`, `nodeMaven`, `soax`, `netNut`, `webshare`, `rayobyte`, `packetStream`, `evomi`, `dataImpulse`, `massive`, `proxySeller`, `anyIp`, `thordata`, `abcProxy`, `proxy922`, `lunaProxy`, `proxyEmpire`, `rapidProxy`, `swiftProxy`, `zenrows`, `scrapingBee`, `scraperApi`, `crawlbase`, `scrapeDo`, `scrapingAnt`, `scrapeOps`, `scrapfly`, `oxylabsUnblocker`, `zyteProxy`, `zyteApi`, `scrappey`, `scrapingBot`, `brightDataBrowser`, `browserless`, `zenrowsBrowser`, `oxylabsBrowser`, `nodeMavenBrowser`, `PROVIDER_NAMES`, `ProxyProvider`, `ProxyEndpoint`, `ApiEndpoint`, `ApiResult`, `ProxyContext`, `EndpointOf`, `AttemptOutcome`
-- [Combining providers](#combining-providers): `rotate`, `route`, `adaptive`, `byKind`, `byCountry`, `byIpType`, `weighted`, `healthy`, `budget`, `watch`, `AdaptiveOptions`, `AdaptiveProvider`, `HealthyOptions`, `BudgetOptions`, `WatchOptions`, `WatchedProvider`
-- [Provider checks](#provider-checks): `scrapingBeeUsage`, `zenrowsUsage`, `scraperApiUsage`, `oxylabsUsage`, `statusPage`, `STATUS_PAGES`, `ProviderCheck`, `CheckResult`
+- [Providers](#providers): `direct`, `proxyUrl`, `template`, `custom`, `proxyEndpointUrl`, `oxylabs`, `brightData`, `decodo`, `smartproxy`, `iproyal`, `nodeMaven`, `soax`, `netNut`, `webshare`, `rayobyte`, `packetStream`, `evomi`, `dataImpulse`, `massive`, `proxySeller`, `anyIp`, `thordata`, `abcProxy`, `proxy922`, `lunaProxy`, `proxyEmpire`, `rapidProxy`, `swiftProxy`, `zenrows`, `scrapingBee`, `scraperApi`, `crawlbase`, `scrapeDo`, `scrapingAnt`, `scrapeOps`, `scrapfly`, `oxylabsUnblocker`, `zyteProxy`, `zyteApi`, `xyteApi`, `ZyteApiOptions`, `scrappey`, `scrapingBot`, `brightDataBrowser`, `browserless`, `zenrowsBrowser`, `oxylabsBrowser`, `nodeMavenBrowser`, `PROVIDER_NAMES`, `ProxyProvider`, `ProxyEndpoint`, `ApiEndpoint`, `ApiResult`, `ProxyContext`, `EndpointOf`, `AttemptOutcome`
+- [Combining providers](#combining-providers): `rotate`, `route`, `adaptive`, `byKind`, `byCountry`, `byIpType`, `weighted`, `healthy`, `named`, `budget`, `watch`, `AdaptiveOptions`, `AdaptiveProvider`, `HealthyOptions`, `BudgetOptions`, `WatchOptions`, `WatchedProvider`
+- [Provider checks](#provider-checks): `scrapingBeeUsage`, `zenrowsUsage`, `scraperApiUsage`, `oxylabsUsage`, `zyteSpend`, `statusPage`, `allChecks`, `STATUS_PAGES`, `ProviderCheck`, `CheckResult`
 - [Shared state](#shared-state): `StateStore`, `memoryStore`, `redisStore`, `redisStoreFromUrl`, `resilient`, `RedisSend`
 - [Actions](#actions): `ActionHandlers`, `ActionHandler`, `ActionHandlerContext`, `ActionEntry`, `PerSite`, `ById`, `SearchKeywordAction`, `SetLocationAction`, `InteractionAction`, `ZyteOnlyAction`, `searchBox`, `isZyteOnlyAction`
 - [Browser](#browser): `patchright`, `rebrowser`, `camoufox`, `cloakBrowser`, `STEALTH_BROWSERS`, `capsolver`, `twoCaptcha`, `createTaskSolver`, `CaptchaSolver`, `CaptchaTask`, `CaptchaKind`, `CaptchaOutcome`, `BrowserOptions`, `BrowserHookInfo`, `BrowserTypeLike`, `RemoteBrowser`
@@ -449,8 +449,9 @@ type XyteProblem = Required<Pick<Problem, "type" | "status" | "title">> & {
 
 ### `UpstreamProblem`
 
-A retryable failure an upstream Zyte-compatible API answered with its own problem (a 520 ban,
-a 429). Retried like any download error; if it is the last one, that problem is returned as is.
+A failure an upstream Zyte-compatible API answered with its own problem (a 520 ban, a 429, a
+suspended account). Retried like any download error; if it is the last one, that problem is
+returned as is.
 
 ```ts
 class UpstreamProblem extends Error {
@@ -458,7 +459,18 @@ class UpstreamProblem extends Error {
   override name: string;
   /** The upstream's problem, returned to the caller as is if no retry succeeds. */
   readonly problem: XyteProblem;
-  constructor(problem: XyteProblem);
+  /**
+   * The provider can't serve any request until someone fixes it (a bad key, a suspended account):
+   * inside a combinator the request moves on and the provider isn't tried again for it; alone, the
+   * problem is the answer, with no retries.
+   */
+  readonly fatal: boolean;
+  /** What the upstream reported about its own attempts (another xyte server's `X-Xyte-Attempts`). */
+  readonly upstream?: UpstreamInfo;
+  constructor(problem: XyteProblem, options?: {
+    fatal?: boolean;
+    upstream?: UpstreamInfo;
+  });
 }
 ```
 
@@ -947,14 +959,43 @@ function zyteProxy(options: {
 
 Zyte API itself (https://docs.zyte.com/zyte-api/usage/reference.html): the request is forwarded
 unchanged, so every Zyte feature works, AI extraction included. Use it as the last resort:
-`rotate([nodeMaven(…), zyteApi({ apiKey })])`.
+`rotate([nodeMaven(…), zyteApi({ apiKey })])`. A bad key or a suspended account (401, 403)
+moves a combinator on to its next provider; alone, it is the answer, with no retries.
 
 ```ts
-function zyteApi(options: {
-  apiKey: string;
-  endpoint?: string;
-  fetch?: typeof fetch;
+function zyteApi(options: ZyteApiOptions): ProxyProvider<ApiEndpoint>;
+```
+
+### `xyteApi`
+
+Another xyte server (`xyte serve`, e.g. a deployment with its own proxy): `zyteApi()` with a
+required `endpoint` that also reads its `X-Xyte-Attempts` / `X-Xyte-Transfer-Bytes` headers, so
+the local attempt carries the remote ones (`upstream`) and the bytes they moved. Default name
+`xyte`; give each deployment its own: `xyteApi({ endpoint, apiKey, name: 'xyte-oxylabs' })`.
+
+```ts
+function xyteApi(options: ZyteApiOptions & {
+  endpoint: string;
 }): ProxyProvider<ApiEndpoint>;
+```
+
+### `ZyteApiOptions`
+
+Options for `zyteApi()` and `xyteApi()`.
+
+```ts
+interface ZyteApiOptions {
+  apiKey: string;
+  /** Default `https://api.zyte.com/v1/extract`; any Zyte-compatible `/v1/extract` works. */
+  endpoint?: string;
+  /**
+   * The provider's name in reports, `rates`, circuits and budgets. Default `zyte-api`. Set one per
+   * endpoint when a combinator has several, so each keeps its own numbers.
+   */
+  name?: string;
+  /** Resolved at call time: a stub put on `globalThis.fetch` later is used too. */
+  fetch?: typeof fetch;
+}
 ```
 
 ### `scrappey`
@@ -1165,6 +1206,10 @@ interface ApiResult {
   html?: string;
   /** The service already handled bans (Zyte): skip xyte's ban check on this answer. */
   trusted?: boolean;
+  /** Bytes the service reported moving for it (another xyte server's `X-Xyte-Transfer-Bytes`). */
+  transferBytes?: number;
+  /** The service's own report of its attempts, when it is another xyte server (`xyteApi()`). */
+  upstream?: UpstreamInfo;
 }
 ```
 
@@ -1228,6 +1273,13 @@ interface AttemptOutcome {
    */
   transferBytes?: number;
   reason?: string;
+  /**
+   * The provider can't serve any request until someone fixes it (a bad key, a suspended account):
+   * `healthy()` opens its circuit at once.
+   */
+  fatal?: boolean;
+  /** Through another xyte server (`xyteApi()`): its attempts, e.g. `oxylabs-residential:ban, oxylabs-residential:ok`. */
+  upstream?: UpstreamInfo;
   /** Captchas met in a browser render with `browser.captcha`, and whether they were solved. */
   captchas?: {
     kind: string;
@@ -1334,6 +1386,16 @@ an open circuit doesn't block requests (there is nothing to fall back to).
 function healthy<P extends ProxyProvider>(provider: P, options?: HealthyOptions): ProxyProvider<EndpointOf<P>>;
 ```
 
+### `named`
+
+The same provider under another name, for reports, `rates`, circuits, budgets and `adaptive()`:
+`named('oxylabs-us', oxylabs({ … }))`. Two instances of one preset in a combinator otherwise
+share a name, and with it their numbers.
+
+```ts
+function named<P extends ProxyProvider>(name: string, provider: P): ProxyProvider<EndpointOf<P>>;
+```
+
 ### `budget`
 
 Caps how many attempts go to a provider per time window, e.g. so a fallback to Zyte can't
@@ -1402,7 +1464,10 @@ Options of `healthy()`, the circuit breaker.
 
 ```ts
 interface HealthyOptions {
-  /** Consecutive failed attempts (proxy or network errors, not bans) that open the circuit. Default 5. */
+  /**
+   * Consecutive failed attempts (proxy or network errors, not bans) that open the circuit. Default
+   * 5. An account problem (a bad key, a suspended account) opens it at once.
+   */
   failures?: number;
   /** Seconds the circuit stays open. Then one attempt is let through: a failure reopens it. Default 60. */
   cooldown?: number;
@@ -1525,6 +1590,30 @@ function oxylabsUsage(options: CheckOptions & {
 }): ProviderCheck;
 ```
 
+### `zyteSpend`
+
+Zyte API spend this billing cycle, against `limitUsd` (Zyte has no balance endpoint): unavailable
+from `maxPercent` of it (default 100), so a combinator moves to the next provider before Zyte's
+account runs dry. Reads `cost_micro_total` from Zyte's Stats API
+(`zyte-api-stats.zyte.com/api/v1/stats`), which takes the *dashboard* API key (not the Zyte API
+key) and your `organizationId` (the number in the dashboard URL, `/o/000000`). The cycle starts
+on `cycleStartDay` (1–28, UTC; default 1). The Stats API allows 20 requests a minute: keep
+`watch()`'s `every` at 60 or more. Not yet checked against an account.
+
+```ts
+function zyteSpend(options: CheckOptions & {
+  apiKey: string;
+  organizationId: string | number;
+  limitUsd: number;
+  maxPercent?: number;
+  cycleStartDay?: number;
+  /** Default `USD`: the currency your organization is billed in. */
+  currency?: string;
+  /** Default `https://zyte-api-stats.zyte.com`. */
+  baseUrl?: string;
+}): ProviderCheck;
+```
+
 ### `statusPage`
 
 A Statuspage page (`https://status.zyte.com`, IPRoyal, Webshare…): unavailable while its
@@ -1534,6 +1623,14 @@ indicator is one of `downOn` (default `major`, `critical`; `minor` is a partial 
 function statusPage(url: string, options?: CheckOptions & {
   downOn?: readonly string[];
 }): ProviderCheck;
+```
+
+### `allChecks`
+
+Several checks as one, all of which must pass (what `watch()` does with an array).
+
+```ts
+function allChecks(checks: readonly ProviderCheck[]): ProviderCheck;
 ```
 
 ### `STATUS_PAGES`
@@ -2735,6 +2832,8 @@ Neither set: no proxy. On top of that:
 - `XYTE_WATCH=true`: wraps providers that have a usage API or status page in `watch()`
   (`XYTE_WATCH_EVERY` seconds, default 60). Oxylabs needs `OXYLABS_LIMIT_GB` (and, if the
   proxy user isn't the account's main one, `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD`).
+  Zyte's spend is checked too with `ZYTE_STATS_API_KEY` (the dashboard key),
+  `ZYTE_ORGANIZATION_ID` and `ZYTE_LIMIT_USD` (optional `ZYTE_MAX_PERCENT`, `ZYTE_CYCLE_START_DAY`).
 - `XYTE_REDIS_URL=redis://…`: budgets, circuits and checks are shared by every instance.
 
 A provider named in several places is one instance, so its budget and circuit are shared.

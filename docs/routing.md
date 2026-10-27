@@ -57,6 +57,12 @@ for Zyte), so the next provider gets the turn without a request, a backoff or a 
 What isn't retried: a target's own 4xx/5xx other than the ban statuses (returned in `statusCode`,
 as on Zyte), invalid requests (400/422), and configuration errors (500).
 
+An **account problem** from an upstream API (Zyte's 401/403: a bad key, a suspended account) fails
+the provider, not the request: in a combinator the next provider gets the request and that one is
+passed over for the rest of it; alone, the problem is the answer, with no retries. When the only
+providers left are ones that answered that, the last such problem is returned
+([providers](providers.md#api-only-services)).
+
 After each attempt the client tells the provider how it went (`ok`, `ban`, `error`, or `aborted`
 when the attempt says nothing about the provider), and combinators pass that on to the child
 they chose. That's what `adaptive`, `healthy` and `budget` learn from; your own providers can
@@ -190,7 +196,8 @@ After `failures` consecutive proxy or network errors (rejected logins, an unreac
 timeouts), the provider is unavailable for `cooldown` seconds and `rotate()`, `route()`,
 `weighted()` and `adaptive()` go straight past it. Without it, a provider that is down costs one
 attempt per request. After the cooldown, one attempt is let through: success closes the circuit,
-a failure reopens it. Bans don't count (the provider works; the site blocked an IP). Used alone,
+a failure reopens it. Bans don't count (the provider works; the site blocked an IP). An account
+problem (a 401/403 from `zyteApi()`: a suspended account, a bad key) opens the circuit at once. Used alone,
 an open circuit doesn't block anything, since there's nothing to fall back to. `onChange(open)`
 reports transitions.
 
@@ -239,6 +246,7 @@ Built-in checks:
 | `zenrowsUsage({ apiKey, maxPercent? })` | `api.zenrows.com/v1/subscriptions/self/details` | subscription inactive, usage ≥ `maxPercent`, or the key's caps spent | docs |
 | `scraperApiUsage({ apiKey })` | `api.scraperapi.com/account` | `requestCount` reaches `requestLimit` | docs |
 | `oxylabsUsage({ username, password, limitGB, maxPercent? })` | `residential-api.oxylabs.io/v2` (login, then `client-stats`) | this month's GB reach `maxPercent` of `limitGB` (the API reports usage, not your limit) | docs; needs the account's *main* proxy user |
+| `zyteSpend({ apiKey, organizationId, limitUsd, maxPercent?, cycleStartDay? })` | Zyte's Stats API (`zyte-api-stats.zyte.com/api/v1/stats`): `cost_micro_total` since the cycle began | this cycle's spend reaches `maxPercent` of `limitUsd`. Zyte has no balance endpoint: this marks it unavailable *before* the account runs dry. `apiKey` is the dashboard key, not the Zyte API key; the Stats API allows 20 requests a minute | docs |
 | `statusPage(url, { downOn? })` | any Statuspage page (`/api/v2/status.json`): Zyte, IPRoyal, Webshare… | its indicator is `major` or `critical` | ✅ (Zyte) |
 
 A check is just `(signal) => Promise<{ available, detail?, remaining? }>`, so anything else (an
@@ -247,7 +255,9 @@ all must pass.
 
 From env: `XYTE_WATCH=true` watches every named provider that has a built-in check (ScrapingBee,
 ZenRows, ScraperAPI, Zyte, IPRoyal, Webshare; Oxylabs with `OXYLABS_LIMIT_GB`, and
-`OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the main one), every
+`OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the main one; Zyte's
+spend with `ZYTE_STATS_API_KEY`, `ZYTE_ORGANIZATION_ID` and `ZYTE_LIMIT_USD`, optionally
+`ZYTE_MAX_PERCENT` and `ZYTE_CYCLE_START_DAY`), every
 `XYTE_WATCH_EVERY` seconds, logging switches to stderr.
 
 ## Shared state across instances (Redis)

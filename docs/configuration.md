@@ -71,7 +71,7 @@ Checked in this order; the first one set wins.
 | `XYTE_BROWSER_PROVIDER` | `oxylabs` | Browser renders go here, HTTP requests to the above ([`byKind()`](routing.md#bykind-http-or-browser)). |
 | `XYTE_CIRCUIT_BREAKER` | `5,60` | Every named provider gets a [circuit breaker](routing.md#healthy-a-circuit-breaker): failures, cooldown seconds. |
 | `XYTE_BUDGET` | `zyte-api=500/hour,scrapingbee=1000/day` | [Attempt caps](routing.md#budget-cap-what-a-provider-can-spend) per provider (`minute`, `hour`, `day` or seconds). |
-| `XYTE_WATCH` | `true` | [Check](routing.md#watch-check-providers-ahead-of-requests) every named provider that has a usage API or status page; `XYTE_WATCH_EVERY` seconds (60). Oxylabs needs `OXYLABS_LIMIT_GB` (and `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the account's main one). |
+| `XYTE_WATCH` | `true` | [Check](routing.md#watch-check-providers-ahead-of-requests) every named provider that has a usage API or status page; `XYTE_WATCH_EVERY` seconds (60). Oxylabs needs `OXYLABS_LIMIT_GB` (and `OXYLABS_API_USERNAME` / `OXYLABS_API_PASSWORD` if the proxy user isn't the account's main one); Zyte's spend is checked with `ZYTE_STATS_API_KEY` (the dashboard key), `ZYTE_ORGANIZATION_ID`, `ZYTE_LIMIT_USD`, and optionally `ZYTE_MAX_PERCENT`, `ZYTE_CYCLE_START_DAY`. |
 | `XYTE_REDIS_URL` | `redis://…` | [Share](routing.md#shared-state-across-instances-redis) budgets, circuits, checks, `adaptive` scores, the `sessionContext` pool and the cache across instances. |
 
 None set: `direct()`. A provider named in several of these is one instance: its budget and circuit

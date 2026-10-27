@@ -46,19 +46,40 @@ export const invalidRequest = (detail: string): XyteError =>
   new XyteError({ status: 400, type: '/request/invalid', title: 'Invalid Request', detail });
 
 /**
- * A retryable failure an upstream Zyte-compatible API answered with its own problem (a 520 ban,
- * a 429). Retried like any download error; if it is the last one, that problem is returned as is.
+ * A failure an upstream Zyte-compatible API answered with its own problem (a 520 ban, a 429, a
+ * suspended account). Retried like any download error; if it is the last one, that problem is
+ * returned as is.
  */
 export class UpstreamProblem extends Error {
   /** Always `UpstreamProblem`. */
   override name = 'UpstreamProblem';
   /** The upstream's problem, returned to the caller as is if no retry succeeds. */
   readonly problem: XyteProblem;
+  /**
+   * The provider can't serve any request until someone fixes it (a bad key, a suspended account):
+   * inside a combinator the request moves on and the provider isn't tried again for it; alone, the
+   * problem is the answer, with no retries.
+   */
+  readonly fatal: boolean;
+  /** What the upstream reported about its own attempts (another xyte server's `X-Xyte-Attempts`). */
+  readonly upstream?: UpstreamInfo;
 
-  constructor(problem: XyteProblem) {
+  constructor(problem: XyteProblem, options: { fatal?: boolean; upstream?: UpstreamInfo } = {}) {
     super(`${problem.status} ${problem.type}${problem.detail ? `: ${problem.detail}` : ''}`);
     this.problem = problem;
+    this.fatal = options.fatal ?? false;
+    this.upstream = options.upstream;
   }
+}
+
+/** An upstream xyte server's report of a request, from its `X-Xyte-*` headers. */
+export interface UpstreamInfo {
+  /** Its attempts, in order: `provider` is its leaf (`oxylabs-residential`), `result` its verdict. */
+  attempts: { provider: string; result: string }[];
+  /** Bytes its attempts moved (`X-Xyte-Transfer-Bytes`). */
+  transferBytes?: number;
+  /** Its request id (`X-Xyte-Request-Id`), to find the request in its logs. */
+  requestId?: string;
 }
 
 /** A well-formed request whose parameters can't be combined (or that asks for nothing): Zyte's 422. */
