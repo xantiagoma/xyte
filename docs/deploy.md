@@ -37,15 +37,29 @@ The host's IP mostly doesn't matter, because sites see the proxy's IP. The excep
 
 ## Images
 
-```sh
-docker build -t xyte .                       # full: HTTP + browser (Playwright Chromium), ~2.5 GB
-docker build -t xyte:slim --target slim .    # HTTP only, ~250 MB
+Each release publishes both images to GitHub's registry, for `linux/amd64` and `linux/arm64`:
 
+| Image | Tags | |
+| --- | --- | --- |
+| `ghcr.io/xantiagoma/xyte` | `0.1.3`, `0.1`, `latest` | full: HTTP + browser, ~2.5 GB |
+| `ghcr.io/xantiagoma/xyte` | `0.1.3-slim`, `0.1-slim`, `slim` | HTTP only, ~250 MB |
+
+```sh
 docker run -p 8080:8080 -e XYTE_API_KEYS=dev \
-  -e XYTE_PROVIDER=oxylabs -e OXYLABS_USERNAME=… -e OXYLABS_PASSWORD=… xyte
+  -e XYTE_PROVIDER=oxylabs -e OXYLABS_USERNAME=… -e OXYLABS_PASSWORD=… ghcr.io/xantiagoma/xyte:0.1.3
 
 curl -u dev: localhost:8080/v1/extract -d '{"url":"https://example.com","httpResponseBody":true}'
 ```
+
+Pin a version in production: `latest` moves with every release. To build them yourself:
+`docker build -t xyte .` (full) and `docker build -t xyte:slim --target slim .`.
+
+Every setting is an env var, so the images need no other config: the whole list is in
+[configuration](configuration.md). The images carry the optional dependencies those settings need:
+`undici` (proxies on Node) and `ioredis` (`XYTE_REDIS_URL`) in both; in the full image, Playwright
+and Patchright on the same Chromium (`XYTE_BROWSER=patchright`). The other stealth browsers
+(`rebrowser`, `camoufox`, `cloakbrowser`) have their own installs: extend the image for them, e.g.
+`FROM ghcr.io/xantiagoma/xyte:0.1.3` then `RUN npm install rebrowser-playwright`.
 
 - **full**: built on `mcr.microsoft.com/playwright`, so Chromium and its system libraries match
   the `playwright` version (`PLAYWRIGHT_VERSION` build arg). Runs as the non-root `pwuser`.
@@ -112,28 +126,36 @@ and point the health check at `/healthz`.
 
 ## Modal
 
-[`deploy/modal_app.py`](../deploy/modal_app.py) builds the repo's Dockerfile (the browser image)
-and runs `xyte serve` behind `@modal.web_server`, one container per `XYTE_MODAL_CONCURRENCY`
-requests, scaling with traffic.
+[`deploy/modal_app.py`](../deploy/modal_app.py) runs the published image
+(`ghcr.io/xantiagoma/xyte:<version>`, with the browser) behind `@modal.web_server`. Each container
+takes up to `XYTE_MODAL_CONCURRENCY` requests, and the app scales with traffic. Each GitHub release
+attaches a copy of the file pinned to that version's image, so a deployment from any repo needs
+only that one file:
 
 ```sh
+curl -LO https://github.com/xantiagoma/xyte/releases/download/v0.1.3/modal_app.py
 modal secret create xyte OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
-modal deploy deploy/modal_app.py
+modal deploy modal_app.py
 ```
+
+`XYTE_IMAGE` picks another image (`ghcr.io/xantiagoma/xyte:0.1.3-slim` for an HTTP-only fleet, or
+your own built `FROM` it). `XYTE_MODAL_BUILD=1` builds the repo's Dockerfile instead (from the
+repo root).
 
 Several apps from the same file, each with its own provider and secret, are set by env at deploy
 time:
 
 ```sh
 modal secret create xyte-decodo DECODO_USERNAME=… DECODO_PASSWORD=… XYTE_API_KEYS=…
-XYTE_MODAL_APP=xyte-decodo XYTE_PROVIDER=decodo modal deploy deploy/modal_app.py
+XYTE_MODAL_APP=xyte-decodo XYTE_PROVIDER=decodo modal deploy modal_app.py
 
 modal secret create xyte-oxylabs OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
-XYTE_MODAL_APP=xyte-oxylabs XYTE_PROVIDER=oxylabs XYTE_MODAL_MIN_CONTAINERS=1 modal deploy deploy/modal_app.py
+XYTE_MODAL_APP=xyte-oxylabs XYTE_PROVIDER=oxylabs XYTE_MODAL_MIN_CONTAINERS=1 modal deploy modal_app.py
 ```
 
 | Variable | Default | Modal setting | |
 | --- | --- | --- | --- |
+| `XYTE_IMAGE` | `ghcr.io/xantiagoma/xyte:<the file's version>` | `Image.from_registry` | The image. In the repo's copy the version is `latest` |
 | `XYTE_MODAL_APP` | `xyte` | `modal.App(name)` | The app's name, and so its URL: `https://<workspace>--<app>-serve.modal.run` |
 | `XYTE_PROVIDER` | `oxylabs` | | What `xyte serve` uses ([configuration](configuration.md)). Anything else (`XYTE_ROUTES`, `XYTE_CIRCUIT_BREAKER`, `XYTE_REDIS_URL`…) goes in the secret |
 | `XYTE_MODAL_SECRET` | the app's name | `secrets` | The provider's credentials and `XYTE_API_KEYS` |
@@ -188,20 +210,21 @@ with no Playwright, no Chromium, and no proxy credentials, and sends every reque
 running elsewhere. Those servers do the heavy lifting: the browser, the proxy, the retries.
 
 ```
-your service ── xyte (no browser) ──┬─ xyteApi ─▶ xyte on Modal     ── oxylabs ──▶ site
-               rotate · healthy     ├─ xyteApi ─▶ xyte on Cloud Run ── decodo  ──▶ site
-               reports · costs      └─ zyteApi ─▶ Zyte API                     ──▶ site
+your service ── xyte (no browser) ──┬─ zyteApi ─▶ Zyte API                     ──▶ site
+               fallback · healthy   ├─ xyteApi ─▶ xyte on Modal     ── oxylabs ──▶ site
+               reports · costs      └─ xyteApi ─▶ xyte on Cloud Run ── decodo  ──▶ site
 ```
 
 ```ts
-import { healthy, rotate, Xyte, xyteApi, zyteApi } from '@xtandard/xyte';
+import { fallback, healthy, Xyte, xyteApi, zyteApi } from '@xtandard/xyte';
 
 const key = process.env.XYTE_FLEET_KEY!;
 const xyte = new Xyte({
-  proxy: rotate([
+  // Zyte gets the first 3 attempts while it works; the fleets the rest, or all of them while
+  // Zyte's circuit is open (an outage, a suspended account).
+  proxy: fallback(healthy(zyteApi({ apiKey: process.env.ZYTE_API_KEY! })), [
     healthy(xyteApi({ endpoint: 'https://you--xyte-oxylabs-serve.modal.run/v1/extract', apiKey: key, name: 'xyte-oxylabs' })),
     healthy(xyteApi({ endpoint: 'https://xyte-decodo-abc123.a.run.app/v1/extract', apiKey: key, name: 'xyte-decodo' })),
-    healthy(zyteApi({ apiKey: process.env.ZYTE_API_KEY! })),
   ]),
   rates: { 'xyte-oxylabs': { perGB: 4 }, 'xyte-decodo': { perGB: 3.5 }, 'zyte-api': { perRequest: 0.0013 } },
 });

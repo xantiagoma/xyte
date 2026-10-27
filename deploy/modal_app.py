@@ -1,12 +1,16 @@
-# Modal: run from the repo root
+# Modal: runs `xyte serve` as a web server, from the published image
+# (ghcr.io/xantiagoma/xyte:<version>: HTTP + browser). Modal adds its own Python to the image.
 #   modal secret create xyte OXYLABS_USERNAME=… OXYLABS_PASSWORD=… XYTE_API_KEYS=…
-#   modal deploy deploy/modal_app.py
-# Modal is Python-first; this builds the repo's Dockerfile (full target: HTTP + browser) and runs
-# `xyte serve` as a web server. Modal adds its own Python to the image.
+#   modal deploy modal_app.py
+# Each GitHub release attaches this file pinned to its version (its XYTE_VERSION line), so a
+# deployment needs only that file:
+#   curl -LO https://github.com/xantiagoma/xyte/releases/download/v<version>/modal_app.py
 #
 # Several apps from this one file, each with its own provider and secret (docs/deploy.md#modal):
-#   XYTE_MODAL_APP=xyte-decodo XYTE_PROVIDER=decodo modal deploy deploy/modal_app.py
+#   XYTE_MODAL_APP=xyte-decodo XYTE_PROVIDER=decodo modal deploy modal_app.py
 # Read at deploy time (defaults in brackets):
+#   XYTE_IMAGE                   the image [ghcr.io/xantiagoma/xyte:<XYTE_VERSION>]; its -slim tag is HTTP only
+#   XYTE_MODAL_BUILD=1           build the repo's Dockerfile instead (from the repo root)
 #   XYTE_MODAL_APP               the app's name, and so its URL [xyte]
 #   XYTE_PROVIDER                the provider `xyte serve` uses [oxylabs]
 #   XYTE_MODAL_SECRET            the Modal secret with its credentials [the app's name]
@@ -25,6 +29,9 @@ import subprocess
 
 import modal
 
+# The release this file belongs to: "latest" in the repo, the version in a release's copy.
+XYTE_VERSION = "latest"
+
 
 def setting(name: str, default: str) -> str:
     return os.environ.get(name, default)
@@ -33,6 +40,8 @@ def setting(name: str, default: str) -> str:
 # Baked into the image too: Modal imports this file again inside the container, where the deploy
 # shell's environment isn't set, and the values must match there.
 config = {
+    "XYTE_IMAGE": setting("XYTE_IMAGE", f"ghcr.io/xantiagoma/xyte:{XYTE_VERSION}"),
+    "XYTE_MODAL_BUILD": setting("XYTE_MODAL_BUILD", ""),
     "XYTE_MODAL_APP": setting("XYTE_MODAL_APP", "xyte"),
     "XYTE_PROVIDER": setting("XYTE_PROVIDER", "oxylabs"),
     "XYTE_MODAL_MIN_CONTAINERS": setting("XYTE_MODAL_MIN_CONTAINERS", "0"),
@@ -54,7 +63,12 @@ worst = int(config["XYTE_TIMEOUT"]) * (int(config["XYTE_RETRIES"]) + 1)
 if worst >= 150:
     print(f"warning: XYTE_TIMEOUT × attempts is {worst}s; Modal answers a web request past 150 s with a 303 redirect")
 
-image = modal.Image.from_dockerfile("Dockerfile", add_python="3.12").env(
+if config["XYTE_MODAL_BUILD"]:
+    base = modal.Image.from_dockerfile("Dockerfile", add_python="3.12")
+else:
+    base = modal.Image.from_registry(config["XYTE_IMAGE"], add_python="3.12")
+
+image = base.env(
     # xyte's own queue matches Modal's: requests past max_inputs go to another container.
     {"HOST": "0.0.0.0", "PORT": "8080", "XYTE_CONCURRENCY": str(max_inputs), **config}
 )
