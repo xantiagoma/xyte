@@ -1,6 +1,24 @@
 # Changelog
 
 
+## v0.1.2
+
+[compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.1...v0.1.2)
+
+### 🚀 Enhancements
+
+- **providers:** Fall back on Zyte account errors; names, xyteApi(), zyteSpend() ([c218345](https://github.com/xantiagoma/xyte/commit/c218345))
+- **deploy:** Modal autoscaling settings, per-endpoint API timeout, thin-client fleets ([c27c6af](https://github.com/xantiagoma/xyte/commit/c27c6af))
+
+### 📖 Documentation
+
+- Disclaimer, mission, and the open-source files ([94e971e](https://github.com/xantiagoma/xyte/commit/94e971e))
+- A docs site at me.xantiagoma.com/xyte (VitePress over docs/) ([db85f72](https://github.com/xantiagoma/xyte/commit/db85f72))
+
+### ❤️ Contributors
+
+- Santiago Montoya ([@xantiagoma](https://github.com/xantiagoma))
+
 ## v0.1.1
 
 [compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.0...v0.1.1)
