@@ -26,3 +26,34 @@
   --vp-home-hero-name-background: linear-gradient(120deg, #d9f99d 10%, #b7f34a 60%);
   --vp-home-hero-image-background-image: linear-gradient(-45deg, rgba(183, 243, 74, 0.35) 50%, rgba(154, 164, 178, 0.2) 50%);
 }
+
+/* The sibling-project cards on the home page, styled like the hero's feature cards. */
+.ecosystem-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.vp-doc a.ecosystem-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--vp-c-bg-soft);
+  border-radius: 12px;
+  background-color: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+  transition: border-color 0.25s;
+}
+
+.vp-doc a.ecosystem-card:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+.ecosystem-card span {
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}

@@ -45,6 +45,7 @@
     "!docs/index.md",
     "!docs/guide.md",
     "!docs/about.md",
+    "!docs/ecosystem.md",
     "NOTICE"
   ],
   "publishConfig": {

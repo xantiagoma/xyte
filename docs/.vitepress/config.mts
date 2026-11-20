@@ -112,6 +112,7 @@ export default defineConfig({
           { text: 'API reference', link: '/api' },
           { text: 'Releases', link: '/releases' },
           { text: 'About and disclaimer', link: '/about' },
+          { text: 'The xtandard ecosystem', link: '/ecosystem' },
         ],
       },
     ],
