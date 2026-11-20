@@ -84,3 +84,29 @@ code whether the request goes to Zyte, to a proxy, or nowhere special. It speaks
 because that API is well designed and well documented, so code moves between xyte and Zyte in
 either direction. It doesn't try to compete with or replace Zyte, which is one of its providers,
 and it isn't affiliated with Zyte ([disclaimer](./about#disclaimer)).
+
+## The xtandard ecosystem
+
+xyte has siblings: open-source, MIT-licensed projects that share the xtandard name. Each one
+stands on its own.
+
+<div class="ecosystem-cards">
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard/" target="_blank">
+    <strong>@xtandard/lib</strong>
+    <span>Lightweight, type-safe TypeScript utilities with a zero-dependency core.</span>
+  </a>
+  <a class="ecosystem-card" href="https://github.com/xantiagoma/xtandard-flags" target="_blank">
+    <strong>@xtandard/flags</strong>
+    <span>Self-hosted, embeddable, OpenFeature-compatible feature flags with pluggable storage.</span>
+  </a>
+  <a class="ecosystem-card" href="https://github.com/xantiagoma/xtandard-webhooks" target="_blank">
+    <strong>@xtandard/webhooks</strong>
+    <span>Self-hosted, Standard Webhooks-compliant outbound webhooks: a Svix alternative as a library.</span>
+  </a>
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-image/" target="_blank">
+    <strong>xtandard-image</strong>
+    <span>Self-hosted image and video processing in Go and libvips, with imgproxy-compatible URLs.</span>
+  </a>
+</div>
+
+All of them, with npm and GitHub links: [the xtandard ecosystem](./ecosystem).

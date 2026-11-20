@@ -397,6 +397,27 @@ to compete with or replace Zyte or any other service it works with.
   contacts only the sites you request and the services you configure, plus `ipinfo.io` when you
   run `xyte doctor` (`--url` changes it).
 
+<!-- #endregion about -->
+
+## The xtandard ecosystem
+
+<!-- #region ecosystem -->
+
+`@xtandard/xyte` is one of a family of open-source, MIT-licensed projects that share the xtandard
+name. They are independent of each other: use any of them on its own.
+
+| Project | What it is | Links |
+| --- | --- | --- |
+| **`@xtandard/xyte`** (this package) | A Zyte API-compatible `/v1/extract` client and server that runs on any proxy provider, or none | [Docs](https://me.xantiagoma.com/xyte/) · [npm](https://www.npmjs.com/package/@xtandard/xyte) |
+| **`@xtandard/lib`** | Lightweight, type-safe TypeScript utilities with a zero-dependency core | [Docs](https://me.xantiagoma.com/xtandard/) · [GitHub](https://github.com/xantiagoma/xtandard) · [npm](https://www.npmjs.com/package/@xtandard/lib) |
+| **`@xtandard/flags`** | A self-hosted, embeddable, OpenFeature-compatible feature-flag control plane with pluggable storage | [GitHub](https://github.com/xantiagoma/xtandard-flags) · [npm](https://www.npmjs.com/package/@xtandard/flags) |
+| **`@xtandard/webhooks`** | A self-hosted, embeddable, Standard Webhooks-compliant outbound-webhooks control plane: a Svix alternative as a library | [GitHub](https://github.com/xantiagoma/xtandard-webhooks) · [npm](https://www.npmjs.com/package/@xtandard/webhooks) |
+| **xtandard-image** | A self-hosted image and video processing server in Go and libvips: imgproxy-compatible URLs plus the imgix, Cloudinary, ImageKit, Cloudflare and Thumbor dialects, with a TypeScript client (`@xtandard/image`) | [Docs](https://me.xantiagoma.com/xtandard-image/) · [GitHub](https://github.com/xantiagoma/xtandard-image) · [npm](https://www.npmjs.com/package/@xtandard/image) |
+
+<!-- #endregion ecosystem -->
+
+<!-- #region contributing -->
+
 ## Contributing, security and licence
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the
@@ -408,7 +429,7 @@ checks CI runs and the commit style. Report vulnerabilities privately, as
 The code is MIT licensed ([LICENSE](LICENSE)). [NOTICE](NOTICE) credits the third-party material
 in the repository, including Zyte's OpenAPI document.
 
-<!-- #endregion about -->
+<!-- #endregion contributing -->
 
 ## Development
 
