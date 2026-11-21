@@ -1,6 +1,39 @@
 # Changelog
 
 
+## v0.1.4
+
+[compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.3...v0.1.4)
+
+Docs and branding only: the README and the npm page show the new `@xtandard/xyte` lockups (SVG),
+and the docs site uses the generated vector brand kit and lists the rest of the xtandard ecosystem.
+No library, server, CLI or Docker image behavior changed.
+
+### Migration
+
+None: no code, config, storage or package-content change. The only removal is outside the
+package: the docs site no longer serves the PNG logos (`logo.png`, `logo-128.png`, `logo-256.png`,
+`symbol.png`, `favicon.png`). If you hot-linked one, use the SVGs next to them
+(`lockup-horizontal-{light,dark}.svg`, `symbol-{light,dark}.svg`, `favicon.svg`); see
+[docs/BRAND.md](https://github.com/xantiagoma/xyte/blob/main/docs/BRAND.md).
+
+### 🩹 Fixes
+
+- **brand:** Stacked lockups as the docs hero, no tile on any page; centre the horizontal lockups ([#6](https://github.com/xantiagoma/xyte/pull/6))
+
+### 📖 Documentation
+
+- The xtandard ecosystem ([#1](https://github.com/xantiagoma/xyte/pull/1))
+- **ecosystem:** Link the flags and webhooks docs sites ([#2](https://github.com/xantiagoma/xyte/pull/2))
+- **brand:** Generated vector brand kit in the xtandard family style ([#3](https://github.com/xantiagoma/xyte/pull/3))
+- **brand:** SVG-only logos on every page; drop the PNG logo variants ([#4](https://github.com/xantiagoma/xyte/pull/4))
+- **ecosystem:** Add @xtandard/audit, @xtandard/links and @xtandard/entitlements ([#5](https://github.com/xantiagoma/xyte/pull/5))
+- **ecosystem:** Link @xtandard/entitlements on npm ([#7](https://github.com/xantiagoma/xyte/pull/7))
+
+### ❤️ Contributors
+
+- Santiago Montoya A. ([@xantiagoma](https://github.com/xantiagoma))
+
 ## v0.1.3
 
 [compare changes](https://github.com/xantiagoma/xyte/compare/v0.1.2...v0.1.3)
