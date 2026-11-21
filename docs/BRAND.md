@@ -4,7 +4,8 @@ The xyte mark is the family's lime **X** (a `>` chevron and two arms between gre
 Its upper-right arm is a **route**: it ends in an arrowhead, the request going out, and a grey branch
 leaves it for a second node, another provider to fall back to. Any proxy, one request shape. It comes
 as an app icon, a bare mark and wordmark lockups. Everything lives in [`docs/assets/`](assets/); the
-SVGs are the masters and every PNG and ICO is built from them.
+SVGs are the masters, and they are what every page shows. The only rasters are the three a format
+requires: `favicon.ico` and `apple-touch-icon.png` (`<head>` fallbacks) and `social.png` (`og:image`).
 
 It belongs with its siblings. The near-black rounded tile, the orbit lines, the grey brackets and the
 lime X are shared with `@xtandard/flags` (a flag on the arm), `@xtandard/webhooks` (a hook),
@@ -16,30 +17,29 @@ raster logo (a lime path with an arrow crossing a grey one that ends in a node).
 
 | File | What it is | Use it for |
 | --- | --- | --- |
-| `logo.svg` | App icon: the mark on a near-black rounded square with faint orbit lines | The master for every square raster; the docs home page's hero |
-| `logo.png` (1024), `logo-256.png`, `logo-128.png` | App icon rasters | Avatars, the repository picture, anything that wants a square PNG |
-| `symbol.svg`, `symbol.png` (256 high) | The mark with brackets, transparent | Places that draw their own surface |
-| `lockup-horizontal-dark.svg` / `.png` (2×) | Mark + wordmark, `@xtandard/` in near-white | Headers on dark backgrounds (README in GitHub dark mode, the docs site in dark mode) |
-| `lockup-horizontal-light.svg` / `.png` (2×) | Mark + wordmark, `@xtandard/` in ink, deeper lime | Headers on light backgrounds (README in light mode, the docs site in light mode) |
-| `lockup-stacked-{dark,light}.svg` / `.png` (2×) | Mark left, `@xtandard/` over `xyte` | Square-ish slots: slides, sidebars |
+| `logo.svg` | App icon: the mark on a near-black rounded square with faint orbit lines | The docs home page's hero, avatars (export a PNG from it when a service insists) |
+| `symbol.svg` | The mark with brackets, transparent | Places that draw their own surface |
+| `lockup-horizontal-dark.svg` | Mark + wordmark, `@xtandard/` in near-white | Headers on dark backgrounds (README in GitHub dark mode, the docs site in dark mode) |
+| `lockup-horizontal-light.svg` | Mark + wordmark, `@xtandard/` in ink, deeper lime | Headers on light backgrounds (README in light mode, the docs site in light mode) |
+| `lockup-stacked-{dark,light}.svg` | Mark left, `@xtandard/` over `xyte` | Square-ish slots: slides, sidebars |
 | `monochrome-white.svg`, `monochrome-black.svg` | One-colour horizontal lockup | Photos and busy backgrounds (white); print (black) |
-| `favicon.svg`, `favicon.ico` (16/32/48), `favicon.png` (32), `apple-touch-icon.png` (180) | The icon without orbit lines and shadow, which do not survive 16 px | Browser tabs: the docs site |
+| `favicon.svg`, `favicon.ico` (16/32/48), `apple-touch-icon.png` (180) | The icon without orbit lines and shadow, which do not survive 16 px | Browser tabs: the docs site (`favicon.svg` first; the ICO and PNG are fallbacks for browsers and iOS) |
 | `social.svg`, `social.png` (1280×640) | Social card: icon, wordmark, tagline, `bun add` line | GitHub social preview (Settings → Social preview, uploaded by hand), `og:image` of the docs site |
 
 Rebuild after editing:
 
 ```sh
-sh scripts/brand-assets.sh   # SVG masters, then PNG / ICO (hb-view, rsvg-convert, magick; oxipng if installed)
+sh scripts/brand-assets.sh   # SVG masters, then the three rasters (hb-view, rsvg-convert, magick; oxipng if installed)
 ```
 
 `scripts/brand-svg.ts` holds the geometry (one 1024-unit grid) and shapes the wordmark with HarfBuzz;
-`scripts/brand-assets.sh` runs it and rasterizes. Urbanist comes from
+`scripts/brand-assets.sh` runs it and builds the rasters. Urbanist comes from
 [google/fonts](https://github.com/google/fonts/tree/main/ofl/urbanist) into `~/.cache/xyte-brand/`
 on the first run (`URBANIST=/path/to/Urbanist.ttf` uses a local copy).
 
 ### Where each file goes
 
-- **README header**: a `<picture>` choosing `lockup-horizontal-dark.png` / `lockup-horizontal-light.png`
+- **README header**: a `<picture>` choosing `lockup-horizontal-dark.svg` / `lockup-horizontal-light.svg`
   with `prefers-color-scheme`, by absolute `raw.githubusercontent.com` URL (the README ships to npm,
   which does not ship `docs/assets/`).
 - **Docs site** (VitePress serves `docs/assets/` as its public folder): the horizontal lockup SVGs as
