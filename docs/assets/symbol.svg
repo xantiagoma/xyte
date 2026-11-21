@@ -2,8 +2,8 @@
 <title>@xtandard/xyte</title>
 <defs><linearGradient id="lime" x1="250" y1="200" x2="760" y2="740" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#D9F99D"/><stop offset=".42" stop-color="#A3E635"/><stop offset="1" stop-color="#65A30D"/></linearGradient></defs>
 <g fill="none" stroke="#5B6167" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"><path d="M190 438L118 512L190 586"/><path d="M834 438L906 512L834 586"/></g>
-<g><path d="M566.9 410L705.0 517.5" stroke="#9AA1A8" stroke-width="30" stroke-linecap="round" fill="none"/>
-<circle cx="705.0" cy="517.5" r="38" fill="#9AA1A8"/></g>
+<g><path d="M566.9 410L705.0 517.5" stroke="#7A828A" stroke-width="30" stroke-linecap="round" fill="none"/>
+<circle cx="705.0" cy="517.5" r="38" fill="#7A828A"/></g>
 <path d="M250 300L395 300L560 512L395 724L250 724L415 512Z" fill="url(#lime)"/>
 <path d="M610.5 260.8L700.8 331.0L583.0 482.4L510.5 389.3Z" fill="url(#lime)"/>
 <path d="M545.4 245.5L730.6 199.6L731.6 390.5L655.7 295.9Z" fill="url(#lime)"/>

@@ -191,11 +191,14 @@ await write(
   `${header(1024, 1024, LABEL)}<defs>${iconDefs}${limeGradient('lime')}</defs>\n${icon({ orbit: false, shadow: false })}\n</svg>`,
 );
 
-// symbol.svg — transparent symbol, cropped to its bounds
-await write(
-  'symbol.svg',
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SYM.x} ${f(SYM.y)} ${SYM.w} ${f(SYM.h)}" width="${SYM.w}" height="${f(SYM.h)}" role="img" aria-label="${LABEL}">\n<title>${LABEL}</title>\n<defs>${limeGradient('lime')}</defs>\n${symbolBody({ route: ROUTE_LIGHT })}\n</svg>`,
-);
+// symbol*.svg — the transparent symbol (no tile), cropped to its bounds: what pages show as a
+// standalone logo. symbol-dark / symbol-light carry each surface's gradient and greys (the docs
+// hero switches between them); symbol.svg is the dark-surface one, as on the tile.
+const symbol = (mode: 'dark' | 'light') =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SYM.x} ${f(SYM.y)} ${SYM.w} ${f(SYM.h)}" width="${SYM.w}" height="${f(SYM.h)}" role="img" aria-label="${LABEL}">\n<title>${LABEL}</title>\n<defs>${limeGradient('lime', mode === 'light')}</defs>\n${symbolBody({ route: mode === 'light' ? ROUTE_LIGHT : ROUTE_DARK })}\n</svg>`;
+await write('symbol.svg', symbol('dark'));
+await write('symbol-dark.svg', symbol('dark'));
+await write('symbol-light.svg', symbol('light'));
 
 // ── lockups ─────────────────────────────────────────────────────────────────
 // The npm name: `@xtandard/` in paper or ink, `xyte` in lime.
@@ -203,6 +206,8 @@ const PREFIX = outline('@xtandard/', 100);
 const NAME = outline('xyte', 100);
 // Urbanist's descenders (the @ and the y) go below the baseline, which sits on the X's base.
 const DESC = 26;
+// Urbanist's cap height in em (OS/2 sCapHeight 1400 / unitsPerEm 2000).
+const CAP = 0.7;
 const wordGradient = (light: boolean) =>
   `<linearGradient id="word" x1="0" y1="-60" x2="0" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${light ? '#84CC16' : LIME_HI}"/><stop offset="1" stop-color="${light ? LIME_TEXT_LIGHT : LIME}"/></linearGradient>`;
 
@@ -212,11 +217,14 @@ function horizontal(mode: 'dark' | 'light' | 'white' | 'black'): string {
   const s = symH / MARK.h;
   const symW = MARK.w * s;
   const gap = 26;
-  const baseline = 4 + (724 - MARK.y) * s;
+  // Vertically centre the symbol on the wordmark's optical centre: the middle of its cap height
+  // (baseline .. cap height, descenders ignored) sits on the symbol's vertical centre. The same
+  // rule is used across the xtandard lockups.
+  const baseline = 4 + symH / 2 + (CAP * 100) / 2;
   const prefixFill = mono ?? (mode === 'dark' ? PAPER : INK);
   const nameFill = mono ?? 'url(#word)';
   const w = symW + gap + PREFIX.width + NAME.width + 4;
-  const h = symH + 8 + DESC;
+  const h = Math.max(symH + 8, baseline + DESC);
   const route = mode === 'light' ? ROUTE_LIGHT : ROUTE_DARK;
   const label = mono ? `${LABEL} (${mode})` : LABEL;
   return `${header(w, h, label)}<defs>${limeGradient('lime', mode === 'light')}${wordGradient(mode === 'light')}</defs>
