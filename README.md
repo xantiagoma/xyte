@@ -1,4 +1,9 @@
-<p align="center"><img src="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/logo.png" alt="xyte" width="128" height="128"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-dark.png">
+    <img src="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-light.png" alt="@xtandard/xyte" width="420">
+  </picture>
+</p>
 
 # xyte
 

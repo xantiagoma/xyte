@@ -8,7 +8,7 @@ hero:
   text: The Zyte API, on any proxy
   tagline: "Same request JSON, same response JSON, same error codes as Zyte's POST /v1/extract. Traffic exits through Oxylabs, Bright Data, ZenRows, any proxy URL, no proxy at all, or Zyte itself."
   image:
-    src: /logo.png
+    src: /logo.svg
     alt: xyte
   actions:
     - theme: brand

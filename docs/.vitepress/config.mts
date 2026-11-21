@@ -25,16 +25,16 @@ export default defineConfig({
   base: '/xyte/',
   cleanUrls: true,
   lastUpdated: true,
-  // docs/README.md is the index for GitHub; the sidebar does that job here.
-  srcExclude: ['README.md'],
+  // docs/README.md is the index for GitHub; the sidebar does that job here. BRAND.md is for the repo.
+  srcExclude: ['README.md', 'BRAND.md'],
   // Logo, favicons and the social image, shared with the README (docs/assets).
   vite: { publicDir: 'assets' },
   sitemap: { hostname: site },
   head: [
+    ['link', { rel: 'icon', href: '/xyte/favicon.svg', type: 'image/svg+xml' }],
     ['link', { rel: 'icon', href: '/xyte/favicon.ico', sizes: '16x16 32x32 48x48' }],
-    ['link', { rel: 'icon', href: '/xyte/favicon.png', type: 'image/png' }],
     ['link', { rel: 'apple-touch-icon', href: '/xyte/apple-touch-icon.png' }],
-    ['meta', { name: 'theme-color', content: '#0B0F14' }],
+    ['meta', { name: 'theme-color', content: '#0F1215' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'xyte' }],
     ['meta', { property: 'og:title', content: 'xyte: the Zyte API, on any proxy' }],
@@ -61,7 +61,9 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: '/logo.png',
+    // The lockup carries the name, so the title text is hidden.
+    logo: { light: '/lockup-horizontal-light.svg', dark: '/lockup-horizontal-dark.svg', alt: '@xtandard/xyte' },
+    siteTitle: false,
     nav: [
       { text: 'Guide', link: '/guide', activeMatch: '^/(guide|migrating-from-zyte|coverage)' },
       { text: 'Docs', link: '/routing', activeMatch: '^/(providers|routing|actions|browser|extraction|authentication|lifecycle|configuration|deploy|mounting|proxy-mode|observability)' },
