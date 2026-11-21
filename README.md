@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-dark.png">
-    <img src="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-light.png" alt="@xtandard/xyte" width="420">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-dark.svg">
+    <img src="https://raw.githubusercontent.com/xantiagoma/xyte/main/docs/assets/lockup-horizontal-light.svg" alt="@xtandard/xyte" width="420">
   </picture>
 </p>
 
