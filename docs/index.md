@@ -92,6 +92,10 @@ xyte has siblings: open-source, MIT-licensed projects that share the xtandard na
 stands on its own.
 
 <div class="ecosystem-cards">
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-kit/" target="_blank">
+    <strong>@xtandard/kit</strong>
+    <span>The shared building blocks behind the xtandard products: storage drivers and conformance suite, auth, HTTP plumbing, adapters, admin shell and tooling.</span>
+  </a>
   <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard/" target="_blank">
     <strong>@xtandard/lib</strong>
     <span>Lightweight, type-safe TypeScript utilities with a zero-dependency core.</span>
