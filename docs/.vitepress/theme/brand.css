@@ -8,8 +8,6 @@
   --vp-button-brand-hover-text: #ffffff;
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(120deg, #65a30d 20%, #4d7c0f);
-  --vp-home-hero-image-background-image: linear-gradient(-45deg, rgba(183, 243, 74, 0.45) 50%, rgba(11, 15, 20, 0.25) 50%);
-  --vp-home-hero-image-filter: blur(56px);
 }
 
 .dark {
@@ -24,7 +22,6 @@
   --vp-button-brand-text: #0b0f14;
   --vp-button-brand-hover-text: #0b0f14;
   --vp-home-hero-name-background: linear-gradient(120deg, #d9f99d 10%, #b7f34a 60%);
-  --vp-home-hero-image-background-image: linear-gradient(-45deg, rgba(183, 243, 74, 0.35) 50%, rgba(154, 164, 178, 0.2) 50%);
 }
 
 /* The sibling-project cards on the home page, styled like the hero's feature cards. */
@@ -60,5 +57,23 @@
 
 /* The nav logo is the full lockup (the text title is hidden): taller than VitePress's 24px icon. */
 .VPNavBarTitle .logo {
-  height: 34px;
+  height: 38px;
+}
+
+/* The hero image is the stacked lockup (no tile), as on the sibling sites: no glow behind it, and
+   wider than VitePress's 320px default so the wordmark reads at the hero's scale. */
+.VPHero .image-bg {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    width: 420px;
+    height: 320px;
+  }
+
+  .VPHero .image-src {
+    max-width: 420px;
+    max-height: none;
+  }
 }

@@ -17,11 +17,11 @@ raster logo (a lime path with an arrow crossing a grey one that ends in a node).
 
 | File | What it is | Use it for |
 | --- | --- | --- |
-| `logo.svg` | App icon: the mark on a near-black rounded square with faint orbit lines | The docs home page's hero, avatars (export a PNG from it when a service insists) |
-| `symbol.svg` | The mark with brackets, transparent | Places that draw their own surface |
+| `logo.svg` | App icon: the mark on a near-black rounded square with faint orbit lines | Only where an app-icon shape is expected (avatars, the repository picture); never as a logo on a page |
+| `symbol-dark.svg`, `symbol-light.svg` (`symbol.svg` = dark) | The mark with brackets, transparent: no tile, each with its surface's gradient and greys | Any bare logo on a page (admin UIs, embeds); pick the variant for the surface |
 | `lockup-horizontal-dark.svg` | Mark + wordmark, `@xtandard/` in near-white | Headers on dark backgrounds (README in GitHub dark mode, the docs site in dark mode) |
 | `lockup-horizontal-light.svg` | Mark + wordmark, `@xtandard/` in ink, deeper lime | Headers on light backgrounds (README in light mode, the docs site in light mode) |
-| `lockup-stacked-{dark,light}.svg` | Mark left, `@xtandard/` over `xyte` | Square-ish slots: slides, sidebars |
+| `lockup-stacked-{dark,light}.svg` | Mark left, `@xtandard/` over `xyte` | The docs home hero (light/dark); square-ish slots: slides, sidebars |
 | `monochrome-white.svg`, `monochrome-black.svg` | One-colour horizontal lockup | Photos and busy backgrounds (white); print (black) |
 | `favicon.svg`, `favicon.ico` (16/32/48), `apple-touch-icon.png` (180) | The icon without orbit lines and shadow, which do not survive 16 px | Browser tabs: the docs site (`favicon.svg` first; the ICO and PNG are fallbacks for browsers and iOS) |
 | `social.svg`, `social.png` (1280×640) | Social card: icon, wordmark, tagline, `bun add` line | GitHub social preview (Settings → Social preview, uploaded by hand), `og:image` of the docs site |
@@ -43,7 +43,8 @@ on the first run (`URBANIST=/path/to/Urbanist.ttf` uses a local copy).
   with `prefers-color-scheme`, by absolute `raw.githubusercontent.com` URL (the README ships to npm,
   which does not ship `docs/assets/`).
 - **Docs site** (VitePress serves `docs/assets/` as its public folder): the horizontal lockup SVGs as
-  the nav logo (light/dark, with the text title hidden), `logo.svg` as the home hero image,
+  the nav logo (light/dark, with the text title hidden), `lockup-stacked-light.svg` / `lockup-stacked-dark.svg`
+  as the home hero image (light/dark), as in `xtandard-audit`; no tile on any page,
   `favicon.svg` + `favicon.ico` + `apple-touch-icon.png`, and `social.png` as `og:image`.
 
 ## Palette
@@ -94,6 +95,11 @@ arrowhead along its diagonal: base 236 units wide, 150 long, with a 28-unit notc
 the arm's centre line at y = 410, at a right angle to the arm, and ends 175 units out in a 38-unit
 node. In the app icon the mark is scaled by 0.86 and centred; the tile's corner radius is 224 (21.9%).
 
+In the horizontal lockups the symbol is vertically centred on the wordmark's optical centre: the
+middle of its cap height (baseline to cap height, descenders ignored) sits on the symbol's vertical
+centre, the same rule as in every xtandard lockup. The stacked lockups keep the X's base on the
+second line's baseline.
+
 **Clear space**: the arrowhead's length on every side of the mark or a lockup. **Minimum sizes**: app
 icon 16 px (use the favicon set below 48 px), horizontal lockup 24 px high, stacked lockup 48 px high.
 
@@ -103,7 +109,9 @@ Do:
 
 - Use the dark lockup on dark backgrounds and the light one on light; on GitHub switch with
   `<picture>` and `prefers-color-scheme`.
-- Use the app icon wherever a square avatar is expected; the monochrome lockups on photos or in print.
+- Show the tile only where an app-icon shape is expected (favicons, the apple-touch icon, the social
+  card, avatars). On pages use the symbol or a lockup, which have no tile.
+- Use the monochrome lockups on photos or in print.
 
 Don't:
 
