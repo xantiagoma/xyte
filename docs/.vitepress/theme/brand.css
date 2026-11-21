@@ -1,4 +1,4 @@
-/* The logo's lime (#B7F34A) on dark; a darker green on light, so links and buttons stay readable. */
+/* The family's lime on dark (docs/BRAND.md); a darker green on light, so links and buttons stay readable. */
 :root {
   --vp-c-brand-1: #4d7c0f;
   --vp-c-brand-2: #3f6212;
@@ -56,4 +56,9 @@
   color: var(--vp-c-text-2);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* The nav logo is the full lockup (the text title is hidden): taller than VitePress's 24px icon. */
+.VPNavBarTitle .logo {
+  height: 34px;
 }

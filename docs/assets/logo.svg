@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024.0 1024.0" width="1024.0" height="1024.0" role="img" aria-label="@xtandard/xyte">
+<title>@xtandard/xyte</title>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1A1C1F"/><stop offset="1" stop-color="#08090B"/></linearGradient><linearGradient id="rim" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity=".03"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000" flood-opacity=".55"/></filter><linearGradient id="lime" x1="250" y1="200" x2="760" y2="740" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#D9F99D"/><stop offset=".42" stop-color="#A3E635"/><stop offset="1" stop-color="#65A30D"/></linearGradient></defs>
+<rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+<rect x="2" y="2" width="1020" height="1020" rx="222" fill="none" stroke="url(#rim)" stroke-width="4"/>
+<g fill="none" stroke="#4E5459" stroke-linecap="round">
+<circle cx="512" cy="512" r="350" stroke-width="3" opacity=".22"/>
+<path d="M614.1 102.5A422 422 0 0 1 933.4 489.9" stroke-width="4.5" opacity=".7"/>
+<path d="M93.1 563.4A422 422 0 0 0 307.4 881.1" stroke-width="4.5" opacity=".7"/>
+</g>
+<g fill="#4E5459"><circle cx="614.1" cy="102.5" r="13"/><circle cx="933.4" cy="489.9" r="13"/><circle cx="93.1" cy="563.4" r="13"/><circle cx="307.4" cy="881.1" r="13"/></g>
+<g transform="translate(71.7 121.1) scale(0.86)" filter="url(#shadow)">
+<g fill="none" stroke="#5B6167" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"><path d="M190 438L118 512L190 586"/><path d="M834 438L906 512L834 586"/></g>
+<g><path d="M566.9 410L705.0 517.5" stroke="#7A828A" stroke-width="30" stroke-linecap="round" fill="none"/>
+<circle cx="705.0" cy="517.5" r="38" fill="#7A828A"/></g>
+<path d="M250 300L395 300L560 512L395 724L250 724L415 512Z" fill="url(#lime)"/>
+<path d="M610.5 260.8L700.8 331.0L583.0 482.4L510.5 389.3Z" fill="url(#lime)"/>
+<path d="M545.4 245.5L730.6 199.6L731.6 390.5L655.7 295.9Z" fill="url(#lime)"/>
+<path d="M580.0 724L725.0 724L583.0 541.6L510.5 634.7Z" fill="url(#lime)"/>
+</g>
+</svg>

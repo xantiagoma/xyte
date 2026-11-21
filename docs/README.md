@@ -20,5 +20,6 @@ Also published as a site, with search: **https://me.xantiagoma.com/xyte/** (buil
 | [mounting.md](mounting.md) | Serving `/v1/extract` from Hono, Express, Fastify, Bun.serve, Next.js, node:http |
 | [migrating-from-zyte.md](migrating-from-zyte.md) | Moving code that calls Zyte: change the base URL, or call the library; gotchas (`geolocation` with `direct()`…); live checks |
 | [releases.md](releases.md) | Versioning (ZeroVer), the changelog, and how a release reaches npm |
+| [BRAND.md](BRAND.md) | The logo, lockups, favicons and social card: files, palette, how they're generated |
 
 Runnable, typechecked examples are in [`../examples`](../examples).
