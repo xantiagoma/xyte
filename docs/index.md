@@ -103,6 +103,18 @@ stands on its own.
     <strong>@xtandard/webhooks</strong>
     <span>Self-hosted, Standard Webhooks-compliant outbound webhooks: a Svix alternative as a library.</span>
   </a>
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-audit/" target="_blank">
+    <strong>@xtandard/audit</strong>
+    <span>Self-hosted, tamper-evident audit logs for B2B SaaS: a WorkOS Audit Logs alternative as a library.</span>
+  </a>
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-links/" target="_blank">
+    <strong>@xtandard/links</strong>
+    <span>Self-hosted branded short links with click analytics, conversions and deep links: a Dub alternative as a library.</span>
+  </a>
+  <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-entitlements/" target="_blank">
+    <strong>@xtandard/entitlements</strong>
+    <span>Plans, entitlements and usage metering for TypeScript apps, as a library.</span>
+  </a>
   <a class="ecosystem-card" href="https://me.xantiagoma.com/xtandard-image/" target="_blank">
     <strong>xtandard-image</strong>
     <span>Self-hosted image and video processing in Go and libvips, with imgproxy-compatible URLs.</span>
